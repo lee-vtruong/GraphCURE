@@ -1,0 +1,39 @@
+seed: 42
+data:
+  train_manifest: data/processed/newsclippings/train.jsonl
+  val_manifest: data/processed/newsclippings/val.jsonl
+  test_manifest: data/processed/newsclippings/test.jsonl
+  image_root: data/raw/visualnews
+  max_text_length: 96
+model:
+  text_model: distilroberta-base
+  vision_model: vit_base_patch16_224
+  hidden_dim: 256
+  num_constraints: 4
+  num_states: 3
+  num_labels: 3
+  graph_layers: 2
+  dropout: 0.1
+  freeze_text: false
+  freeze_vision: false
+train:
+  epochs: 10
+  batch_size: 32
+  num_workers: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  amp: true
+  grad_accumulation: 1
+  output_dir: outputs/newsclippings
+loss:
+  label: 1.0
+  constraint: 0.5
+  conflict: 0.2
+  counterfactual: 0.5
+  budget: 0.05
+acquisition:
+  actions: [semantic, entity, temporal, contextual]
+  cost: [1.0, 1.0, 0.8, 1.5]
+  cost_weight: 0.05
+  max_steps: 3
+

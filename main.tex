@@ -1,0 +1,1310 @@
+\documentclass[11pt,a4paper]{article}
+
+% =========================
+% Packages
+% =========================
+\usepackage[T5]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+
+\geometry{left=2.4cm,right=2.4cm,top=2.4cm,bottom=2.4cm}
+
+\hypersetup{
+colorlinks=true,
+linkcolor=blue,
+citecolor=blue,
+urlcolor=blue
+}
+
+% =========================
+% Commands
+% =========================
+\newcommand{\True}{\textsc{True}}
+\newcommand{\False}{\textsc{False}}
+\newcommand{\Misleading}{\textsc{Misleading}}
+\newcommand{\Sat}{\textsc{Satisfied}}
+\newcommand{\Viol}{\textsc{Violated}}
+\newcommand{\Unk}{\textsc{Unknown}}
+\newcommand{\Closed}{\textsc{Closed}}
+\newcommand{\Open}{\textsc{Open}}
+\newcommand{\Abstain}{\textsc{Abstain}}
+
+\title{
+\textbf{GraphCURE: Intervention-Faithful Constraint Verification\\
+with Value-of-Information Evidence Acquisition\\
+for Cost-Efficient Multimodal Fact Checking}
+}
+
+\author{
+Lê Văn Trường\\
+Faculty of Information Technology\\
+University of Science, VNU-HCM\\
+\texttt{23120181@student.hcmus.edu.vn}
+}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% =========================================================
+\begin{abstract}
+Multimodal fact verification often fails not only because external knowledge is missing, but also because models do not explicitly distinguish different kinds of claim--image inconsistency. A real image can be reused in a misleading context: the person may be correct but the date wrong, the location may match but the event may differ, or the visual scene may appear relevant while the causal or temporal context is false. Closed-book multimodal classifiers are cheap and fast, but they tend to be overconfident on such out-of-context examples. Conversely, retrieval-augmented systems and multimodal LLM pipelines provide broader coverage but incur high token cost, latency, and are vulnerable to irrelevant evidence.
+
+We propose \textbf{GraphCURE}, an intervention-faithful framework for cost-efficient multimodal fact verification. Instead of treating the final label as a single black-box classification target, GraphCURE decomposes verification into four interpretable constraints: semantic, entity, temporal, and contextual consistency. Minimal counterfactual interventions test which dependencies are genuine, while relation-specific compatibility tensors distinguish typed contradictions from harmless distributional disagreement. Retrieval is formulated as sequential evidence acquisition: the system selects an entity, temporal, semantic, or contextual query only when its expected reduction in Bayes risk exceeds its token and latency cost.
+
+Compared with prior closed-book, RAG-based, and uncertainty-thresholding approaches, GraphCURE asks: (i) whether intervention-faithful dependency learning improves out-of-context detection and counterfactual consistency, (ii) whether typed conflict semantics improves diagnosis and calibration, and (iii) whether value-of-information acquisition improves the accuracy--cost Pareto frontier over binary routing. Acquired evidence is organized in a \textit{constraint evidence table} before being passed to an LLM judge.
+
+We evaluate GraphCURE on NewsCLIPpings, MM-COVID, MOCHEG, and a new \textbf{Temporal-Context Manipulation Benchmark} containing hard negatives such as same entity with wrong time, same location with wrong event, same visual scene with wrong claim, and multi-constraint conflicts. The experimental design includes strong closed-book, RAG, multimodal LLM, routing, cross-attention, and graph ablations to test whether the proposed dependency-aware formulation provides benefits beyond standard attention or independent multi-head models.
+\end{abstract}
+
+% =========================================================
+\section{Đặt vấn đề}
+
+Thông tin sai lệch đa phương thức không nhất thiết được tạo ra bằng ảnh giả hoàn toàn. Một dạng phổ biến hơn là \textit{out-of-context misinformation}: ảnh thật được tái sử dụng để minh họa cho một claim sai ngữ cảnh. Ví dụ, một ảnh biểu tình tại Paris năm 2018 có thể bị dùng lại để minh họa cho một cuộc biểu tình tại London năm 2024. Ở đây, ảnh là thật, claim có thể chứa thực thể thật, nhưng cặp claim--image vẫn sai do sai thời gian, sai địa điểm hoặc sai sự kiện.
+
+Các hệ thống hiện tại thường đi theo hai hướng chính.
+
+\paragraph{Closed-book multimodal classification.}
+Mô hình nhận claim $C$ và ảnh $I$, sau đó dự đoán nhãn trực tiếp:
+\[
+(C,I) \rightarrow y.
+\]
+Cách này nhanh và rẻ, nhưng dễ overconfident khi ảnh và claim có vẻ tương đồng về mặt ngữ nghĩa nhưng sai ngữ cảnh.
+
+\paragraph{Open-search hoặc RAG-based verification.}
+Hệ thống truy xuất tài liệu ngoài rồi dùng LLM hoặc judge model để kết luận. Cách này có độ bao phủ tốt hơn, nhưng chi phí token, độ trễ và nhiễu từ evidence không liên quan đều cao. Ngoài ra, nhiều pipeline RAG đưa top-$k$ evidence vào LLM dưới dạng phẳng, không phân biệt evidence đó phục vụ kiểm chứng thực thể, thời gian, ngữ cảnh hay ngữ nghĩa.
+
+Chúng tôi cho rằng điểm yếu cốt lõi không chỉ là thiếu retrieval, mà là thiếu một biểu diễn có cấu trúc cho quá trình kiểm chứng. Một claim--image pair có thể đúng về mặt semantic nhưng sai temporal, đúng entity nhưng sai context, hoặc nhiều constraint mâu thuẫn với nhau. Vì vậy, thay vì xem verification như một bài toán phân loại đơn lẻ, chúng tôi mô hình hóa nó như một quá trình kiểm tra các constraint phụ thuộc:
+\[
+(C,I,M) \rightarrow \{z_{sem}, z_{ent}, z_{tmp}, z_{ctx}\} \rightarrow R(C,I,M) \rightarrow y.
+\]
+
+\paragraph{Research Question.}
+Bài báo tập trung vào câu hỏi:
+
+\begin{quote}
+\textit{Can multimodal fact verification be made more accurate, interpretable, and cost-efficient by learning intervention-faithful dependencies among typed constraints and acquiring only the evidence whose expected verification value exceeds its cost?}
+\end{quote}
+
+\paragraph{Đóng góp chính.}
+GraphCURE có bốn đóng góp:
+
+\begin{enumerate}[leftmargin=1.5em]
+\item \textbf{Intervention-faithful constraint graph.}
+Chúng tôi phân rã multimodal fact verification thành semantic, entity, temporal và contextual constraints, mô hình hóa quan hệ phụ thuộc bằng graph có kiểu, và huấn luyện graph bằng các cặp counterfactual tối thiểu. Một can thiệp chỉ thay đổi thời gian, thực thể hoặc bối cảnh phải làm thay đổi đúng các node hậu duệ được graph dự đoán, trong khi giữ bất biến các node không liên quan.
+
+\item \textbf{Typed conflict semantics.}
+Thay vì so sánh trực tiếp các phân phối trạng thái của những constraint khác nghĩa, GraphCURE học một compatibility tensor có giám sát, kết hợp các luật weak logic và nhãn conflict của con người, để phân biệt các kiểu mâu thuẫn temporal--contextual, entity--contextual và semantic--contextual.
+
+\item \textbf{Budgeted value-of-information evidence acquisition.}
+Router không chỉ quyết định open/closed mà tuần tự chọn hành động truy xuất theo constraint. Hệ thống chỉ mua một nguồn evidence khi expected reduction in Bayes risk của nguồn đó lớn hơn chi phí token/latency, sau đó dừng sớm khi không còn hành động có utility dương.
+
+\item \textbf{Temporal-Context Manipulation Benchmark.}
+Chúng tôi xây dựng benchmark hard-negative tập trung vào out-of-context misinformation, gồm same entity wrong time, same location wrong event, same visual scene wrong claim và multi-constraint conflict, kèm human validation và inter-annotator agreement.
+\end{enumerate}
+
+% =========================================================
+\section{Định nghĩa bài toán}
+
+Cho claim văn bản $C$, ảnh $I$, metadata tùy chọn $M$, và nhãn:
+\[
+y \in \{\True, \False, \Misleading\},
+\]
+mục tiêu là dự đoán nhãn đúng và sinh giải thích có bằng chứng hỗ trợ.
+
+GraphCURE không chỉ dự đoán nhãn cuối mà còn dự đoán trạng thái của bốn verification constraints:
+\[
+V = \{v_{sem}, v_{ent}, v_{tmp}, v_{ctx}\}.
+\]
+
+Mỗi constraint có trạng thái:
+\[
+z_i \in \{\Sat,\Viol,\Unk\},
+\]
+và uncertainty:
+\[
+u_i \in [0,1].
+\]
+
+Các constraint gồm:
+
+\begin{itemize}[leftmargin=1.5em]
+\item $v_{sem}$: semantic consistency giữa claim và ảnh/caption.
+\item $v_{ent}$: entity consistency giữa người, địa điểm, tổ chức, đối tượng hoặc sự kiện.
+\item $v_{tmp}$: temporal consistency giữa thời gian trong claim, metadata và evidence.
+\item $v_{ctx}$: contextual consistency giữa ảnh và ngữ cảnh sự kiện mà claim mô tả.
+\end{itemize}
+
+Quan hệ phụ thuộc được biểu diễn bằng một directed dependency graph:
+\[
+G_c = (V,E,A).
+\]
+
+Prior edges gồm:
+\[
+E_{prior} = \{(ent,ctx),(tmp,ctx),(sem,ctx),(ent,sem),(tmp,sem)\}.
+\]
+
+Ý nghĩa chính là contextual consistency thường phụ thuộc vào entity, temporal và semantic consistency.
+
+% =========================================================
+\section{Phương pháp đề xuất}
+
+\subsection{Tổng quan GraphCURE}
+
+GraphCURE gồm bảy bước:
+
+\begin{enumerate}[leftmargin=1.5em]
+\item Mã hóa claim, image, caption và metadata.
+\item Tạo biểu diễn ban đầu cho từng verification constraint.
+\item Xây dựng dependency graph với prior structure và sample-specific edge weights.
+\item Thực hiện structured message passing giữa các constraint.
+\item Ước lượng trạng thái và uncertainty của từng constraint.
+\item Phát hiện inter-constraint conflicts và tính verification risk.
+\item Route mẫu sang closed-book verdict hoặc open-search verification.
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\fbox{
+\begin{minipage}{0.94\linewidth}
+\centering
+\vspace{0.25cm}
+\textbf{GraphCURE Pipeline}\\[0.15cm]
+Claim + Image + Metadata\\
+$\Downarrow$\\
+Multimodal Constraint Encoder\\
+$\Downarrow$\\
+Constraint Representations: Semantic / Entity / Temporal / Contextual\\
+$\Downarrow$\\
+Dependency-Aware Message Passing\\
+$\Downarrow$\\
+Constraint States + Uncertainties\\
+$\Downarrow$\\
+Conflict Detection + Verification Risk\\
+$\Downarrow$\\
+Closed-book Verdict \quad or \quad Constraint-Grounded Open Verification
+\vspace{0.25cm}
+\end{minipage}
+}
+\caption{Tổng quan GraphCURE. Trọng tâm là dependency-aware constraint modeling, conflict-aware uncertainty routing, và evidence organization theo constraint.}
+\label{fig:overview}
+\end{figure}
+
+% ---------------------------------------------------------
+\subsection{Constraint-Aware Multimodal Encoder}
+
+Với claim $C$, image $I$ và metadata $M$, hệ thống tạo biểu diễn:
+\[
+h_C = \text{TextEnc}(C), \quad
+h_I = \text{VisionEnc}(I), \quad
+h_M = \text{MetaEnc}(M).
+\]
+
+Một image captioner sinh caption cho ảnh:
+\[
+T_I = \text{Captioner}(I).
+\]
+
+Các thực thể:
+\[
+E_C = \text{NER}(C), \quad E_I = \text{NER}(T_I).
+\]
+
+Tín hiệu thời gian:
+\[
+T_C = \text{TimeParse}(C), \quad T_M = \text{TimeParse}(M).
+\]
+
+Biểu diễn tương tác claim--image:
+\[
+A_{C \leftarrow I} = \text{Attn}(h_C,h_I,h_I),
+\]
+\[
+A_{I \leftarrow C} = \text{Attn}(h_I,h_C,h_C).
+\]
+
+Vector multimodal tổng quát:
+\[
+h = [h_C;h_I;h_M;A_{C \leftarrow I};A_{I \leftarrow C};|h_C-h_I|;h_C \odot h_I].
+\]
+
+% ---------------------------------------------------------
+\subsection{Initial Constraint Representations}
+
+Với mỗi constraint $k \in \{sem,ent,tmp,ctx\}$:
+\[
+h^k_0 = \text{FFN}_k([h;s_k]),
+\]
+trong đó $s_k$ là feature phụ trợ:
+
+\paragraph{Semantic feature.}
+\[
+s_{sem} = \cos(\text{TextEnc}(C),\text{TextEnc}(T_I)).
+\]
+
+\paragraph{Entity feature.}
+\[
+s_{ent} = 1 - \frac{|E_C \cap E_I|}{|E_C \cup E_I|+\epsilon}.
+\]
+
+\paragraph{Temporal feature.}
+\[
+s_{tmp} = \mathbf{1}[\text{dist}(T_C,T_M) > \tau_{time}],
+\]
+với trạng thái \Unk{} nếu không có tín hiệu thời gian đủ tin cậy.
+
+\paragraph{Contextual feature.}
+\[
+s_{ctx} = \text{EventSim}(C,T_I) + \text{LocSim}(C,T_I).
+\]
+
+% ---------------------------------------------------------
+\subsection{Dependency Graph Construction}
+
+GraphCURE sử dụng prior graph như một inductive bias, nhưng trọng số cạnh được học theo từng mẫu:
+\[
+a_{ij} = \sigma \left( w_a^\top [h^i_0;h^j_0;\phi_{ij}] \right),
+\]
+trong đó $\phi_{ij}$ là feature quan hệ giữa constraint $i$ và $j$, ví dụ temporal relevance, entity overlap hoặc event-location compatibility.
+
+Adjacency cuối:
+\[
+A_{ij} = \mathbf{1}[(i,j)\in E_{prior}] \cdot a_{ij}.
+\]
+
+Để tránh graph quá dày và tăng khả năng diễn giải, có thể dùng sparsification:
+\[
+A_{ij}=0 \quad \text{if } A_{ij} < \tau_A.
+\]
+
+Cách này giúp mô hình không hoàn toàn phụ thuộc vào graph hard-coded. Ví dụ, nếu claim không chứa temporal expression, cạnh $tmp \rightarrow ctx$ có thể có trọng số thấp.
+
+% ---------------------------------------------------------
+\subsection{Dependency-Aware Message Passing}
+
+Ở layer $l$, mỗi node constraint nhận message từ các node phụ thuộc:
+\[
+m_i^{(l)} = \sum_{j\in \mathcal{N}(i)} A_{ji} W_m h_j^{(l)}.
+\]
+
+Hidden state được cập nhật:
+\[
+h_i^{(l+1)} = \text{FFN}\left([h_i^{(l)};m_i^{(l)}]\right).
+\]
+
+Sau $L$ layers:
+\[
+\tilde{h}_i = h_i^{(L)}.
+\]
+
+Điểm quan trọng là contextual representation không chỉ được học từ feature ngữ cảnh ban đầu, mà còn nhận thông tin từ semantic, entity và temporal checks.
+
+\paragraph{Graph-vs-attention stress test.}
+Vì graph chỉ có số node nhỏ, chúng tôi không mặc định giả định rằng graph luôn tốt hơn attention. Do đó, trong thực nghiệm, GraphCURE được so sánh trực tiếp với một \textbf{constraint cross-attention baseline}, trong đó mỗi constraint attends tới các constraint còn lại mà không dùng prior dependency graph. Nếu graph không vượt qua baseline này, paper sẽ diễn giải contribution chính là constraint decomposition và conflict-aware routing thay vì graph reasoning.
+
+% ---------------------------------------------------------
+\subsection{Constraint State and Uncertainty Estimation}
+
+Với mỗi constraint $i$, GraphCURE dự đoán phân phối xác suất trên ba trạng thái:
+\[
+p_i = \text{Softmax}(W_i\tilde{h}_i+b_i).
+\]
+
+Uncertainty có thể được ước lượng bằng một trong ba cách, tùy cấu hình ablation:
+
+\paragraph{Softmax entropy.}
+\[
+u_i^{ent} = -\sum_{c} p_{i,c}\log p_{i,c}.
+\]
+
+\paragraph{Evidential Deep Learning.}
+Mỗi head dự đoán Dirichlet parameters:
+\[
+\alpha_i = \text{Softplus}(W_i\tilde{h}_i+b_i)+1.
+\]
+Tổng evidence:
+\[
+S_i = \sum_{c=1}^{K}\alpha_{i,c}.
+\]
+Expected probability:
+\[
+p_{i,c} = \frac{\alpha_{i,c}}{S_i}.
+\]
+Uncertainty:
+\[
+u_i^{edl} = \frac{K}{S_i}.
+\]
+
+EDL loss:
+\[
+\mathcal{L}_{edl}^{i} =
+\mathcal{L}_{ce}^{i}
++
+\lambda_{kl}\text{KL}\left[
+\text{Dir}(\alpha_i)\mid \text{Dir}(\mathbf{1})
+\right].
+\]
+
+\paragraph{Calibrated uncertainty.}
+Temperature scaling hoặc validation-based calibration được dùng như baseline để kiểm tra liệu improvement đến từ architecture hay chỉ từ hậu xử lý calibration.
+
+% ---------------------------------------------------------
+\subsection{Learned Uncertainty Aggregation}
+
+Thay vì claim đây là Bayesian uncertainty propagation, GraphCURE dùng một \textbf{learned uncertainty aggregation module}. Module này học cách uncertainty của constraint phụ thuộc ảnh hưởng tới risk của constraint hiện tại:
+\[
+\bar{u}_i =
+\sigma \left(
+w_u^\top
+\left[
+u_i;
+\sum_{j\in\mathcal{N}(i)}A_{ji}u_j;
+\max_{j\in\mathcal{N}(i)}A_{ji}u_j;
+\tilde{h}_i
+\right]
+\right).
+\]
+
+Đặc biệt:
+\[
+\bar{u}_{ctx}
+=
+f_u(
+u_{ctx},
+A_{ent,ctx}u_{ent},
+A_{tmp,ctx}u_{tmp},
+A_{sem,ctx}u_{sem}
+).
+\]
+
+Cách diễn giải: nếu entity hoặc temporal constraint không chắc chắn, mô hình không nên quá tự tin vào contextual consistency. Chúng tôi đánh giá module này bằng ECE, Brier score, NLL và risk--coverage curves.
+
+% ---------------------------------------------------------
+\subsection{Inter-Constraint Conflict Detection}
+
+Một điểm mới quan trọng của GraphCURE là phát hiện mâu thuẫn giữa các constraint phụ thuộc. Ví dụ, semantic và entity có thể \Sat{}, nhưng temporal hoặc contextual lại \Viol{}, đây là pattern phổ biến trong out-of-context misinformation.
+
+Không dùng Jensen--Shannon divergence trực tiếp giữa $p_i$ và $p_j$, vì cùng một trạng thái \Sat{} ở hai constraint khác nhau không có cùng nội hàm và disagreement không đồng nghĩa với conflict. Với mỗi loại cạnh $r=(i,j)$, GraphCURE định nghĩa compatibility tensor:
+\[
+K^{r}\in[0,1]^{3\times 3},
+\]
+trong đó $K^{r}_{ab}$ biểu diễn mức không tương thích khi constraint $i$ ở trạng thái $a$ và constraint $j$ ở trạng thái $b$. Conflict có kiểu được tính:
+\[
+c_{ij}^{r}
+=
+A_{ij}\sum_{a,b}p_i(a)p_j(b)K^{r}_{ab}.
+\]
+
+$K^r$ được khởi tạo bằng weak logical rules và được tinh chỉnh trên tập human-labeled conflict. Ví dụ, $(z_{tmp}=\Viol,z_{ctx}=\Sat)$ có mức không tương thích cao nếu contextual verdict khẳng định đúng sự kiện đang xét; ngược lại $(z_{sem}=\Sat,z_{tmp}=\Viol)$ là một pattern OOC hợp lệ, không phải lỗi mô hình cần bị làm trơn.
+
+Conflict vector:
+\[
+c_G = [c_{ij}]_{(i,j)\in E}.
+\]
+
+Conflict score tổng:
+\[
+C_G = \sum_{(i,j)\in E} c_{ij}.
+\]
+
+Module này mô hình hóa \emph{typed incompatibility}, không ép các constraint phải giống nhau. Ngoài score tổng, loại conflict được dùng để chọn đúng hành động evidence acquisition.
+
+% ---------------------------------------------------------
+\subsection{Intervention-Faithful Graph Learning}
+
+Để graph biểu diễn dependency có thể kiểm chứng thay vì chỉ là attention mask, GraphCURE tạo các cặp counterfactual tối thiểu $(x,x^{do(k)})$ bằng cách thay duy nhất một thuộc tính $k\in\{ent,tmp,ctx\}$ và giữ nguyên các yếu tố còn lại. Tập hậu duệ theo graph là $\mathrm{Desc}_G(k)$.
+
+Với node không phải hậu duệ, dự đoán phải bất biến:
+\[
+\mathcal{L}_{inv}
+=
+\sum_{j\notin \mathrm{Desc}_G(k)\cup\{k\}}
+\mathrm{JS}\!\left(p_j(x),p_j(x^{do(k)})\right).
+\]
+
+Với node được can thiệp và các hậu duệ có nhãn thay đổi, mô hình phải nhạy đúng hướng:
+\[
+\mathcal{L}_{sens}
+=
+\sum_{j\in \mathcal{T}(k)}
+\max\!\left(0,m-
+\mathrm{JS}\!\left(p_j(x),p_j(x^{do(k)})\right)\right),
+\]
+trong đó $\mathcal{T}(k)$ chỉ gồm các node được annotation xác nhận phải đổi. Loss counterfactual:
+\[
+\mathcal{L}_{cf}=\mathcal{L}_{inv}+\eta\mathcal{L}_{sens}.
+\]
+
+Protocol này tạo ra một phép kiểm tra falsifiable: nếu can thiệp thời gian làm thay đổi entity head hoặc không làm thay đổi temporal/context head, graph chưa học đúng dependency.
+
+% ---------------------------------------------------------
+\subsection{Graph Regularization}
+
+Để tránh message passing học quan hệ nhiễu, GraphCURE dùng regularization có gate theo relation:
+\[
+\mathcal{L}_{graph}
+=
+\sum_{(i,j)\in E}
+A_{ij}g_{ij}
+\|W_i\tilde{h}_i-W_j\tilde{h}_j\|_2^2,
+\]
+trong đó:
+\[
+g_{ij} = \sigma(w_g^\top \phi_{ij}).
+\]
+
+Không dùng distribution-level smoothing giữa các head vì có thể xóa đúng các OOC conflict cần phát hiện. Regularizer này chỉ làm trơn representation trên cạnh khi relation gate cho thấy hai node nên chia sẻ thông tin; typed conflict objective và counterfactual loss vẫn bảo toàn khác biệt trạng thái có ý nghĩa.
+
+% ---------------------------------------------------------
+\subsection{Final Verdict Prediction}
+
+Graph representation:
+\[
+h_G = \text{Pool}(\{\tilde{h}_{sem},\tilde{h}_{ent},\tilde{h}_{tmp},\tilde{h}_{ctx}\}).
+\]
+
+Nhãn cuối:
+\[
+p(y|C,I,M)
+=
+\text{Softmax}
+\left(
+W_y[
+h_G;
+p_{sem};p_{ent};p_{tmp};p_{ctx};
+\bar{u}_{sem};\bar{u}_{ent};\bar{u}_{tmp};\bar{u}_{ctx};
+c_G
+]+b_y
+\right).
+\]
+
+% ---------------------------------------------------------
+\subsection{Budgeted Value-of-Information Evidence Acquisition}
+
+GraphCURE xem retrieval là một bài toán sequential decision-making. Tại bước $t$, state $s_t$ chứa posterior của verdict, các constraint, typed conflicts và evidence đã có. Action space:
+\[
+\mathcal{A}=\{a_{ent},a_{tmp},a_{ctx},a_{sem},a_{stop}\},
+\]
+trong đó mỗi action phát một query chuyên biệt và có chi phí $\kappa(a)$ đo bằng token, latency hoặc tiền.
+
+Với loss quyết định $\ell$, Bayes risk hiện tại là:
+\[
+\mathcal{R}(s_t)=\min_{\hat y}\mathbb{E}_{y\sim p(y|s_t)}[\ell(\hat y,y)].
+\]
+Expected value of information của action $a$:
+\[
+\mathrm{EVI}(a|s_t)
+=
+\mathcal{R}(s_t)
+-
+\mathbb{E}_{e\sim q(e|a,s_t)}
+\left[\mathcal{R}(s_t\oplus e)\right].
+\]
+Utility có xét chi phí:
+\[
+U(a|s_t)=\mathrm{EVI}(a|s_t)-\lambda_{\$}\kappa(a).
+\]
+Policy chọn $a_t=\arg\max_a U(a|s_t)$ và dừng khi $\max_{a\neq a_{stop}}U(a|s_t)\leq 0$, khi đạt budget, hoặc khi posterior verdict vượt ngưỡng selective-prediction đã calibration. Distribution $q(e|a,s_t)$ được học từ evidence outcomes trên training set; một ablation dùng one-step rollout Monte Carlo. Nhờ đó, temporal conflict ưu tiên temporal evidence, thay vì luôn đưa flat top-$k$ documents vào LLM.
+
+Budget regularization:
+\[
+\mathcal{L}_{budget}
+=
+\max(0,\mathbb{E}[\sum_t\kappa(a_t)]-B)^2.
+\]
+
+Tổng loss:
+\[
+\mathcal{L}
+=
+\mathcal{L}_{label}
++
+\sum_{i\in V}\lambda_i\mathcal{L}_{constraint}^{i}
++
+\lambda_g\mathcal{L}_{graph}
++
+\lambda_{cf}\mathcal{L}_{cf}
++
+\lambda_b\mathcal{L}_{budget}
++
+\lambda_c\text{Cost}(\pi).
+\]
+
+\begin{algorithm}[htbp]
+\caption{GraphCURE Inference}
+\begin{algorithmic}[1]
+\STATE \textbf{Input:} claim $C$, image $I$, metadata $M$, budget $B$
+\STATE Encode claim, image, caption, and metadata
+\STATE Build initial constraint representations $h_0^{sem},h_0^{ent},h_0^{tmp},h_0^{ctx}$
+\STATE Construct dependency graph $G_c=(V,E,A)$
+\STATE Perform dependency-aware message passing
+\STATE Predict constraint states $p_i$ and uncertainties $\bar{u}_i$
+\STATE Compute typed conflict vector $c_G$ and initial state $s_0$
+\WHILE{budget remains and $\max_{a\neq a_{stop}}U(a|s_t)>0$}
+\STATE Select $a_t=\arg\max_a U(a|s_t)$
+\STATE Retrieve constraint-specific evidence $e_t$ and update $s_{t+1}$
+\ENDWHILE
+\STATE Build constraint evidence table from acquired evidence
+\STATE Return calibrated verdict and evidence-grounded explanation
+\end{algorithmic}
+\end{algorithm}
+
+% ---------------------------------------------------------
+\subsection{Constraint-Grounded Open Verification}
+
+Khi open branch được kích hoạt, hệ thống truy xuất tài liệu ngoài bằng BM25, dense retrieval hoặc web search API. Với mỗi document $d_i$:
+\[
+d_i=\{s_1,s_2,\ldots,s_n\}.
+\]
+
+Mỗi sentence evidence được gán vào một hoặc nhiều constraint:
+\[
+r(s_j)\subseteq\{sem,ent,tmp,ctx\}.
+\]
+
+Evidence score:
+\[
+\begin{aligned}
+Score(s_j,k)
+=&\ \text{Rel}(s_j,C)
++\eta_1\text{EntMatch}(s_j,E_C)\\
+&+\eta_2\text{TimeMatch}(s_j,T_C)
++\eta_3\text{ContextMatch}(s_j,C)
+-\eta_4\text{Noise}(s_j).
+\end{aligned}
+\]
+
+Top evidence cho constraint $k$:
+\[
+\mathcal{E}^k=\text{TopM}_{s_j}Score(s_j,k).
+\]
+
+LLM judge nhận input dạng có cấu trúc:
+
+\begin{verbatim}
+Claim:
+...
+
+Image caption:
+...
+
+Constraint diagnosis:
+Semantic: satisfied/violated/unknown, uncertainty = ...
+Entity: satisfied/violated/unknown, uncertainty = ...
+Temporal: satisfied/violated/unknown, uncertainty = ...
+Contextual: satisfied/violated/unknown, uncertainty = ...
+
+Detected conflicts:
+- Entity -> Context conflict score = ...
+- Temporal -> Context conflict score = ...
+
+Evidence table:
+[Semantic Evidence]
+1. ...
+2. ...
+
+[Entity Evidence]
+1. ...
+2. ...
+
+[Temporal Evidence]
+1. ...
+2. ...
+
+[Contextual Evidence]
+1. ...
+2. ...
+
+Task:
+Decide whether the claim-image pair is True, False, or Misleading.
+Only use the evidence above.
+Every explanation sentence must cite at least one evidence category.
+\end{verbatim}
+
+% ---------------------------------------------------------
+\subsection{Explanation Faithfulness}
+
+Mỗi câu giải thích $e_l$ phải được liên kết với một constraint và ít nhất một evidence item:
+\[
+e_l \rightarrow (k,\mathcal{E}^{k}_j).
+\]
+
+Faithfulness tổng thể:
+\[
+F =
+\frac{
+\#\text{supported explanation sentences}
+}{
+\#\text{all explanation sentences}
+}.
+\]
+
+Faithfulness theo constraint:
+\[
+F^k =
+\frac{
+\#\text{supported explanation sentences for constraint } k
+}{
+\#\text{all explanation sentences for constraint } k
+}.
+\]
+
+% =========================================================
+\section{Tính mới so với các hướng liên quan}
+
+GraphCURE không claim novelty ở từng module riêng lẻ như CLIP, EDL, GNN, RAG hay LLM judge. Lõi phương pháp có thể kiểm chứng gồm ba thành phần liên kết: dependency được nhận dạng bằng intervention, conflict có semantics theo loại cạnh, và evidence acquisition tối ưu theo value-of-information:
+
+\begin{quote}
+\textit{Learn which constraint dependencies survive minimal interventions, represent typed incompatibilities without conflating them with distributional disagreement, and acquire the next piece of evidence only when its expected reduction in verification risk exceeds its cost.}
+\end{quote}
+
+\begin{table}[H]
+\centering
+\small
+\caption{So sánh GraphCURE với các hướng hiện có}
+\begin{tabularx}{\linewidth}{lXXXXX}
+\toprule
+\textbf{Hướng}
+& \textbf{Constraint}
+& \textbf{Dependency}
+& \textbf{Conflict}
+& \textbf{Acquisition}
+& \textbf{Evidence}\\
+\midrule
+Closed-book classifier
+& Không & Không & Không & Không & Không\\
+Standard RAG
+& Không & Không & Không & Không & Flat\\
+GraphRAG
+& Evidence graph & Có & Không rõ & Không & Graph evidence\\
+Multi-agent fact-checking
+& Một phần & Không rõ & Một phần & Không & Có\\
+Entropy routing
+& Không & Không & Không & Có & Không\\
+Independent constraint heads
+& Có & Không & Không & Có thể & Không\\
+Constraint cross-attention
+& Có & Implicit & Không rõ & Có thể & Không\\
+\textbf{GraphCURE}
+& \textbf{Có}
+& \textbf{Intervention-tested}
+& \textbf{Typed}
+& \textbf{Sequential EVI}
+& \textbf{Constraint table}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Vì sao typed conflict thay cho JS divergence?}
+Các head semantic, entity, temporal và contextual dự đoán những mệnh đề khác nhau. Khoảng cách giữa hai vector xác suất không tự động có nghĩa là mâu thuẫn. Compatibility tensor khiến định nghĩa conflict phụ thuộc vào loại quan hệ và có thể được audit bằng annotation.
+
+\paragraph{Vì sao intervention và EVI là lõi novelty?}
+Minimal interventions biến dependency graph thành giả thuyết có thể bác bỏ, còn EVI biến routing từ một confidence heuristic thành quyết định mua evidence có objective rõ ràng. Hai phần gặp nhau ở typed graph: can thiệp xác định evidence nào có thể ảnh hưởng node nào, và conflict xác định giá trị tiềm năng của từng action.
+
+\paragraph{Vì sao cần cross-attention baseline?}
+Vì graph có số node nhỏ, reviewer có thể hỏi liệu graph reasoning có khác gì attention giữa các constraint. Do đó, chúng tôi thêm constraint cross-attention baseline như một stress test bắt buộc. Đây là phần quan trọng để xác nhận contribution của dependency graph.
+
+% =========================================================
+\section{Thiết lập thực nghiệm}
+
+\subsection{Datasets}
+
+Chúng tôi đánh giá trên:
+
+\begin{itemize}[leftmargin=1.5em]
+\item \textbf{NewsCLIPpings}: out-of-context image-caption dataset.
+\item \textbf{MM-COVID}: multimodal misinformation trong miền COVID-19.
+\item \textbf{MOCHEG}: multimodal claim verification có evidence.
+\item \textbf{Temporal-Context Manipulation Benchmark}: benchmark mới tập trung vào temporal và contextual manipulation.
+\end{itemize}
+
+\subsection{Temporal-Context Manipulation Benchmark}
+
+Benchmark mới gồm năm nhóm hard negatives:
+
+\begin{enumerate}[leftmargin=1.5em]
+\item \textbf{Same entity, wrong time}: cùng nhân vật hoặc sự kiện lớn nhưng khác thời điểm.
+\item \textbf{Same location, wrong event}: cùng địa điểm nhưng khác sự kiện.
+\item \textbf{Same visual scene, wrong claim}: cảnh trực quan tương tự nhưng claim nói về sự kiện khác.
+\item \textbf{Same event type, wrong context}: cùng loại sự kiện nhưng khác quốc gia, nguyên nhân hoặc bối cảnh.
+\item \textbf{Multi-constraint conflict}: đồng thời sai nhiều constraint.
+\end{enumerate}
+
+Với mỗi sample gốc $(C,I,y)$, chúng tôi truy xuất ảnh ứng viên $I'$ có độ tương đồng thị giác cao nhưng khác thời gian, event entity hoặc context evidence. Sample mới:
+\[
+(C,I',\Misleading)
+\]
+được giữ lại nếu vượt qua automatic filtering và human validation.
+
+\paragraph{Counterfactual tuples.}
+Ngoài hard negatives độc lập, benchmark phát hành các tuple $(x,x^{do(k)})$ trong đó đúng một slot thực thể, thời gian, địa điểm hoặc sự kiện được thay đổi. Mỗi tuple có annotation về tập constraint nào \emph{phải đổi}, tập nào \emph{phải bất biến}, và evidence span chứng minh can thiệp. Split được tạo theo event và source, không chia ngẫu nhiên theo pair, để tránh cùng một ảnh hoặc sự kiện xuất hiện ở cả train và test.
+
+\paragraph{Quality control.}
+Một sample được giữ lại nếu thỏa mãn:
+\begin{itemize}[leftmargin=1.5em]
+\item visual similarity đủ cao để tránh negative quá dễ;
+\item entity hoặc scene overlap đủ lớn để tạo hard negative;
+\item temporal/contextual mismatch được xác nhận bằng evidence;
+\item ít nhất hai annotators đồng ý với label và manipulation type.
+\end{itemize}
+
+\subsection{Human Validation}
+
+Mỗi sample được annotate bởi ít nhất ba annotators với các trường:
+
+\begin{itemize}[leftmargin=1.5em]
+\item final label: \True, \False, \Misleading;
+\item semantic constraint label;
+\item entity constraint label;
+\item temporal constraint label;
+\item contextual constraint label;
+\item manipulation type;
+\item evidence sufficiency.
+\end{itemize}
+
+Chúng tôi báo cáo:
+
+\begin{itemize}[leftmargin=1.5em]
+\item Cohen's Kappa hoặc Krippendorff's Alpha;
+\item agreement theo từng constraint;
+\item tỉ lệ sample bị loại;
+\item phân bố manipulation type;
+\item artifact analysis.
+\end{itemize}
+
+\subsection{Weak Supervision for Constraint Labels}
+
+Vì các dataset hiện có thường chỉ có final label, GraphCURE tạo pseudo-label cho constraints bằng labeling functions:
+
+\begin{itemize}[leftmargin=1.5em]
+\item CLIP/caption similarity cho semantic constraint;
+\item NER, entity linking và fuzzy matching cho entity constraint;
+\item temporal parser, metadata và evidence date cho temporal constraint;
+\item event similarity, location matching và retrieved evidence cho contextual constraint.
+\end{itemize}
+
+Mỗi labeling function:
+\[
+l_m^k(C,I)\in\{\Sat,\Viol,\Unk,\Abstain\}.
+\]
+
+Pseudo-label:
+\[
+\hat{z}^k=\text{Aggregate}(l_1^k,\ldots,l_M^k).
+\]
+
+Chúng tôi đánh giá pseudo-label quality trên human-labeled subset:
+\[
+Acc_{pseudo}^{k}
+=
+\frac{
+\#\text{pseudo-labels matching human labels for }k
+}{
+\#\text{human-labeled samples}
+}.
+\]
+
+Ngoài accuracy, báo cáo precision, recall và macro-F1 theo từng constraint.
+
+% =========================================================
+\section{Baselines}
+
+\subsection{Closed-book Baselines}
+
+\begin{itemize}[leftmargin=1.5em]
+\item CLIP-based classifier.
+\item ViLT.
+\item VisualBERT.
+\item BLIP/BLIP-2 classifier.
+\item MCVE-style multimodal claim verification model.
+\end{itemize}
+
+\subsection{RAG and Open-search Baselines}
+
+\begin{itemize}[leftmargin=1.5em]
+\item BM25 + LLM judge.
+\item Dense retrieval + LLM judge.
+\item FlatRAG.
+\item Reranked RAG.
+\item GraphRAG-style evidence graph.
+\item Multi-agent fact-checking pipeline.
+\end{itemize}
+
+\subsection{Multimodal LLM Baselines}
+
+\begin{itemize}[leftmargin=1.5em]
+\item LLaVA-1.6 zero-shot.
+\item InternVL2 zero-shot.
+\item Qwen2-VL hoặc Qwen2.5-VL zero-shot.
+\item GPT-4V hoặc GPT-4o nếu có điều kiện.
+\item Multimodal LLM + retrieved evidence.
+\end{itemize}
+
+\subsection{Routing Baselines}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Always closed.
+\item Always open.
+\item Entropy threshold.
+\item Max probability threshold.
+\item MC dropout uncertainty.
+\item Global EDL uncertainty.
+\item Independent constraint uncertainty.
+\item Learned logistic router.
+\item Constraint cross-attention router.
+\item GraphCURE conflict-aware router.
+\item Entropy-per-cost greedy acquisition.
+\item Contextual-bandit evidence acquisition.
+\item One-step Monte Carlo value-of-information.
+\item Oracle value-of-information using observed outcomes as an upper bound.
+\end{itemize}
+
+\subsection{Critical Architecture Baselines}
+
+Để kiểm tra liệu graph có thật sự cần thiết:
+
+\begin{itemize}[leftmargin=1.5em]
+\item \textbf{Independent constraint heads}: bốn constraint không giao tiếp.
+\item \textbf{Fully connected constraint attention}: mọi constraint attends tới mọi constraint khác.
+\item \textbf{Context-query cross-attention}: contextual node attends tới semantic/entity/temporal nodes.
+\item \textbf{Prior graph only}: dùng graph cố định.
+\item \textbf{Learned graph only}: học edge weights không dùng prior.
+\item \textbf{Prior + learned graph}: GraphCURE full model.
+\end{itemize}
+
+\noindent Với sequential acquisition, chúng tôi còn báo cáo area under the accuracy--cost Pareto curve, acquisition regret so với oracle EVI, số evidence actions trung bình, action distribution theo manipulation type, và stop accuracy.
+
+% =========================================================
+\section{Metrics}
+
+\subsection{Prediction Metrics}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Accuracy.
+\item Macro-F1.
+\item Class-wise F1.
+\item Hard-negative F1.
+\item Out-of-context F1.
+\item Cross-dataset transfer F1.
+\end{itemize}
+
+\subsection{Constraint Metrics}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Constraint accuracy.
+\item Constraint macro-F1.
+\item Constraint confusion matrix.
+\item Constraint-level precision and recall.
+\item Multi-constraint conflict detection F1.
+\end{itemize}
+
+\subsection{Calibration and Selective Prediction Metrics}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Expected Calibration Error.
+\item Maximum Calibration Error.
+\item Brier Score.
+\item Negative Log-Likelihood.
+\item Area Under Risk-Coverage Curve.
+\item Selective prediction accuracy at different coverage levels.
+\end{itemize}
+
+\subsection{Retrieval and Cost Metrics}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Retrieval rate.
+\item Average token cost.
+\item Average latency.
+\item Cost-normalized F1.
+\item Accuracy under fixed retrieval budgets.
+\item Savings compared to always-open:
+\[
+\text{Savings}
+=
+1-
+\frac{
+\text{Cost}_{GraphCURE}
+}{
+\text{Cost}_{AlwaysOpen}
+}.
+\]
+\end{itemize}
+
+\subsection{Evidence and Explanation Metrics}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Evidence precision.
+\item Evidence recall.
+\item Evidence F1.
+\item Explanation faithfulness.
+\item Constraint-wise faithfulness.
+\item Human evaluation of explanation correctness.
+\item Human evaluation of usefulness.
+\item Human evaluation of evidence grounding.
+\end{itemize}
+
+% =========================================================
+\section{Ablation Study}
+
+\subsection{Main Ablation}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Main ablation configurations}
+\begin{tabularx}{\linewidth}{cXXXXX}
+\toprule
+\textbf{ID}
+& \textbf{Constraints}
+& \textbf{Dependency}
+& \textbf{Uncertainty}
+& \textbf{Routing}
+& \textbf{Evidence}\\
+\midrule
+A1 & Không & Không & Không & Không & Không\\
+A2 & Có & Không & Không & Không & Không\\
+A3 & Có & Không & Global entropy & Threshold & Flat\\
+A4 & Có & Không & Independent EDL & Threshold & Flat\\
+A5 & Có & Cross-attention & Independent & Learned & Flat\\
+A6 & Có & Prior graph & Independent & Learned & Flat\\
+A7 & Có & Prior graph & Aggregated & Risk & Flat\\
+A8 & Có & Prior + learned graph & Aggregated & Risk & Flat\\
+A9 & Có & Prior + learned graph & Aggregated & Conflict-aware & Flat\\
+A10 & Có & Prior + learned graph & Aggregated & Conflict-aware & Constraint table\\
+A11 & Có & Prior + learned graph & Aggregated & Always open & Constraint table\\
+A12 & Có & Intervention graph & Typed conflict & Entropy/cost & Constraint table\\
+A13 & Có & Intervention graph & Typed conflict & One-step EVI & Constraint table\\
+A14 & Có & Intervention graph & Typed conflict & Sequential EVI & Constraint table\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Constraint Ablation}
+
+\begin{table}[H]
+\centering
+\caption{Constraint ablation}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Cấu hình} & \textbf{Mục tiêu}\\
+\midrule
+w/o Semantic & Kiểm tra đóng góp của semantic consistency\\
+w/o Entity & Kiểm tra phát hiện sai người, sai địa điểm, sai tổ chức\\
+w/o Temporal & Kiểm tra phát hiện ảnh thật nhưng sai thời gian\\
+w/o Contextual & Kiểm tra phát hiện sai ngữ cảnh sự kiện\\
+Only Semantic & Semantic-only baseline\\
+Only Entity+Temporal & Đánh giá out-of-context dựa trên thực thể và thời gian\\
+Only Contextual & Đánh giá vai trò context consistency\\
+Full & Dùng đủ bốn constraints\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Dependency Modeling Ablation}
+
+\begin{table}[H]
+\centering
+\caption{Dependency modeling ablation}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Cấu hình} & \textbf{Mục tiêu}\\
+\midrule
+No dependency & Bốn constraint heads độc lập\\
+Fully connected attention & Kiểm tra attention không dùng prior graph\\
+Context-query attention & Context node attends tới sem/entity/temp\\
+Prior graph only & Graph cố định dựa trên domain prior\\
+Learned graph only & Học edge weights không dùng prior\\
+Prior + learned graph & Kết hợp prior và sample-specific edge weights\\
+Remove ent $\rightarrow$ ctx & Kiểm tra vai trò entity đối với context\\
+Remove tmp $\rightarrow$ ctx & Kiểm tra vai trò temporal đối với context\\
+Remove sem $\rightarrow$ ctx & Kiểm tra vai trò semantic đối với context\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Uncertainty and Conflict Ablation}
+
+\begin{table}[H]
+\centering
+\caption{Uncertainty and conflict ablation}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Cấu hình} & \textbf{Mục tiêu}\\
+\midrule
+Softmax confidence & Baseline confidence thông thường\\
+Temperature scaling & Calibration hậu xử lý\\
+MC dropout & Bayesian approximation baseline\\
+Global EDL & EDL trên nhãn cuối\\
+Independent constraint EDL & EDL cho từng constraint không aggregation\\
+Learned uncertainty aggregation & Aggregation theo dependency graph\\
+w/o conflict score & Loại bỏ inter-constraint conflict\\
+Full conflict-aware risk & Dùng uncertainty + conflict vector\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Evidence Organization Ablation}
+
+\begin{table}[H]
+\centering
+\caption{Evidence organization ablation}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Cấu hình} & \textbf{Mục tiêu}\\
+\midrule
+No evidence & Closed-book only\\
+Flat top-$k$ evidence & Đưa toàn bộ top-$k$ evidence vào LLM\\
+Reranked evidence & Rerank evidence trước khi đưa vào LLM\\
+Constraint evidence table & Tổ chức evidence theo từng constraint\\
+w/o temporal evidence & Kiểm tra vai trò evidence thời gian\\
+w/o entity evidence & Kiểm tra vai trò evidence thực thể\\
+w/o context evidence & Kiểm tra vai trò evidence ngữ cảnh\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =========================================================
+\section{Giả thuyết thực nghiệm}
+
+Chúng tôi kiểm tra các giả thuyết:
+
+\begin{itemize}[leftmargin=1.5em]
+\item \textbf{H1}: Constraint decomposition cải thiện hard-negative F1 so với fusion classifier.
+\item \textbf{H2}: Dependency-aware modeling tốt hơn independent constraint heads trên multi-constraint conflict.
+\item \textbf{H3}: Prior + learned graph tốt hơn prior-only và learned-only graph.
+\item \textbf{H4}: GraphCURE vượt constraint cross-attention baseline; nếu không, contribution chính được diễn giải là constraint decomposition và conflict-aware routing.
+\item \textbf{H5}: Learned uncertainty aggregation giảm ECE, Brier Score và AURC so với global entropy và independent EDL.
+\item \textbf{H6}: Conflict-aware routing giảm retrieval rate đáng kể so với always-open trong khi giữ Macro-F1 gần tương đương.
+\item \textbf{H7}: Constraint evidence table cải thiện evidence precision và explanation faithfulness so với FlatRAG.
+\item \textbf{H8}: Temporal-Context Manipulation Benchmark phơi bày điểm yếu của closed-book models và multimodal LLMs trên temporal/contextual manipulation.
+\item \textbf{H9}: Counterfactual training giảm non-descendant sensitivity và tăng descendant intervention accuracy so với graph chỉ học từ nhãn quan sát.
+\item \textbf{H10}: Sequential EVI acquisition đạt Pareto frontier accuracy--cost tốt hơn binary entropy router và learned logistic router dưới cùng budget.
+\end{itemize}
+
+% =========================================================
+\section{Kết quả kỳ vọng}
+
+Chúng tôi kỳ vọng:
+
+\begin{itemize}[leftmargin=1.5em]
+\item Macro-F1 và hard-negative F1 cao hơn closed-book baselines.
+\item F1 trên multi-constraint conflict cao hơn independent constraint model.
+\item Calibration tốt hơn qua ECE, Brier Score và AURC.
+\item Giảm 40--60\% retrieval calls so với always-open với mức giảm accuracy nhỏ.
+\item Cost-normalized F1 tốt hơn multimodal LLM zero-shot và flat RAG.
+\item Constraint evidence table có faithfulness cao hơn FlatRAG.
+\item Benchmark mới cho thấy temporal/context manipulation vẫn là điểm yếu của các model mạnh.
+\end{itemize}
+
+% =========================================================
+\section{Rủi ro và phương án xử lý}
+
+\begin{table}[H]
+\centering
+\caption{Rủi ro và phương án xử lý}
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+\textbf{Rủi ro} & \textbf{Phương án xử lý}\\
+\midrule
+Graph với 4 node bị xem là yếu & Đánh giá intervention accuracy; nếu graph không vượt structured MLP/cross-attention thì không claim graph contribution\\
+Novelty bị xem là ghép module & Định vị contribution ở intervention-faithful graph + typed conflict + EVI acquisition và kiểm chứng từng mắt xích\\
+Uncertainty propagation bị cho là thiếu lý thuyết & Gọi là learned uncertainty aggregation, đánh giá bằng calibration metrics\\
+Weak supervision noisy & Báo cáo pseudo-label quality trên human-labeled subset\\
+Temporal parser lỗi & Cho phép \Unk{} và dùng evidence date thay vì ép đoán\\
+NER/entity linking lỗi & Dùng soft entity linking, fuzzy matching và disambiguation\\
+Benchmark có artifact & Human validation, IAA và artifact analysis\\
+LLM judge hallucination & Bắt buộc explanation cite evidence trong constraint table\\
+Router overfit dataset & Cross-dataset transfer và budget sensitivity analysis\\
+EVI outcome model sai lệch & So sánh learned EVI với oracle rollout, myopic rollout và entropy-per-cost; báo cáo regret\\
+Không đánh bại GPT-4o về accuracy & Tập trung cost-normalized performance, calibration và retrieval efficiency\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =========================================================
+\section{Kết luận}
+
+Chúng tôi đề xuất GraphCURE, một framework kiểm chứng thông tin đa phương thức dựa trên dependency-aware constraint verification và conflict-aware uncertainty routing. Thay vì dự đoán nhãn cuối như một classifier đóng, GraphCURE phân rã verification thành semantic, entity, temporal và contextual constraints, mô hình hóa quan hệ phụ thuộc giữa chúng, phát hiện các conflict giữa constraint, và dùng verification risk để quyết định khi nào cần retrieval.
+
+Khi retrieval được kích hoạt, GraphCURE tổ chức evidence thành constraint evidence table để hỗ trợ LLM judge và tạo giải thích có căn cứ. Bên cạnh đó, Temporal-Context Manipulation Benchmark được xây dựng để đánh giá trực tiếp các dạng out-of-context misinformation khó, đặc biệt là cùng thực thể nhưng sai thời gian, cùng địa điểm nhưng sai sự kiện, và multi-constraint conflict.
+
+Nếu kết quả thực nghiệm xác nhận các giả thuyết, GraphCURE có tiềm năng đóng góp cho multimodal fact verification ở ba khía cạnh: accuracy trên hard negatives, calibration và selective retrieval, cũng như evidence-grounded explanation.
+
+% =========================================================
+\bibliographystyle{plain}
+
+\begin{thebibliography}{99}
+
+\bibitem{edl2018}
+Murat Sensoy, Lance Kaplan, and Melih Kandemir.
+\newblock Evidential Deep Learning to Quantify Classification Uncertainty.
+\newblock In \textit{NeurIPS}, 2018.
+
+\bibitem{clip2021}
+Alec Radford, Jong Wook Kim, Chris Hallacy, et al.
+\newblock Learning Transferable Visual Models From Natural Language Supervision.
+\newblock In \textit{ICML}, 2021.
+
+\bibitem{rag2020}
+Patrick Lewis, Ethan Perez, Aleksandra Piktus, et al.
+\newblock Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks.
+\newblock In \textit{NeurIPS}, 2020.
+
+\bibitem{vilt2021}
+Wonjae Kim, Bokyung Son, and Ildoo Kim.
+\newblock ViLT: Vision-and-Language Transformer Without Convolution or Region Supervision.
+\newblock In \textit{ICML}, 2021.
+
+\bibitem{visualbert2019}
+Liunian Harold Li, Mark Yatskar, Da Yin, Cho-Jui Hsieh, and Kai-Wei Chang.
+\newblock VisualBERT: A Simple and Performant Baseline for Vision and Language.
+\newblock arXiv preprint arXiv:1908.03557, 2019.
+
+\bibitem{newsclippings}
+Grace Luo, Trevor Darrell, and Anna Rohrbach.
+\newblock NewsCLIPpings: Automatic Generation of Out-of-Context Multimodal Media.
+\newblock In \textit{EMNLP}, 2021.
+
+\bibitem{llava2023}
+Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee.
+\newblock Visual Instruction Tuning.
+\newblock In \textit{NeurIPS}, 2023.
+
+\bibitem{qagnn2021}
+Michihiro Yasunaga, Hongyu Ren, Antoine Bosselut, Percy Liang, and Jure Leskovec.
+\newblock QA-GNN: Reasoning with Language Models and Knowledge Graphs for Question Answering.
+\newblock In \textit{NAACL}, 2021.
+
+\bibitem{greaselm2022}
+Xikun Zhang, Deepak Ramachandran, Ian Tenney, Yanai Elazar, and Dan Roth.
+\newblock GreaseLM: Graph REASoning Enhanced Language Models.
+\newblock In \textit{ICLR}, 2022.
+
+\bibitem{adaptive-rag}
+Adaptive retrieval and routing for retrieval-augmented generation.
+\newblock Replace with the official citation for Adaptive RAG / Self-RAG style routing papers.
+
+\bibitem{mocheg}
+Multimodal Claim Verification with Evidence.
+\newblock Replace with the official MOCHEG citation.
+
+\bibitem{mmcovid}
+A Multimodal COVID-19 Misinformation Dataset.
+\newblock Replace with the official MM-COVID citation.
+
+\bibitem{verite}
+VERITE: A benchmark for multimodal misinformation or fact verification.
+\newblock Replace with the official citation.
+
+\bibitem{internvl}
+InternVL: Scaling up Vision Foundation Models and Aligning for Generic Visual-Linguistic Tasks.
+\newblock Replace with the official citation.
+
+\bibitem{qwen-vl}
+Qwen-VL: A Versatile Vision-Language Model for Understanding, Localization, Text Reading, and Beyond.
+\newblock Replace with the official citation.
+
+\end{thebibliography}
+
+% =========================================================
+\appendix
+
+\section{Appendix A: Example Constraint Diagnosis}
+
+\textbf{Claim:} ``Joe Biden signed the Infrastructure Act in Texas.''
+
+\textbf{Image caption:} ``Joe Biden signs a bill at the White House.''
+
+\textbf{Constraint diagnosis:}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Semantic: \Sat. Claim and image both concern Biden signing a law.
+\item Entity: \Sat. Biden and the Infrastructure Act are consistent.
+\item Temporal: \Unk. No explicit date is provided.
+\item Contextual: \Viol. Evidence indicates the signing happened at the White House, not Texas.
+\end{itemize}
+
+\textbf{Conflict pattern:}
+Semantic and entity constraints are satisfied, but contextual constraint is violated. This is a typical out-of-context pattern.
+
+\textbf{Verdict:} \False{} or \Misleading{}, depending on dataset label policy.
+
+\section{Appendix B: Prompt Template for LLM Judge}
+
+\begin{verbatim}
+You are a multimodal fact verification system.
+
+Claim:
+{claim}
+
+Image caption:
+{caption}
+
+Constraint diagnosis:
+Semantic: {state_sem}, uncertainty={u_sem}
+Entity: {state_ent}, uncertainty={u_ent}
+Temporal: {state_tmp}, uncertainty={u_tmp}
+Contextual: {state_ctx}, uncertainty={u_ctx}
+
+Detected conflicts:
+{conflict_list}
+
+Evidence table:
+
+[Semantic Evidence]
+{semantic_evidence}
+
+[Entity Evidence]
+{entity_evidence}
+
+[Temporal Evidence]
+{temporal_evidence}
+
+[Contextual Evidence]
+{contextual_evidence}
+
+Instruction:
+Decide whether the claim-image pair is True, False, or Misleading.
+Only use the evidence above.
+Every explanation sentence must cite at least one evidence category.
+Do not introduce external facts that are not supported by the evidence table.
+\end{verbatim}
+
+\section{Appendix C: Reporting Checklist}
+
+\begin{itemize}[leftmargin=1.5em]
+\item Report final label performance on all datasets.
+\item Report hard-negative and out-of-context split performance.
+\item Report constraint-level F1.
+\item Report calibration metrics.
+\item Report retrieval rate, token cost and latency.
+\item Report risk--coverage curves.
+\item Report pseudo-label quality against human labels.
+\item Report inter-annotator agreement for benchmark construction.
+\item Report cross-attention vs graph comparison.
+\item Report graph edge ablation.
+\item Report conflict detection ablation.
+\item Report comparison with multimodal LLM baselines.
+\item Report budget sensitivity analysis.
+\item Report error analysis by failure type.
+\end{itemize}
+
+\end{document}

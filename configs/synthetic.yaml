@@ -1,0 +1,25 @@
+seed: 42
+data:
+  train_manifest: data/processed/synthetic/train.jsonl
+  val_manifest: data/processed/synthetic/val.jsonl
+  test_manifest: data/processed/synthetic/test.jsonl
+model:
+  hidden_dim: 32
+  num_states: 3
+  num_labels: 3
+  graph_layers: 2
+  dropout: 0.1
+train:
+  epochs: 2
+  batch_size: 16
+  num_workers: 0
+  learning_rate: 0.001
+  weight_decay: 0.0
+  amp: false
+  output_dir: outputs/synthetic
+loss:
+  label: 1.0
+  constraint: 0.5
+  conflict: 0.2
+  counterfactual: 0.5
+

@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+import argparse
+import json
+import random
+from pathlib import Path
+
+import numpy as np
+import torch
+import yaml
+from sklearn.metrics import f1_score
+from torch.utils.data import DataLoader
+
+from graphcure.data import EmbeddingManifestDataset, collate_manifest
+from graphcure.losses import total_loss
+from graphcure.model import GraphCURE, GraphCUREConfig
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="configs/base.yaml")
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--resume")
+    return parser.parse_args()
+
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def move(batch: dict, device: torch.device) -> dict:
+    return {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}
+
+
+@torch.no_grad()
+def evaluate(model: GraphCURE, loader: DataLoader, device: torch.device) -> dict:
+    model.eval()
+    labels, predictions = [], []
+    for batch in loader:
+        batch = move(batch, device)
+        out = model(batch["text_embedding"], batch["image_embedding"], batch["metadata"])
+        labels.extend(batch["label"].cpu().tolist())
+        predictions.extend(out["verdict_logits"].argmax(-1).cpu().tolist())
+    return {
+        "accuracy": float(np.mean(np.asarray(labels) == np.asarray(predictions))),
+        "macro_f1": float(f1_score(labels, predictions, average="macro")),
+    }
+
+
+def main() -> None:
+    args = parse_args()
+    cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    seed_everything(cfg["seed"])
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    train_data = EmbeddingManifestDataset(cfg["data"]["train_manifest"])
+    val_data = EmbeddingManifestDataset(cfg["data"]["val_manifest"])
+    loader_args = dict(
+        batch_size=cfg["train"]["batch_size"],
+        num_workers=cfg["train"]["num_workers"],
+        collate_fn=collate_manifest,
+        pin_memory=device.type == "cuda",
+    )
+    train_loader = DataLoader(train_data, shuffle=True, **loader_args)
+    val_loader = DataLoader(val_data, shuffle=False, **loader_args)
+    sample = train_data[0]
+    model_cfg = GraphCUREConfig(
+        text_dim=sample["text_embedding"].numel(),
+        vision_dim=sample["image_embedding"].numel(),
+        metadata_dim=sample["metadata"].numel(),
+        **{
+            k: cfg["model"][k]
+            for k in ("hidden_dim", "num_states", "num_labels", "graph_layers", "dropout")
+        },
+    )
+    model = GraphCURE(model_cfg).to(device)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=cfg["train"]["learning_rate"],
+        weight_decay=cfg["train"]["weight_decay"],
+    )
+    scaler = torch.amp.GradScaler("cuda", enabled=cfg["train"]["amp"] and device.type == "cuda")
+    output_dir = Path(cfg["train"]["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    best = -1.0
+    weights = cfg["loss"]
+    for epoch in range(cfg["train"]["epochs"]):
+        model.train()
+        running = 0.0
+        for batch in train_loader:
+            batch = move(batch, device)
+            optimizer.zero_grad(set_to_none=True)
+            with torch.autocast(device_type=device.type, enabled=scaler.is_enabled()):
+                out = model(batch["text_embedding"], batch["image_embedding"], batch["metadata"])
+                cf_out = None
+                if "cf_text_embedding" in batch:
+                    cf_out = model(
+                        batch["cf_text_embedding"],
+                        batch["cf_image_embedding"],
+                        batch["cf_metadata"],
+                    )
+                loss, _ = total_loss(out, batch, weights, cf_out)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            running += loss.item()
+        metrics = evaluate(model, val_loader, device)
+        print(json.dumps({"epoch": epoch + 1, "loss": running / len(train_loader), **metrics}))
+        if metrics["macro_f1"] > best:
+            best = metrics["macro_f1"]
+            torch.save(
+                {"model": model.state_dict(), "config": model_cfg.__dict__, "metrics": metrics},
+                output_dir / "best.pt",
+            )
+    (output_dir / "metrics.json").write_text(
+        json.dumps({"best_val_macro_f1": best}, indent=2), encoding="utf-8"
+    )
+
+
+if __name__ == "__main__":
+    main()
+
