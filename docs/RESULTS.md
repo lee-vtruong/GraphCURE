@@ -327,3 +327,11 @@ order by 2.14, constraint order by 0.63, and DIA by 0.77 relative to R3. Relativ
 to R7, it further improves CVC and both order metrics with essentially unchanged
 Macro-F1, while DIA decreases by 0.12 points. This is provisional until gradient
 conflict diagnostics are inspected and five-seed validation confirms stability.
+
+Gradient diagnostics reject the proposed mechanism: mean primary/auxiliary
+gradient cosine was +0.2311 and mean conflict rate only 0.0017 across 13 epochs.
+Projection activated in only a few early/late batches. Therefore R8 must not be
+described as a gradient-conflict solution and does not advance to five seeds.
+The remaining implementation difference from R7 is FP32 versus AMP. R8-C
+(`configs/newsclippings_minimal_fp32.yaml`) is a seed-42 validation control with
+identical losses and FP32 training but no projection.

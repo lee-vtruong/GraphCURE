@@ -171,6 +171,9 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
 This configuration disables AMP because task-gradient projection is performed
 explicitly. Training logs include gradient cosine and conflict rate.
 
+Use `configs/newsclippings_minimal_fp32.yaml` as the required numerical control:
+it disables AMP but applies no gradient projection.
+
 After the screen succeeds, run the five-seed experiment (preferably in tmux):
 
 ```bash
