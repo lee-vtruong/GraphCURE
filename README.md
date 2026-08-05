@@ -241,6 +241,18 @@ Evaluation writes Descendant Intervention Accuracy (DIA), Non-descendant
 Invariance (NDI), and Counterfactual Verdict Consistency (CVC) into each
 `test_metrics.json`. Pair members never cross the official split boundary.
 
+The directional follow-up orders the falsified member above its pristine pair
+in both VIOLATED-state probability and falsified-verdict score:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_directional.yaml \
+  --device cuda \
+  --architectures multi_independent \
+  --seeds 42 \
+  --output-root outputs/ablations/newsclippings_directional_screen
+```
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.

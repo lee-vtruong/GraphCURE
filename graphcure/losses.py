@@ -46,6 +46,30 @@ def counterfactual_loss(
     return inv + sens
 
 
+def directional_intervention_loss(
+    factual: dict[str, torch.Tensor],
+    counterfactual: dict[str, torch.Tensor],
+    labels: torch.Tensor,
+    cf_labels: torch.Tensor,
+    changed_mask: torch.Tensor,
+    verdict_margin: float = 0.5,
+    constraint_margin: float = 0.1,
+) -> torch.Tensor:
+    """Order paired scores in the known pristine-to-falsified direction."""
+    direction = (cf_labels.float() - labels.float()).sign()
+    factual_score = factual["verdict_logits"][:, 1] - factual["verdict_logits"][:, 0]
+    paired_score = counterfactual["verdict_logits"][:, 1] - counterfactual["verdict_logits"][:, 0]
+    verdict = F.relu(verdict_margin - direction * (paired_score - factual_score)).mean()
+    factual_violated = factual["constraint_prob"][..., 1]
+    paired_violated = counterfactual["constraint_prob"][..., 1]
+    selected_delta = (paired_violated - factual_violated)[changed_mask.bool()]
+    selected_direction = direction[:, None].expand_as(changed_mask)[changed_mask.bool()]
+    constraint = F.relu(
+        constraint_margin - selected_direction * selected_delta
+    ).mean()
+    return verdict + constraint
+
+
 def total_loss(
     output: dict[str, torch.Tensor],
     batch: dict[str, torch.Tensor],
@@ -65,7 +89,11 @@ def total_loss(
             cf_output["constraint_prob"],
             batch["changed_mask"],
         )
+        parts["directional"] = directional_intervention_loss(
+            output, cf_output, batch["label"], batch["cf_label"], batch["changed_mask"]
+        )
     else:
         parts["counterfactual"] = output["verdict_logits"].sum() * 0.0
+        parts["directional"] = output["verdict_logits"].sum() * 0.0
     loss = sum(weights.get(name, 0.0) * value for name, value in parts.items())
     return loss, parts

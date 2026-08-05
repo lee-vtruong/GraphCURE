@@ -121,10 +121,28 @@ where graph/constraint behavior has direct supervision.
 
 ## R5: paired counterfactual intervention training
 
-Status: pending. Official pairing was verified exactly for all splits: 35,536
+Official pairing was verified exactly for all splits: 35,536
 train, 3,512 validation, and 3,632 test pairs had pristine-then-falsified
 ordering, identical caption IDs, different image IDs, and identical generation
-sources. The first screen compares the R3 multi-view independent reference
-against the same model with counterfactual sensitivity/invariance loss. Report
-DIA, NDI, CVC, accuracy, and Macro-F1; retain the method only if intervention
-metrics improve without a material verdict-quality collapse.
+sources.
+
+| Model | Accuracy | Macro-F1 | DIA | NDI | CVC |
+|---|---:|---:|---:|---:|---:|
+| R3 independent reference | **0.6529** | **0.6529** | 0.4601 | 0.7406 | **0.5063** |
+| R5 + symmetric JS intervention | 0.6461 | 0.6458 | **0.4821** | **0.7676** | 0.5008 |
+
+R5 confusion matrix: `[[2448, 1184], [1387, 2245]]`.
+
+Interpretation: DIA improved by 2.20 points and NDI by 2.70 points, but test
+Macro-F1 fell by 0.71 points and CVC fell by 0.55 points. Symmetric JS enforces
+that a changed node differs, but not the known direction from SATISFIED/pristine
+to VIOLATED/falsified.
+
+Decision: do not run five seeds. R6 adds directional pair ranking for both the
+changed constraint's VIOLATED probability and the falsified verdict score,
+while reducing the symmetric JS weight.
+
+## R6: directional intervention objective
+
+Status: pending. Config: `configs/newsclippings_directional.yaml`. Acceptance
+requires CVC and DIA above R3 while maintaining Macro-F1 near or above 0.6529.

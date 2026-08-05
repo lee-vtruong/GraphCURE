@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 from graphcure.acquisition import choose_evi_action
-from graphcure.losses import counterfactual_loss
+from graphcure.losses import counterfactual_loss, directional_intervention_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
 from graphcure.data import PackedEmbeddingDataset, resolve_newsclippings_source
 
@@ -36,6 +36,25 @@ def test_counterfactual_loss_is_finite():
     q = torch.softmax(torch.randn(3, 4, 3), -1)
     mask = torch.tensor([[0, 0, 1, 1]] * 3).bool()
     assert torch.isfinite(counterfactual_loss(p, q, mask))
+
+
+def test_directional_loss_rewards_correct_pair_order():
+    mask = torch.tensor([[1, 0, 0, 0]], dtype=torch.bool)
+    labels, cf_labels = torch.tensor([0]), torch.tensor([1])
+    good = {
+        "verdict_logits": torch.tensor([[2.0, 0.0]]),
+        "constraint_prob": torch.tensor([[[0.9, 0.1, 0.0]] * 4]),
+    }
+    good_cf = {
+        "verdict_logits": torch.tensor([[0.0, 2.0]]),
+        "constraint_prob": torch.tensor([[[0.1, 0.9, 0.0]] * 4]),
+    }
+    bad_cf = {
+        "verdict_logits": torch.tensor([[3.0, 0.0]]),
+        "constraint_prob": torch.tensor([[[0.95, 0.05, 0.0]] * 4]),
+    }
+    assert directional_intervention_loss(good, good_cf, labels, cf_labels, mask) < \
+           directional_intervention_loss(good, bad_cf, labels, cf_labels, mask)
 
 
 def test_evi_stops_when_every_action_is_costly():
