@@ -6,6 +6,7 @@ from graphcure.acquisition import choose_evi_action
 from graphcure.losses import counterfactual_loss, directional_intervention_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
 from graphcure.data import PackedEmbeddingDataset, resolve_newsclippings_source
+from graphcure.optimization import project_auxiliary_gradients
 
 
 def test_model_shapes():
@@ -55,6 +56,16 @@ def test_directional_loss_rewards_correct_pair_order():
     }
     assert directional_intervention_loss(good, good_cf, labels, cf_labels, mask) < \
            directional_intervention_loss(good, bad_cf, labels, cf_labels, mask)
+
+
+def test_primary_projection_removes_negative_gradient_dot_product():
+    primary = (torch.tensor([1.0, 0.0]),)
+    auxiliary = (torch.tensor([-1.0, 1.0]),)
+    combined, diagnostics = project_auxiliary_gradients(primary, auxiliary)
+    projected_auxiliary = combined[0] - primary[0]
+    assert diagnostics["conflict"] == 1.0
+    assert torch.dot(primary[0], projected_auxiliary).abs() < 1e-6
+    assert torch.equal(combined[0], torch.tensor([1.0, 1.0]))
 
 
 def test_evi_stops_when_every_action_is_costly():

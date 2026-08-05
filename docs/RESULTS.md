@@ -300,3 +300,16 @@ NewsCLIPpings test is now fully consumed and must not be used for further model
 selection or acceptance decisions. Any R8 optimization uses NewsCLIPpings
 validation only and requires an untouched external dataset for final
 confirmation.
+
+## R8: primary-protected intervention gradients
+
+Status: validation-only development. Config:
+`configs/newsclippings_minimal_pcgrad.yaml`. The primary gradient comprises
+verdict and weak constraint classification. The auxiliary gradient comprises
+minimal-intervention JS and directional ranking. When their global dot product
+is negative, the conflicting component of the auxiliary gradient is projected
+out before summation. Epoch logs record gradient cosine and conflict rate.
+
+R8 is selected exclusively on NewsCLIPpings validation. It must improve the R7
+intervention metrics while keeping validation Macro-F1 non-inferior; no
+NewsCLIPpings test evaluation is authorized during R8 development.

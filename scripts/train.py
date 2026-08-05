@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from graphcure.data import build_dataset, collate_manifest
 from graphcure.losses import total_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
+from graphcure.optimization import project_auxiliary_gradients
 
 
 def parse_args() -> argparse.Namespace:
@@ -113,9 +114,17 @@ def main() -> None:
     stale_epochs = 0
     patience = int(cfg["train"].get("early_stopping_patience", 0))
     weights = cfg["loss"]
+    gradient_surgery = cfg["train"].get("gradient_surgery", "none")
+    if gradient_surgery not in {"none", "primary_projection"}:
+        raise ValueError(f"Unsupported gradient_surgery: {gradient_surgery}")
+    if gradient_surgery != "none" and scaler.is_enabled():
+        raise ValueError("Set train.amp=false when using gradient surgery")
+    parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
     for epoch in range(cfg["train"]["epochs"]):
         model.train()
         running = 0.0
+        gradient_cosines: list[float] = []
+        gradient_conflicts: list[float] = []
         for batch in train_loader:
             batch = move(batch, device)
             optimizer.zero_grad(set_to_none=True)
@@ -124,13 +133,40 @@ def main() -> None:
                 cf_out = None
                 if "cf_text_embedding" in batch:
                     cf_out = model_forward(model, batch, prefix="cf_")
-                loss, _ = total_loss(out, batch, weights, cf_out)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+                loss, parts = total_loss(out, batch, weights, cf_out)
+            if gradient_surgery == "primary_projection":
+                primary = sum(weights.get(name, 0.0) * parts[name]
+                              for name in ("label", "constraint", "conflict"))
+                auxiliary = sum(weights.get(name, 0.0) * parts[name]
+                                for name in ("counterfactual", "directional"))
+                primary_grads = torch.autograd.grad(
+                    primary, parameters, retain_graph=True, allow_unused=True
+                )
+                auxiliary_grads = torch.autograd.grad(
+                    auxiliary, parameters, allow_unused=True
+                )
+                combined, diagnostics = project_auxiliary_gradients(
+                    primary_grads, auxiliary_grads
+                )
+                for parameter, gradient in zip(parameters, combined):
+                    parameter.grad = gradient
+                optimizer.step()
+                gradient_cosines.append(diagnostics["cosine"])
+                gradient_conflicts.append(diagnostics["conflict"])
+            else:
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
             running += loss.item()
         metrics = evaluate(model, val_loader, device)
-        print(json.dumps({"epoch": epoch + 1, "loss": running / len(train_loader), **metrics}))
+        diagnostics = {}
+        if gradient_cosines:
+            diagnostics = {
+                "gradient_cosine": float(np.mean(gradient_cosines)),
+                "gradient_conflict_rate": float(np.mean(gradient_conflicts)),
+            }
+        print(json.dumps({"epoch": epoch + 1, "loss": running / len(train_loader),
+                          **metrics, **diagnostics}))
         if metrics["macro_f1"] > best:
             best = metrics["macro_f1"]
             stale_epochs = 0

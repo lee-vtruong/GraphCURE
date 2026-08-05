@@ -159,6 +159,18 @@ Do not repeatedly inspect the official test set while tuning loss weights.
 The multi-seed runner accepts `--eval-split val`; with `--skip-existing`, it
 evaluates existing checkpoints without retraining them.
 
+Primary-protected gradient projection can be screened on validation with:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_minimal_pcgrad.yaml \
+  --device cuda --architectures multi_independent --seeds 42 \
+  --eval-split val --output-root outputs/ablations/newsclippings_minimal_pcgrad_screen
+```
+
+This configuration disables AMP because task-gradient projection is performed
+explicitly. Training logs include gradient cosine and conflict rate.
+
 After the screen succeeds, run the five-seed experiment (preferably in tmux):
 
 ```bash
