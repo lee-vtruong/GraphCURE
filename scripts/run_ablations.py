@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     ])
     parser.add_argument("--output-root", default="outputs/ablations/newsclippings_clip")
     parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument("--eval-split", choices=["val", "test"], default="test")
     return parser.parse_args()
 
 
@@ -34,15 +35,17 @@ def main() -> None:
     for architecture in args.architectures:
         for seed in args.seeds:
             directory = root / architecture / f"seed_{seed}"
-            test_file = directory / "test_metrics.json"
-            if not (args.skip_existing and test_file.exists()):
-                run([sys.executable, "-m", "scripts.train", "--config", args.config,
-                     "--device", args.device, "--seed", str(seed),
-                     "--architecture", architecture, "--output-dir", str(directory)])
+            metrics_file = directory / f"{args.eval_split}_metrics.json"
+            checkpoint = directory / "best.pt"
+            if not (args.skip_existing and metrics_file.exists()):
+                if not (args.skip_existing and checkpoint.exists()):
+                    run([sys.executable, "-m", "scripts.train", "--config", args.config,
+                         "--device", args.device, "--seed", str(seed),
+                         "--architecture", architecture, "--output-dir", str(directory)])
                 run([sys.executable, "-m", "scripts.evaluate", "--config", args.config,
-                     "--checkpoint", str(directory / "best.pt"), "--device", args.device,
-                     "--output", str(test_file)])
-            metrics = json.loads(test_file.read_text(encoding="utf-8"))
+                     "--checkpoint", str(checkpoint), "--device", args.device,
+                     "--split", args.eval_split, "--output", str(metrics_file)])
+            metrics = json.loads(metrics_file.read_text(encoding="utf-8"))
             rows.append({"architecture": architecture, "seed": seed,
                          "accuracy": metrics["accuracy"], "macro_f1": metrics["macro_f1"]})
 
@@ -56,8 +59,11 @@ def main() -> None:
             entry[f"{metric}_std"] = float(values.std(ddof=1)) if len(values) > 1 else 0.0
         summary.append(entry)
     root.mkdir(parents=True, exist_ok=True)
-    (root / "runs.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
-    (root / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (root / f"runs_{args.eval_split}.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    (root / f"summary_{args.eval_split}.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    if args.eval_split == "test":
+        (root / "runs.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+        (root / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
 
 

@@ -30,7 +30,7 @@ def fmt(value: object) -> str:
 def main() -> None:
     args = parse_args()
     root = Path(args.root)
-    files = sorted(root.rglob("test_metrics.json"))
+    files = sorted(root.rglob("*_metrics.json"))
     lines = [
         "# Server results snapshot", "",
         f"Generated: {datetime.now(timezone.utc).isoformat()}", "",

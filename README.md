@@ -156,6 +156,8 @@ python -m scripts.evaluate --split val --config <CONFIG> \
 ```
 
 Do not repeatedly inspect the official test set while tuning loss weights.
+The multi-seed runner accepts `--eval-split val`; with `--skip-existing`, it
+evaluates existing checkpoints without retraining them.
 
 After the screen succeeds, run the five-seed experiment (preferably in tmux):
 

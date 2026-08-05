@@ -237,3 +237,15 @@ Protocol decision: the official test set has now been inspected during several
 engineering screens. Freeze it immediately. R8 loss balancing and all further
 model selection must use validation metrics only; test evaluation is permitted
 again only after the configuration and seeds are preregistered in this ledger.
+
+Validation confirmation under the same minimal protocol:
+
+| Model | Macro-F1 | DIA | NDI | CVC | Verdict order | Constraint order |
+|---|---:|---:|---:|---:|---:|---:|
+| Frozen R3 reference | 0.6433 | 0.4547 | 1.0000 | 0.2765 | 0.6189 | 0.6244 |
+| R7 minimal trained | **0.6435** | **0.4636** | 1.0000 | **0.2984** | **0.6338** | **0.6264** |
+
+Validation confirms the intervention signal without a verdict-quality loss:
+DIA +0.89 points, CVC +2.19, verdict order +1.49, constraint order +0.20,
+and Macro-F1 +0.02. Advance R3 and R7 to five-seed validation confirmation;
+do not evaluate new checkpoints on test during this stage.
