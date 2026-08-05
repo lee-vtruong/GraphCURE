@@ -1,8 +1,11 @@
 import torch
+import json
+import numpy as np
 
 from graphcure.acquisition import choose_evi_action
 from graphcure.losses import counterfactual_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
+from graphcure.data import PackedEmbeddingDataset
 
 
 def test_model_shapes():
@@ -31,3 +34,15 @@ def test_evi_stops_when_every_action_is_costly():
     decision = choose_evi_action(current, outcome, posterior, torch.ones(2), 1.0)
     assert decision.should_stop
 
+
+def test_packed_embedding_dataset(tmp_path):
+    np.save(tmp_path / "text_embeddings.npy", np.ones((2, 4), dtype=np.float32))
+    np.save(tmp_path / "image_embeddings.npy", np.ones((2, 6), dtype=np.float32))
+    np.save(tmp_path / "labels.npy", np.array([0, 1], dtype=np.int64))
+    with (tmp_path / "records.jsonl").open("w", encoding="utf-8") as handle:
+        for index in range(2):
+            handle.write(json.dumps({"sample_id": f"x-{index}"}) + "\n")
+    dataset = PackedEmbeddingDataset(tmp_path)
+    assert len(dataset) == 2
+    assert dataset[0]["text_embedding"].shape == (4,)
+    assert dataset[0]["image_embedding"].shape == (6,)

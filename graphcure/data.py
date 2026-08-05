@@ -6,6 +6,7 @@ from typing import Any
 
 import torch
 from torch.utils.data import Dataset
+import numpy as np
 
 
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -64,6 +65,43 @@ class EmbeddingManifestDataset(Dataset):
         return item
 
 
+class PackedEmbeddingDataset(Dataset):
+    """Memory-mapped embedding dataset produced by prepare_newsclippings.py."""
+
+    def __init__(self, directory: str | Path) -> None:
+        self.directory = Path(directory)
+        self.text = np.load(self.directory / "text_embeddings.npy", mmap_mode="r")
+        self.image = np.load(self.directory / "image_embeddings.npy", mmap_mode="r")
+        self.labels = np.load(self.directory / "labels.npy", mmap_mode="r")
+        self.ids = read_jsonl(self.directory / "records.jsonl")
+        if not (len(self.text) == len(self.image) == len(self.labels) == len(self.ids)):
+            raise ValueError(f"Inconsistent packed dataset lengths in {self.directory}")
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        # np.array(copy=True) avoids returning non-writable mmap views to torch.
+        return {
+            "id": self.ids[index]["sample_id"],
+            "text_embedding": torch.from_numpy(np.array(self.text[index], copy=True)),
+            "image_embedding": torch.from_numpy(np.array(self.image[index], copy=True)),
+            "metadata": torch.zeros(16, dtype=torch.float32),
+            "label": torch.tensor(int(self.labels[index]), dtype=torch.long),
+            "constraint_labels": torch.full((4,), -100, dtype=torch.long),
+            "conflict_labels": torch.full((5,), -1.0, dtype=torch.float32),
+        }
+
+
+def build_dataset(config: dict[str, Any], split: str) -> Dataset:
+    data_format = config.get("format", "manifest")
+    if data_format == "manifest":
+        return EmbeddingManifestDataset(config[f"{split}_manifest"])
+    if data_format == "packed_npy":
+        return PackedEmbeddingDataset(config[f"{split}_dir"])
+    raise ValueError(f"Unsupported data format: {data_format}")
+
+
 def collate_manifest(items: list[dict[str, Any]]) -> dict[str, Any]:
     # Counterfactual batches require all rows to carry a pair. Generate manifests
     # accordingly to keep the loss semantics explicit.
@@ -72,4 +110,3 @@ def collate_manifest(items: list[dict[str, Any]]) -> dict[str, Any]:
     for key in keys - {"id"}:
         batch[key] = torch.stack([item[key] for item in items])
     return batch
-

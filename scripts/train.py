@@ -11,7 +11,7 @@ import yaml
 from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader
 
-from graphcure.data import EmbeddingManifestDataset, collate_manifest
+from graphcure.data import build_dataset, collate_manifest
 from graphcure.losses import total_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
 
@@ -55,8 +55,8 @@ def main() -> None:
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     seed_everything(cfg["seed"])
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    train_data = EmbeddingManifestDataset(cfg["data"]["train_manifest"])
-    val_data = EmbeddingManifestDataset(cfg["data"]["val_manifest"])
+    train_data = build_dataset(cfg["data"], "train")
+    val_data = build_dataset(cfg["data"], "val")
     loader_args = dict(
         batch_size=cfg["train"]["batch_size"],
         num_workers=cfg["train"]["num_workers"],
@@ -121,4 +121,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

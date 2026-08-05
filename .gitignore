@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.runtime/
+*.egg-info/
 data/
 outputs/
 checkpoints/
@@ -9,4 +11,3 @@ wandb/
 *.aux
 *.log
 *.out
-

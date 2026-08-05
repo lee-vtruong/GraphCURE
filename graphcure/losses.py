@@ -7,6 +7,8 @@ import torch.nn.functional as F
 def masked_constraint_loss(
     logits: torch.Tensor, targets: torch.Tensor, unknown_index: int = -100
 ) -> torch.Tensor:
+    if not (targets != unknown_index).any():
+        return logits.sum() * 0.0
     return F.cross_entropy(
         logits.flatten(0, 1), targets.flatten(), ignore_index=unknown_index
     )
@@ -67,4 +69,3 @@ def total_loss(
         parts["counterfactual"] = output["verdict_logits"].sum() * 0.0
     loss = sum(weights.get(name, 0.0) * value for name, value in parts.items())
     return loss, parts
-

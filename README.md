@@ -111,6 +111,30 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train \
   --device cuda
 ```
 
+### NewsCLIPpings precomputed-embedding baseline
+
+The official release includes CLIP image/text embedding dictionaries, so the
+closed-book baseline does not require VisualNews images. Pack the dictionaries
+into memory-mapped arrays:
+
+```bash
+python -m scripts.prepare_newsclippings \
+  --raw-root data/raw/news_clippings/news_clippings \
+  --output data/processed/newsclippings_clip
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train \
+  --config configs/newsclippings_embeddings.yaml \
+  --device cuda
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.evaluate \
+  --config configs/newsclippings_embeddings.yaml \
+  --checkpoint outputs/newsclippings_embeddings/best.pt \
+  --device cuda
+```
+
+This is an observational binary-label baseline. Constraint, conflict, and
+counterfactual losses are disabled until their supervision is generated.
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.
@@ -140,4 +164,3 @@ should remain a held-out stress test.
 - Report mean and standard deviation over at least five seeds for main claims.
 - Report Macro-F1, hard-negative F1, ECE, AURC, accuracy-cost Pareto area,
   acquisition regret, evidence recall, token cost, and latency.
-
