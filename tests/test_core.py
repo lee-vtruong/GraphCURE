@@ -5,8 +5,7 @@ import numpy as np
 from graphcure.acquisition import choose_evi_action
 from graphcure.losses import counterfactual_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
-from graphcure.data import PackedEmbeddingDataset
-from scripts.annotate_newsclippings_constraints import resolve_source
+from graphcure.data import PackedEmbeddingDataset, resolve_newsclippings_source
 
 
 def test_model_shapes():
@@ -73,8 +72,8 @@ def test_packed_dataset_loads_optional_constraint_targets(tmp_path):
 
 
 def test_constraint_source_supports_list_and_json_dictionary():
-    assert resolve_source(1, ["semantic", "entity"]) == "entity"
-    assert resolve_source(2, {"2": "scene_resnet_place"}) == "scene_resnet_place"
+    assert resolve_newsclippings_source(1, ["semantic", "entity"]) == "entity"
+    assert resolve_newsclippings_source(2, {"2": "scene_resnet_place"}) == "scene_resnet_place"
 
 
 def test_multiview_architectures_use_specialized_inputs():

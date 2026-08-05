@@ -7,6 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
+from graphcure.data import resolve_newsclippings_source
+
 
 UNKNOWN, SATISFIED, VIOLATED = -100, 0, 1
 CONSTRAINTS = ("semantic", "entity", "temporal", "contextual")
@@ -35,21 +37,6 @@ def constraint_for(source: str, similarity: str | None) -> int:
     raise ValueError(f"Cannot map generation source to constraint: {value!r}")
 
 
-def resolve_source(value: object, names: list[str] | dict[str, str]) -> str:
-    if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
-        index = int(value)
-        if isinstance(names, dict):
-            if str(index) in names:
-                return names[str(index)]
-            if index in names:  # tolerate dictionaries constructed in Python
-                return names[index]  # type: ignore[index]
-            raise KeyError(f"source_dataset key {index} absent from {sorted(names)}")
-        if 0 <= index < len(names):
-            return names[index]
-        raise IndexError(f"source_dataset index {index} outside source_datasets")
-    return str(value)
-
-
 def annotate(raw_root: Path, processed_root: Path, subset: str, split: str,
              overwrite: bool) -> None:
     directory = processed_root / split
@@ -68,7 +55,7 @@ def annotate(raw_root: Path, processed_root: Path, subset: str, split: str,
     targets = np.full((len(records), 4), UNKNOWN, dtype=np.int64)
     counts: Counter[str] = Counter()
     for index, record in enumerate(records):
-        source = resolve_source(record.get("source_dataset", ""), names)
+        source = resolve_newsclippings_source(record.get("source_dataset", ""), names)
         constraint = constraint_for(source, record.get("similarity_score"))
         state = VIOLATED if record["falsified"] else SATISFIED
         targets[index, constraint] = state

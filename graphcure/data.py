@@ -9,6 +9,24 @@ from torch.utils.data import Dataset
 import numpy as np
 
 
+def resolve_newsclippings_source(
+    value: object, names: list[str] | dict[str, str]
+) -> str:
+    """Resolve list- or JSON-dict source mappings from official releases."""
+    if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+        index = int(value)
+        if isinstance(names, dict):
+            if str(index) in names:
+                return names[str(index)]
+            if index in names:
+                return names[index]  # type: ignore[index]
+            raise KeyError(f"source_dataset key {index} absent from {sorted(names)}")
+        if 0 <= index < len(names):
+            return names[index]
+        raise IndexError(f"source_dataset index {index} outside source_datasets")
+    return str(value)
+
+
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     with Path(path).open("r", encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
