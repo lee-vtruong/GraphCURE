@@ -1,12 +1,12 @@
 # Server results snapshot
 
-Generated: 2026-08-05T13:29:08.303934+00:00
+Generated: 2026-08-05T13:49:15.167869+00:00
 
-Git commit: `ae34c7d61a29617dbe0ce3c09089dd49467a5a7d`
+Git commit: `b337c801a2be8d0ae840222a293d489cc500663a`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
-Discovered test metric files: 26
+Discovered test metric files: 27
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
 |---|---|---:|---:|---:|---:|
@@ -28,6 +28,7 @@ Discovered test metric files: 26
 | `outputs/ablations/newsclippings_directional_screen/multi_independent/seed_21/test_metrics.json` | multi_independent | 21 | 7264 | 0.642483 | 0.642381 |
 | `outputs/ablations/newsclippings_directional_screen/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.653634 | 0.653397 |
 | `outputs/ablations/newsclippings_directional_screen/multi_independent/seed_87/test_metrics.json` | multi_independent | 87 | 7264 | 0.644273 | 0.644083 |
+| `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.649917 | 0.647456 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_fully_connected/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.641520 | 0.641067 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_100/test_metrics.json` | multi_independent | 100 | 7264 | 0.654598 | 0.654230 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_13/test_metrics.json` | multi_independent | 13 | 7264 | 0.645925 | 0.645921 |
@@ -159,6 +160,14 @@ Discovered test metric files: 26
 - Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6159140969162996, "counterfactual_verdict_consistency": 0.4944933920704846, "descendant_intervention_accuracy": 0.4688876651982379, "non_descendant_invariance": 0.7354074889867841, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.7029185022026432}`
 - Class 0: precision=0.637895, recall=0.667401, F1=0.652314
 - Class 1: precision=0.651270, recall=0.621145, F1=0.635851
+
+## `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/test_metrics.json`
+
+- Confusion matrix: `[[2664, 968], [1575, 2057]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "b337c801a2be8d0ae840222a293d489cc500663a", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6349118942731278, "counterfactual_verdict_consistency": 0.31208700440528636, "descendant_intervention_accuracy": 0.4743942731277533, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6398678414096917}`
+- Class 0: precision=0.628450, recall=0.733480, F1=0.676915
+- Class 1: precision=0.680000, recall=0.566355, F1=0.617996
 
 ## `outputs/ablations/newsclippings_multiview_screen/multi_fully_connected/seed_42/test_metrics.json`
 
