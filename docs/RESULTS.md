@@ -86,10 +86,29 @@ independent reference (0.6529 Macro-F1).
 
 ## R4: adaptive typed graph
 
-Status: pending. Config: `configs/newsclippings_adaptive.yaml`. The screen must
-report test accuracy, Macro-F1, confusion matrix, and mean/std of the four node
-mixing gates. Temporal gate behavior must be interpreted cautiously because no
-temporal view or supervision is currently available.
+Config: `configs/newsclippings_adaptive.yaml`. Seed 42.
+
+| Architecture | Test accuracy | Test Macro-F1 |
+|---|---:|---:|
+| Multi-view adaptive typed graph | 0.6373 | 0.6371 |
+
+Confusion matrix: `[[2251, 1381], [1254, 2378]]`.
+
+Node mixing gates in `[semantic, entity, temporal, contextual]` order:
+
+- Mean: `[0.8219, 0.2243, 0.5544, 0.7950]`.
+- Standard deviation: `[0.2825, 0.1031, 0.00004, 0.1943]`.
+
+Interpretation: adaptive routing underperformed the R3 independent reference by
+1.58 Macro-F1 points. The temporal gate was almost constant despite temporal
+evidence being unavailable, indicating a learned bias rather than
+evidence-conditioned routing. High semantic/contextual mixing also failed to
+prevent negative transfer.
+
+Decision: reject this design and do not run five seeds. Stop iterating on
+observational graph routing. Use the R3 multi-view independent model as the
+closed-book reference and move to paired counterfactual intervention training,
+where graph/constraint behavior has direct supervision.
 
 ## Reporting rules
 
