@@ -1,12 +1,12 @@
 # Server results snapshot
 
-Generated: 2026-08-05T10:23:17.458038+00:00
+Generated: 2026-08-05T10:53:56.932991+00:00
 
-Git commit: `b653494dd131b982108874c8cc5b21d46bd34ef9`
+Git commit: `e4357f7e0cf5cea9d0518efeef9717ac4e304ea2`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
-Discovered test metric files: 16
+Discovered test metric files: 17
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
 |---|---|---:|---:|---:|---:|
@@ -22,8 +22,9 @@ Discovered test metric files: 16
 | `outputs/ablations/newsclippings_constraints_screen/fully_connected/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.622384 | 0.621664 |
 | `outputs/ablations/newsclippings_constraints_screen/independent/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.631195 | 0.630822 |
 | `outputs/ablations/newsclippings_constraints_screen/typed_graph/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.629268 | 0.629259 |
+| `outputs/ablations/newsclippings_counterfactual_screen/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.646063 | 0.645786 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_fully_connected/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.641520 | 0.641067 |
-| `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.652946 | 0.652922 |
+| `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.652946 | 0.652922 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_typed_graph/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.644824 | 0.644310 |
 | `outputs/newsclippings_embeddings/test_metrics.json` | legacy | NA | 7264 | 0.631195 | 0.630390 |
 
@@ -102,6 +103,14 @@ Discovered test metric files: 16
 - Class 0: precision=0.630525, recall=0.624449, F1=0.627473
 - Class 1: precision=0.628034, recall=0.634086, F1=0.631045
 
+## `outputs/ablations/newsclippings_counterfactual_screen/multi_independent/seed_42/test_metrics.json`
+
+- Confusion matrix: `[[2448, 1184], [1387, 2245]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_counterfactual_screen/multi_independent/seed_42/best.pt", "config_file": "configs/newsclippings_counterfactual.yaml", "config_sha256": "821facb3374a5607c01b16b4f8324efded28dd1465b650724451aae89bfd1182", "cuda_runtime": "13.0", "git_commit": "e4357f7e0cf5cea9d0518efeef9717ac4e304ea2", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"counterfactual_verdict_consistency": 0.5008259911894273, "descendant_intervention_accuracy": 0.4821035242290749, "non_descendant_invariance": 0.7676211453744494, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip"}`
+- Class 0: precision=0.638331, recall=0.674009, F1=0.655685
+- Class 1: precision=0.654710, recall=0.618117, F1=0.635887
+
 ## `outputs/ablations/newsclippings_multiview_screen/multi_fully_connected/seed_42/test_metrics.json`
 
 - Confusion matrix: `[[2459, 1173], [1431, 2201]]`
@@ -111,6 +120,8 @@ Discovered test metric files: 16
 ## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/test_metrics.json`
 
 - Confusion matrix: `[[2402, 1230], [1291, 2341]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/best.pt", "config_file": "configs/newsclippings_multiview.yaml", "config_sha256": "a79bf3c59a9a4e09ffe6542d5093c00591e5d6381ab7d5ed73d555786af9fda1", "cuda_runtime": "13.0", "git_commit": "e4357f7e0cf5cea9d0518efeef9717ac4e304ea2", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"counterfactual_verdict_consistency": 0.5063325991189427, "descendant_intervention_accuracy": 0.4600770925110132, "non_descendant_invariance": 0.7406387665198237, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip"}`
 - Class 0: precision=0.650420, recall=0.661344, F1=0.655836
 - Class 1: precision=0.655559, recall=0.644548, F1=0.650007
 
