@@ -313,3 +313,17 @@ out before summation. Epoch logs record gradient cosine and conflict rate.
 R8 is selected exclusively on NewsCLIPpings validation. It must improve the R7
 intervention metrics while keeping validation Macro-F1 non-inferior; no
 NewsCLIPpings test evaluation is authorized during R8 development.
+
+Seed-42 validation screen:
+
+| Model | Macro-F1 | DIA | CVC | Verdict order | Constraint order |
+|---|---:|---:|---:|---:|---:|
+| R3 reference | 0.6433 | 0.4547 | 0.2765 | 0.6189 | 0.6244 |
+| R7 minimal | **0.6435** | **0.4636** | 0.2984 | 0.6338 | 0.6264 |
+| R8 projected | 0.6434 | 0.4624 | **0.3166** | **0.6402** | **0.6307** |
+
+R8 preserves verdict quality while improving CVC by 4.01 points, verdict pair
+order by 2.14, constraint order by 0.63, and DIA by 0.77 relative to R3. Relative
+to R7, it further improves CVC and both order metrics with essentially unchanged
+Macro-F1, while DIA decreases by 0.12 points. This is provisional until gradient
+conflict diagnostics are inspected and five-seed validation confirms stability.
