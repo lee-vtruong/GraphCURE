@@ -77,6 +77,16 @@ data/raw/
   mocheg/
 ```
 
+After completing the official MOCHEG access form, download the released 69 GB
+archive with resume and integrity checks:
+
+```bash
+bash scripts/download_mocheg.sh --connections 8
+```
+
+Add `--extract` only when enough disk is available. The archive is stored under
+`data/raw/mocheg_dataset/`, separate from the official code clone.
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:
