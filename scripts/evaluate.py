@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -64,6 +66,19 @@ def main() -> None:
         "classification_report": classification_report(
             labels, predictions, output_dict=True, zero_division=0
         ),
+        "provenance": {
+            "git_commit": subprocess.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+            ).stdout.strip() or "unknown",
+            "config_file": args.config,
+            "config_sha256": hashlib.sha256(Path(args.config).read_bytes()).hexdigest(),
+            "checkpoint": args.checkpoint,
+            "architecture": checkpoint.get("architecture", model.cfg.architecture),
+            "seed": checkpoint.get("seed"),
+            "torch": torch.__version__,
+            "cuda_runtime": torch.version.cuda,
+            "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else "cpu",
+        },
     }
     if mix_gates:
         gate_array = np.concatenate(mix_gates, axis=0)

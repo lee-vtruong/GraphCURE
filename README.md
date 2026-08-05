@@ -249,3 +249,13 @@ should remain a held-out stress test.
 - Report mean and standard deviation over at least five seeds for main claims.
 - Report Macro-F1, hard-negative F1, ECE, AURC, accuracy-cost Pareto area,
   acquisition regret, evidence recall, token cost, and latency.
+
+The curated experiment decisions are recorded in `docs/RESULTS.md`. After each
+server experiment, regenerate the auditable raw-results snapshot and commit it:
+
+```bash
+python -m scripts.export_results --root outputs --output docs/SERVER_RESULTS.md
+git add docs/RESULTS.md docs/SERVER_RESULTS.md
+git commit -m "Record experiment results"
+git push origin main
+```
