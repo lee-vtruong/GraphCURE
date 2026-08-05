@@ -220,3 +220,20 @@ a sanity check, not evidence of superiority. Thresholded CVC drops sharply and
 Macro-F1 is 0.55 points below the R3 seed-42 reference. Constraint pair order is
 higher than R6 seed 42, but acceptance is pending re-evaluation of the frozen R3
 checkpoint under the identical minimal-intervention protocol.
+
+Minimal-protocol comparison using the same seed-42 test pairs:
+
+| Model | Macro-F1 | DIA | NDI | CVC | Verdict order | Constraint order |
+|---|---:|---:|---:|---:|---:|---:|
+| Frozen R3 reference | **0.6529** | 0.4601 | 1.0000 | 0.2890 | 0.6188 | 0.6187 |
+| R7 minimal trained | 0.6475 | **0.4744** | 1.0000 | **0.3121** | **0.6399** | **0.6349** |
+
+R7 improves DIA by 1.43 points, CVC by 2.31, verdict pair order by
+2.11, and constraint pair order by 1.62, at a 0.55-point Macro-F1 cost.
+This is the first intervention variant to improve every targeted metric under a
+matched protocol, but the verdict trade-off remains material.
+
+Protocol decision: the official test set has now been inspected during several
+engineering screens. Freeze it immediately. R8 loss balancing and all further
+model selection must use validation metrics only; test evaluation is permitted
+again only after the configuration and seeds are preregistered in this ledger.

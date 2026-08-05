@@ -23,11 +23,12 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output")
+    parser.add_argument("--split", choices=["train", "val", "test"], default="test")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    dataset = build_dataset(cfg["data"], "test")
+    dataset = build_dataset(cfg["data"], args.split)
     loader = DataLoader(
         dataset,
         batch_size=cfg["train"]["batch_size"],
@@ -98,6 +99,7 @@ def main() -> None:
                 ["git", "rev-parse", "HEAD"], capture_output=True, text=True
             ).stdout.strip() or "unknown",
             "config_file": args.config,
+            "split": args.split,
             "config_sha256": hashlib.sha256(Path(args.config).read_bytes()).hexdigest(),
             "checkpoint": args.checkpoint,
             "architecture": checkpoint.get("architecture", model.cfg.architecture),

@@ -148,6 +148,15 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
   --output-root outputs/ablations/newsclippings_clip_screen
 ```
 
+For model selection, evaluate intervention metrics on validation only:
+
+```bash
+python -m scripts.evaluate --split val --config <CONFIG> \
+  --checkpoint <CHECKPOINT> --device cuda --output <VAL_METRICS_JSON>
+```
+
+Do not repeatedly inspect the official test set while tuning loss weights.
+
 After the screen succeeds, run the five-seed experiment (preferably in tmux):
 
 ```bash
