@@ -59,3 +59,13 @@ def test_packed_embedding_dataset(tmp_path):
     assert len(dataset) == 2
     assert dataset[0]["text_embedding"].shape == (4,)
     assert dataset[0]["image_embedding"].shape == (6,)
+
+
+def test_packed_dataset_loads_optional_constraint_targets(tmp_path):
+    np.save(tmp_path / "text_embeddings.npy", np.ones((1, 4), dtype=np.float32))
+    np.save(tmp_path / "image_embeddings.npy", np.ones((1, 6), dtype=np.float32))
+    np.save(tmp_path / "labels.npy", np.array([1], dtype=np.int64))
+    np.save(tmp_path / "constraint_labels.npy", np.array([[1, -100, -100, -100]]))
+    (tmp_path / "records.jsonl").write_text(json.dumps({"sample_id": "x"}) + "\n")
+    dataset = PackedEmbeddingDataset(tmp_path)
+    assert dataset[0]["constraint_labels"].tolist() == [1, -100, -100, -100]

@@ -165,6 +165,27 @@ metrics remain under each architecture/seed directory. `--skip-existing`
 resumes completed runs safely. Do not interpret the graph as useful unless the
 typed graph consistently beats both the MLP and fully connected graph.
 
+### Weak constraint supervision
+
+NewsCLIPpings records which generator produced each mismatch. Convert that
+provenance into explicitly documented weak targets (semantic, entity, or
+contextual/scene) without repacking the embedding arrays:
+
+```bash
+python -m scripts.annotate_newsclippings_constraints
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_constraints.yaml \
+  --device cuda \
+  --architectures independent fully_connected typed_graph \
+  --seeds 42 \
+  --output-root outputs/ablations/newsclippings_constraints_screen
+```
+
+These are pseudo-labels derived from dataset construction, not human-verified
+constraint annotations. Temporal targets remain unknown because the official
+benchmark has no dedicated temporal manipulation subset.
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.

@@ -73,6 +73,10 @@ class PackedEmbeddingDataset(Dataset):
         self.text = np.load(self.directory / "text_embeddings.npy", mmap_mode="r")
         self.image = np.load(self.directory / "image_embeddings.npy", mmap_mode="r")
         self.labels = np.load(self.directory / "labels.npy", mmap_mode="r")
+        constraint_path = self.directory / "constraint_labels.npy"
+        self.constraint_labels = (
+            np.load(constraint_path, mmap_mode="r") if constraint_path.exists() else None
+        )
         self.ids = read_jsonl(self.directory / "records.jsonl")
         if not (len(self.text) == len(self.image) == len(self.labels) == len(self.ids)):
             raise ValueError(f"Inconsistent packed dataset lengths in {self.directory}")
@@ -88,7 +92,11 @@ class PackedEmbeddingDataset(Dataset):
             "image_embedding": torch.from_numpy(np.array(self.image[index], copy=True)),
             "metadata": torch.zeros(16, dtype=torch.float32),
             "label": torch.tensor(int(self.labels[index]), dtype=torch.long),
-            "constraint_labels": torch.full((4,), -100, dtype=torch.long),
+            "constraint_labels": (
+                torch.from_numpy(np.array(self.constraint_labels[index], copy=True)).long()
+                if self.constraint_labels is not None
+                else torch.full((4,), -100, dtype=torch.long)
+            ),
             "conflict_labels": torch.full((5,), -1.0, dtype=torch.float32),
         }
 

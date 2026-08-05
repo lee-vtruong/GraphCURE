@@ -1,0 +1,27 @@
+seed: 42
+data:
+  format: packed_npy
+  train_dir: data/processed/newsclippings_clip/train
+  val_dir: data/processed/newsclippings_clip/val
+  test_dir: data/processed/newsclippings_clip/test
+model:
+  hidden_dim: 256
+  num_states: 3
+  num_labels: 2
+  graph_layers: 2
+  dropout: 0.1
+  architecture: typed_graph
+train:
+  epochs: 20
+  batch_size: 256
+  num_workers: 8
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  amp: true
+  output_dir: outputs/newsclippings_constraints
+  early_stopping_patience: 5
+loss:
+  label: 1.0
+  constraint: 0.25
+  conflict: 0.0
+  counterfactual: 0.0
