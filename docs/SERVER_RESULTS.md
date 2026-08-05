@@ -1,12 +1,12 @@
 # Server results snapshot
 
-Generated: 2026-08-05T13:50:51.440376+00:00
+Generated: 2026-08-05T14:51:53.839802+00:00
 
-Git commit: `f413e23ca05ea06b9dd0076bce39e2c55cab4842`
+Git commit: `5bf7afe3c642d628246a09b3e21d37bc3853912f`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
-Discovered test metric files: 28
+Discovered test metric files: 40
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
 |---|---|---:|---:|---:|---:|
@@ -28,16 +28,28 @@ Discovered test metric files: 28
 | `outputs/ablations/newsclippings_directional_screen/multi_independent/seed_21/test_metrics.json` | multi_independent | 21 | 7264 | 0.642483 | 0.642381 |
 | `outputs/ablations/newsclippings_directional_screen/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.653634 | 0.653397 |
 | `outputs/ablations/newsclippings_directional_screen/multi_independent/seed_87/test_metrics.json` | multi_independent | 87 | 7264 | 0.644273 | 0.644083 |
+| `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_100/val_metrics.json` | multi_independent | 100 | 7024 | 0.652904 | 0.652828 |
+| `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_13/val_metrics.json` | multi_independent | 13 | 7024 | 0.633685 | 0.633419 |
+| `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_21/val_metrics.json` | multi_independent | 21 | 7024 | 0.648918 | 0.648872 |
 | `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.649917 | 0.647456 |
+| `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/val_metrics.json` | multi_independent | 42 | 7024 | 0.646498 | 0.643473 |
+| `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_87/val_metrics.json` | multi_independent | 87 | 7024 | 0.650769 | 0.650733 |
 | `outputs/ablations/newsclippings_minimal_reference/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.652946 | 0.652922 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_fully_connected/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.641520 | 0.641067 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_100/test_metrics.json` | multi_independent | 100 | 7264 | 0.654598 | 0.654230 |
+| `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_100/val_metrics.json` | multi_independent | 100 | 7024 | 0.645074 | 0.644455 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_13/test_metrics.json` | multi_independent | 13 | 7264 | 0.645925 | 0.645921 |
+| `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_13/val_metrics.json` | multi_independent | 13 | 7024 | 0.644789 | 0.644642 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_21/test_metrics.json` | multi_independent | 21 | 7264 | 0.645787 | 0.645658 |
+| `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_21/val_metrics.json` | multi_independent | 21 | 7024 | 0.648491 | 0.648203 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/test_metrics.json` | multi_independent | 42 | 7264 | 0.652946 | 0.652922 |
+| `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/val_metrics.json` | multi_independent | 42 | 7024 | 0.643366 | 0.643283 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_87/test_metrics.json` | multi_independent | 87 | 7264 | 0.648403 | 0.648147 |
+| `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_87/val_metrics.json` | multi_independent | 87 | 7024 | 0.647637 | 0.647186 |
 | `outputs/ablations/newsclippings_multiview_screen/multi_typed_graph/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.644824 | 0.644310 |
 | `outputs/newsclippings_embeddings/test_metrics.json` | legacy | NA | 7264 | 0.631195 | 0.630390 |
+| `outputs/validation/r3_minimal/val_metrics.json` | multi_independent | 42 | 7024 | 0.643366 | 0.643283 |
+| `outputs/validation/r7_minimal/val_metrics.json` | multi_independent | 42 | 7024 | 0.646498 | 0.643473 |
 
 ## `outputs/ablations/multi_fully_connected/seed_42/test_metrics.json`
 
@@ -162,6 +174,30 @@ Discovered test metric files: 28
 - Class 0: precision=0.637895, recall=0.667401, F1=0.652314
 - Class 1: precision=0.651270, recall=0.621145, F1=0.635851
 
+## `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_100/val_metrics.json`
+
+- Confusion matrix: `[[2345, 1167], [1271, 2241]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_100/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 100, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6341116173120729, "counterfactual_verdict_consistency": 0.31605922551252846, "descendant_intervention_accuracy": 0.46070615034168566, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6446469248291572}`
+- Class 0: precision=0.648507, recall=0.667711, F1=0.657969
+- Class 1: precision=0.657570, recall=0.638098, F1=0.647688
+
+## `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_13/val_metrics.json`
+
+- Confusion matrix: `[[2320, 1192], [1381, 2131]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_13/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 13, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6272779043280182, "counterfactual_verdict_consistency": 0.33015375854214124, "descendant_intervention_accuracy": 0.47494305239179957, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6278473804100227}`
+- Class 0: precision=0.626858, recall=0.660592, F1=0.643283
+- Class 1: precision=0.641288, recall=0.606777, F1=0.623555
+
+## `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_21/val_metrics.json`
+
+- Confusion matrix: `[[2239, 1273], [1193, 2319]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_21/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 21, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6261389521640092, "counterfactual_verdict_consistency": 0.3364179954441913, "descendant_intervention_accuracy": 0.48604783599088835, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6321184510250569}`
+- Class 0: precision=0.652389, recall=0.637528, F1=0.644873
+- Class 1: precision=0.645601, recall=0.660308, F1=0.652872
+
 ## `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/test_metrics.json`
 
 - Confusion matrix: `[[2664, 968], [1575, 2057]]`
@@ -169,6 +205,22 @@ Discovered test metric files: 28
 - Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6349118942731278, "counterfactual_verdict_consistency": 0.31208700440528636, "descendant_intervention_accuracy": 0.4743942731277533, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6398678414096917}`
 - Class 0: precision=0.628450, recall=0.733480, F1=0.676915
 - Class 1: precision=0.680000, recall=0.566355, F1=0.617996
+
+## `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/val_metrics.json`
+
+- Confusion matrix: `[[2594, 918], [1565, 1947]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6264236902050114, "counterfactual_verdict_consistency": 0.2984054669703872, "descendant_intervention_accuracy": 0.4635535307517084, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6338268792710706}`
+- Class 0: precision=0.623708, recall=0.738610, F1=0.676313
+- Class 1: precision=0.679581, recall=0.554385, F1=0.610632
+
+## `outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_87/val_metrics.json`
+
+- Confusion matrix: `[[2321, 1191], [1262, 2250]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_87/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 87, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6227220956719818, "counterfactual_verdict_consistency": 0.33670273348519364, "descendant_intervention_accuracy": 0.47750569476082005, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6380979498861048}`
+- Class 0: precision=0.647781, recall=0.660877, F1=0.654264
+- Class 1: precision=0.653880, recall=0.640661, F1=0.647203
 
 ## `outputs/ablations/newsclippings_minimal_reference/multi_independent/seed_42/test_metrics.json`
 
@@ -192,6 +244,14 @@ Discovered test metric files: 28
 - Class 0: precision=0.645128, recall=0.687225, F1=0.665511
 - Class 1: precision=0.665390, recall=0.621971, F1=0.642949
 
+## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_100/val_metrics.json`
+
+- Confusion matrix: `[[2412, 1100], [1393, 2119]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_100/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 100, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6255694760820045, "counterfactual_verdict_consistency": 0.2901480637813212, "descendant_intervention_accuracy": 0.46554669703872437, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6170273348519362}`
+- Class 0: precision=0.633903, recall=0.686788, F1=0.659287
+- Class 1: precision=0.658279, recall=0.603360, F1=0.629624
+
 ## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_13/test_metrics.json`
 
 - Confusion matrix: `[[2359, 1273], [1299, 2333]]`
@@ -199,6 +259,14 @@ Discovered test metric files: 28
 - Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6164647577092511, "counterfactual_verdict_consistency": 0.4966960352422907, "descendant_intervention_accuracy": 0.4686123348017621, "non_descendant_invariance": 0.7400881057268722, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.7045704845814978}`
 - Class 0: precision=0.644888, recall=0.649504, F1=0.647188
 - Class 1: precision=0.646977, recall=0.642346, F1=0.644653
+
+## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_13/val_metrics.json`
+
+- Confusion matrix: `[[2336, 1176], [1319, 2193]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_13/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 13, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6153189066059226, "counterfactual_verdict_consistency": 0.3078018223234624, "descendant_intervention_accuracy": 0.4772209567198178, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6164578587699316}`
+- Class 0: precision=0.639124, recall=0.665148, F1=0.651877
+- Class 1: precision=0.650935, recall=0.624431, F1=0.637407
 
 ## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_21/test_metrics.json`
 
@@ -208,6 +276,14 @@ Discovered test metric files: 28
 - Class 0: precision=0.640414, recall=0.664923, F1=0.652438
 - Class 1: precision=0.651589, recall=0.626652, F1=0.638877
 
+## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_21/val_metrics.json`
+
+- Confusion matrix: `[[2378, 1134], [1335, 2177]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_21/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 21, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6326879271070615, "counterfactual_verdict_consistency": 0.29256833712984054, "descendant_intervention_accuracy": 0.4527334851936219, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6225797266514806}`
+- Class 0: precision=0.640452, recall=0.677107, F1=0.658270
+- Class 1: precision=0.657505, recall=0.619875, F1=0.638136
+
 ## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/test_metrics.json`
 
 - Confusion matrix: `[[2402, 1230], [1291, 2341]]`
@@ -216,6 +292,14 @@ Discovered test metric files: 28
 - Class 0: precision=0.650420, recall=0.661344, F1=0.655836
 - Class 1: precision=0.655559, recall=0.644548, F1=0.650007
 
+## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/val_metrics.json`
+
+- Confusion matrix: `[[2313, 1199], [1306, 2206]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6244305239179955, "counterfactual_verdict_consistency": 0.27648063781321186, "descendant_intervention_accuracy": 0.4547266514806378, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.618878132118451}`
+- Class 0: precision=0.639127, recall=0.658599, F1=0.648717
+- Class 1: precision=0.647871, recall=0.628132, F1=0.637849
+
 ## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_87/test_metrics.json`
 
 - Confusion matrix: `[[2453, 1179], [1375, 2257]]`
@@ -223,6 +307,14 @@ Discovered test metric files: 28
 - Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.626101321585903, "counterfactual_verdict_consistency": 0.5033039647577092, "descendant_intervention_accuracy": 0.4743942731277533, "non_descendant_invariance": 0.7380690161527166, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.7153083700440529}`
 - Class 0: precision=0.640805, recall=0.675385, F1=0.657641
 - Class 1: precision=0.656868, recall=0.621421, F1=0.638653
+
+## `outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_87/val_metrics.json`
+
+- Confusion matrix: `[[2400, 1112], [1363, 2149]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_87/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "5bf7afe3c642d628246a09b3e21d37bc3853912f", "gpu": "NVIDIA GeForce RTX 5090", "seed": 87, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6161731207289294, "counterfactual_verdict_consistency": 0.295130979498861, "descendant_intervention_accuracy": 0.46697038724373574, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6126138952164009}`
+- Class 0: precision=0.637789, recall=0.683371, F1=0.659794
+- Class 1: precision=0.659000, recall=0.611902, F1=0.634578
 
 ## `outputs/ablations/newsclippings_multiview_screen/multi_typed_graph/seed_42/test_metrics.json`
 
@@ -235,3 +327,19 @@ Discovered test metric files: 28
 - Confusion matrix: `[[2462, 1170], [1509, 2123]]`
 - Class 0: precision=0.619995, recall=0.677863, F1=0.647639
 - Class 1: precision=0.644701, recall=0.584526, F1=0.613141
+
+## `outputs/validation/r3_minimal/val_metrics.json`
+
+- Confusion matrix: `[[2313, 1199], [1306, 2206]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_multiview_screen/multi_independent/seed_42/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "9eee88950c48d789f0eaf7afbbe69c38d666ac2e", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6244305239179955, "counterfactual_verdict_consistency": 0.27648063781321186, "descendant_intervention_accuracy": 0.4547266514806378, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.618878132118451}`
+- Class 0: precision=0.639127, recall=0.658599, F1=0.648717
+- Class 1: precision=0.647871, recall=0.628132, F1=0.637849
+
+## `outputs/validation/r7_minimal/val_metrics.json`
+
+- Confusion matrix: `[[2594, 918], [1565, 1947]]`
+- Provenance: `{"architecture": "multi_independent", "checkpoint": "outputs/ablations/newsclippings_minimal_intervention_screen/multi_independent/seed_42/best.pt", "config_file": "configs/newsclippings_minimal_intervention.yaml", "config_sha256": "c969735e3aa7c6766ed0ef3c5ab6e15bfd69d3933f2bb9e5dceea33d0c97dabb", "cuda_runtime": "13.0", "git_commit": "9eee88950c48d789f0eaf7afbbe69c38d666ac2e", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "split": "val", "torch": "2.13.0+cu130"}`
+- Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6264236902050114, "counterfactual_verdict_consistency": 0.2984054669703872, "descendant_intervention_accuracy": 0.4635535307517084, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6338268792710706}`
+- Class 0: precision=0.623708, recall=0.738610, F1=0.676313
+- Class 1: precision=0.679581, recall=0.554385, F1=0.610632
