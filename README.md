@@ -220,6 +220,27 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
   --output-root outputs/ablations/newsclippings_adaptive_screen
 ```
 
+### Paired counterfactual intervention training
+
+Index the official adjacent pristine/falsified pairs without copying arrays,
+then train the multi-view independent reference with changed-node sensitivity
+and unchanged-node invariance:
+
+```bash
+python -m scripts.prepare_newsclippings_counterfactuals
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_counterfactual.yaml \
+  --device cuda \
+  --architectures multi_independent \
+  --seeds 42 \
+  --output-root outputs/ablations/newsclippings_counterfactual_screen
+```
+
+Evaluation writes Descendant Intervention Accuracy (DIA), Non-descendant
+Invariance (NDI), and Counterfactual Verdict Consistency (CVC) into each
+`test_metrics.json`. Pair members never cross the official split boundary.
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.

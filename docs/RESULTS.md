@@ -118,3 +118,13 @@ where graph/constraint behavior has direct supervision.
 - For retained claims, run seeds 13, 21, 42, 87, and 100 and report mean ± SD.
 - Record exact git commit, config, dataset split, GPU, package versions, and raw
   per-seed metrics with `python -m scripts.export_results`.
+
+## R5: paired counterfactual intervention training
+
+Status: pending. Official pairing was verified exactly for all splits: 35,536
+train, 3,512 validation, and 3,632 test pairs had pristine-then-falsified
+ordering, identical caption IDs, different image IDs, and identical generation
+sources. The first screen compares the R3 multi-view independent reference
+against the same model with counterfactual sensitivity/invariance loss. Report
+DIA, NDI, CVC, accuracy, and Macro-F1; retain the method only if intervention
+metrics improve without a material verdict-quality collapse.

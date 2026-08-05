@@ -40,11 +40,12 @@ def move(batch: dict, device: torch.device) -> dict:
     return {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}
 
 
-def model_forward(model: GraphCURE, batch: dict) -> dict[str, torch.Tensor]:
-    optional = {name: batch[name] for name in
+def model_forward(model: GraphCURE, batch: dict, prefix: str = "") -> dict[str, torch.Tensor]:
+    optional = {name: batch[f"{prefix}{name}"] for name in
                 ("sbert_embeddings", "facenet_embeddings", "places_embeddings", "view_mask")
-                if name in batch}
-    return model(batch["text_embedding"], batch["image_embedding"], batch["metadata"],
+                if f"{prefix}{name}" in batch}
+    return model(batch[f"{prefix}text_embedding"], batch[f"{prefix}image_embedding"],
+                 batch[f"{prefix}metadata"],
                  **optional)
 
 
@@ -121,11 +122,7 @@ def main() -> None:
                 out = model_forward(model, batch)
                 cf_out = None
                 if "cf_text_embedding" in batch:
-                    cf_out = model(
-                        batch["cf_text_embedding"],
-                        batch["cf_image_embedding"],
-                        batch["cf_metadata"],
-                    )
+                    cf_out = model_forward(model, batch, prefix="cf_")
                 loss, _ = total_loss(out, batch, weights, cf_out)
             scaler.scale(loss).backward()
             scaler.step(optimizer)

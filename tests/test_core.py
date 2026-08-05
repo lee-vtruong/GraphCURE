@@ -71,6 +71,21 @@ def test_packed_dataset_loads_optional_constraint_targets(tmp_path):
     assert dataset[0]["constraint_labels"].tolist() == [1, -100, -100, -100]
 
 
+def test_packed_dataset_resolves_counterfactual_pair(tmp_path):
+    np.save(tmp_path / "text_embeddings.npy", np.arange(8, dtype=np.float32).reshape(2, 4))
+    np.save(tmp_path / "image_embeddings.npy", np.ones((2, 6), dtype=np.float32))
+    np.save(tmp_path / "labels.npy", np.array([0, 1], dtype=np.int64))
+    np.save(tmp_path / "counterfactual_indices.npy", np.array([1, 0]))
+    np.save(tmp_path / "changed_masks.npy", np.array([[1, 0, 0, 0], [1, 0, 0, 0]], dtype=bool))
+    (tmp_path / "records.jsonl").write_text(
+        "\n".join(json.dumps({"sample_id": str(i)}) for i in range(2)) + "\n"
+    )
+    item = PackedEmbeddingDataset(tmp_path)[0]
+    assert item["cf_label"].item() == 1
+    assert item["cf_text_embedding"].tolist() == [4.0, 5.0, 6.0, 7.0]
+    assert item["changed_mask"].tolist() == [True, False, False, False]
+
+
 def test_constraint_source_supports_list_and_json_dictionary():
     assert resolve_newsclippings_source(1, ["semantic", "entity"]) == "entity"
     assert resolve_newsclippings_source(2, {"2": "scene_resnet_place"}) == "scene_resnet_place"

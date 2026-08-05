@@ -27,6 +27,17 @@ def resolve_newsclippings_source(
     return str(value)
 
 
+def newsclippings_constraint(source: str, similarity: str | None = None) -> int:
+    value = f"{source} {similarity or ''}".lower()
+    if "person" in value or "sbert" in value:
+        return 1
+    if "scene" in value or "place" in value or "resnet" in value:
+        return 3
+    if "semantic" in value or "clip_text" in value:
+        return 0
+    raise ValueError(f"Cannot map generation source to constraint: {value!r}")
+
+
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     with Path(path).open("r", encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
@@ -101,6 +112,10 @@ class PackedEmbeddingDataset(Dataset):
             path = self.directory / f"{name}.npy"
             if path.exists():
                 self.extra[name] = np.load(path, mmap_mode="r")
+        pair_path = self.directory / "counterfactual_indices.npy"
+        mask_path = self.directory / "changed_masks.npy"
+        self.cf_indices = np.load(pair_path, mmap_mode="r") if pair_path.exists() else None
+        self.changed_masks = np.load(mask_path, mmap_mode="r") if mask_path.exists() else None
         self.ids = read_jsonl(self.directory / "records.jsonl")
         if not (len(self.text) == len(self.image) == len(self.labels) == len(self.ids)):
             raise ValueError(f"Inconsistent packed dataset lengths in {self.directory}")
@@ -125,6 +140,19 @@ class PackedEmbeddingDataset(Dataset):
         }
         for name, array in self.extra.items():
             item[name] = torch.from_numpy(np.array(array[index], copy=True)).float()
+        if self.cf_indices is not None and self.changed_masks is not None:
+            cf_index = int(self.cf_indices[index])
+            item["cf_text_embedding"] = torch.from_numpy(np.array(self.text[cf_index], copy=True))
+            item["cf_image_embedding"] = torch.from_numpy(np.array(self.image[cf_index], copy=True))
+            item["cf_metadata"] = torch.zeros(16, dtype=torch.float32)
+            item["cf_label"] = torch.tensor(int(self.labels[cf_index]), dtype=torch.long)
+            item["changed_mask"] = torch.from_numpy(
+                np.array(self.changed_masks[index], copy=True)
+            ).bool()
+            for name, array in self.extra.items():
+                item[f"cf_{name}"] = torch.from_numpy(
+                    np.array(array[cf_index], copy=True)
+                ).float()
         return item
 
 

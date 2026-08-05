@@ -44,6 +44,7 @@ def main() -> None:
     labels: list[int] = []
     predictions: list[int] = []
     mix_gates: list[np.ndarray] = []
+    cf_changed, cf_unchanged, cf_verdict_flip = [], [], []
     with torch.inference_mode():
         for batch in loader:
             text = batch["text_embedding"].to(device, non_blocking=True)
@@ -55,6 +56,16 @@ def main() -> None:
             logits = output_batch["verdict_logits"]
             if model.cfg.architecture == "multi_adaptive_graph":
                 mix_gates.append(output_batch["node_mix_gates"].cpu().numpy())
+            if "cf_text_embedding" in moved:
+                cf_output = model_forward(model, moved, prefix="cf_")
+                factual_state = output_batch["constraint_prob"].argmax(-1)
+                paired_state = cf_output["constraint_prob"].argmax(-1)
+                changed = moved["changed_mask"].bool()
+                cf_changed.extend((factual_state[changed] != paired_state[changed]).cpu().tolist())
+                cf_unchanged.extend((factual_state[~changed] == paired_state[~changed]).cpu().tolist())
+                cf_verdict_flip.extend(
+                    (logits.argmax(-1) != cf_output["verdict_logits"].argmax(-1)).cpu().tolist()
+                )
             labels.extend(batch["label"].tolist())
             predictions.extend(logits.argmax(-1).cpu().tolist())
 
@@ -84,6 +95,13 @@ def main() -> None:
         gate_array = np.concatenate(mix_gates, axis=0)
         metrics["node_mix_gate_mean"] = gate_array.mean(axis=0).tolist()
         metrics["node_mix_gate_std"] = gate_array.std(axis=0).tolist()
+    if cf_changed:
+        metrics["counterfactual"] = {
+            "descendant_intervention_accuracy": float(np.mean(cf_changed)),
+            "non_descendant_invariance": float(np.mean(cf_unchanged)),
+            "counterfactual_verdict_consistency": float(np.mean(cf_verdict_flip)),
+            "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip",
+        }
     output = Path(args.output) if args.output else Path(args.checkpoint).parent / "test_metrics.json"
     output.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print(json.dumps(metrics, indent=2))

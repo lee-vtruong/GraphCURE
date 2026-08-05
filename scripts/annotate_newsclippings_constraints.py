@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from graphcure.data import resolve_newsclippings_source
+from graphcure.data import newsclippings_constraint, resolve_newsclippings_source
 
 
 UNKNOWN, SATISFIED, VIOLATED = -100, 0, 1
@@ -24,17 +24,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--splits", nargs="+", default=["train", "val", "test"])
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
-
-
-def constraint_for(source: str, similarity: str | None) -> int:
-    value = f"{source} {similarity or ''}".lower()
-    if "person" in value or "sbert" in value:
-        return 1
-    if "scene" in value or "place" in value or "resnet" in value:
-        return 3
-    if "semantic" in value or "clip_text" in value:
-        return 0
-    raise ValueError(f"Cannot map generation source to constraint: {value!r}")
 
 
 def annotate(raw_root: Path, processed_root: Path, subset: str, split: str,
@@ -56,7 +45,7 @@ def annotate(raw_root: Path, processed_root: Path, subset: str, split: str,
     counts: Counter[str] = Counter()
     for index, record in enumerate(records):
         source = resolve_newsclippings_source(record.get("source_dataset", ""), names)
-        constraint = constraint_for(source, record.get("similarity_score"))
+        constraint = newsclippings_constraint(source, record.get("similarity_score"))
         state = VIOLATED if record["falsified"] else SATISFIED
         targets[index, constraint] = state
         state_name = "violated" if state == VIOLATED else "satisfied"

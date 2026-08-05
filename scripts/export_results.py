@@ -57,6 +57,8 @@ def main() -> None:
             lines.append(f"- Node mix gate mean `[semantic, entity, temporal, contextual]`: "
                          f"`{json.dumps(metrics['node_mix_gate_mean'])}`")
             lines.append(f"- Node mix gate std: `{json.dumps(metrics.get('node_mix_gate_std'))}`")
+        if "counterfactual" in metrics:
+            lines.append(f"- Counterfactual metrics: `{json.dumps(metrics['counterfactual'], sort_keys=True)}`")
         report = metrics.get("classification_report", {})
         for label in ("0", "1"):
             if label in report:
