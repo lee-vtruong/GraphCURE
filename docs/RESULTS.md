@@ -249,3 +249,30 @@ Validation confirms the intervention signal without a verdict-quality loss:
 DIA +0.89 points, CVC +2.19, verdict order +1.49, constraint order +0.20,
 and Macro-F1 +0.02. Advance R3 and R7 to five-seed validation confirmation;
 do not evaluate new checkpoints on test during this stage.
+
+### R7 five-seed validation confirmation and model lock
+
+Seeds: 13, 21, 42, 87, 100.
+
+| Metric | R3 mean ± SD | R7 mean ± SD | Paired delta mean ± SD |
+|---|---:|---:|---:|
+| Macro-F1 | 0.6456 ± 0.0021 | 0.6459 ± 0.0078 | +0.0003 ± 0.0072 |
+| Accuracy | 0.6459 ± 0.0021 | 0.6466 ± 0.0076 | +0.0007 ± 0.0071 |
+| DIA | 0.4634 ± 0.0100 | 0.4726 ± 0.0104 | +0.0091 ± 0.0151 |
+| NDI | 1.0000 ± 0.0000 | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 |
+| CVC | 0.2924 ± 0.0112 | 0.3235 ± 0.0164 | +0.0311 ± 0.0107 |
+| Verdict pair order | 0.6175 ± 0.0036 | 0.6353 ± 0.0064 | +0.0178 ± 0.0083 |
+| Constraint pair order | 0.6228 ± 0.0072 | 0.6273 ± 0.0042 | +0.0045 ± 0.0072 |
+
+CVC and verdict pair order improved for all five paired seeds. Mean verdict
+quality was unchanged. DIA improved in three of five seeds and constraint order
+in four of five, so both remain secondary outcomes. NDI=1.0 is structural for
+independent nodes under minimal interventions and is only a sanity check.
+
+The R7 configuration is now locked at commit/config provenance recorded by the
+server metrics. Final test acceptance criteria, declared before evaluating the
+remaining R7 test checkpoints, are: (1) positive mean paired delta for CVC and
+verdict pair order; (2) Macro-F1 non-inferiority margin of -0.005 absolute;
+(3) report DIA and constraint order as secondary regardless of direction. No
+additional loss, architecture, seed, or checkpoint tuning is permitted before
+the final comparison.
