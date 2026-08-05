@@ -276,3 +276,27 @@ verdict pair order; (2) Macro-F1 non-inferiority margin of -0.005 absolute;
 (3) report DIA and constraint order as secondary regardless of direction. No
 additional loss, architecture, seed, or checkpoint tuning is permitted before
 the final comparison.
+
+### R7 locked final test result
+
+| Metric | R3 mean ± SD | R7 mean ± SD | Paired delta mean ± SD |
+|---|---:|---:|---:|
+| Macro-F1 | 0.6494 ± 0.0040 | 0.6437 ± 0.0086 | -0.0057 ± 0.0072 |
+| Accuracy | 0.6495 ± 0.0041 | 0.6442 ± 0.0089 | -0.0053 ± 0.0074 |
+| DIA | 0.4678 ± 0.0090 | 0.4795 ± 0.0061 | +0.0117 ± 0.0130 |
+| NDI | 1.0000 ± 0.0000 | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 |
+| CVC | 0.2952 ± 0.0071 | 0.3273 ± 0.0092 | +0.0321 ± 0.0065 |
+| Verdict pair order | 0.6180 ± 0.0098 | 0.6315 ± 0.0090 | +0.0135 ± 0.0108 |
+| Constraint pair order | 0.6210 ± 0.0043 | 0.6277 ± 0.0090 | +0.0067 ± 0.0105 |
+
+The locked test met the two intervention criteria: CVC improved in all five
+seeds and mean verdict pair order improved. It failed the preregistered verdict
+non-inferiority criterion: Macro-F1 delta was -0.0057, below the fixed -0.005
+margin. Therefore **R7 is rejected** as the primary method. The margin must not
+be changed after observing this result. R7 remains a transparent Pareto result:
+stronger intervention behavior at a small but criterion-exceeding verdict cost.
+
+NewsCLIPpings test is now fully consumed and must not be used for further model
+selection or acceptance decisions. Any R8 optimization uses NewsCLIPpings
+validation only and requires an untouched external dataset for final
+confirmation.
