@@ -201,9 +201,22 @@ target node's views and preserve all non-target inputs exactly.
 
 ## R7: feature-level minimal interventions
 
-Status: pending. Config: `configs/newsclippings_minimal_intervention.yaml`.
+Config: `configs/newsclippings_minimal_intervention.yaml`. Seed 42.
 Semantic interventions replace only the semantic node's CLIP image; entity
 interventions replace only FaceNet; contextual interventions replace only the
 contextual CLIP image and Places view. Every other node input is copied bitwise
 from the factual member. This is a constructed predictive intervention and must
 not be described as causal discovery.
+
+| Accuracy | Macro-F1 | DIA | NDI | CVC | Verdict order | Constraint order |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0.6499 | 0.6475 | 0.4744 | 1.0000 | 0.3121 | 0.6399 | 0.6349 |
+
+Confusion matrix: `[[2664, 968], [1575, 2057]]`.
+
+Interpretation: NDI reaches 1.0 by construction for an independent-node model:
+non-target inputs are identical and there is no message passing. It is therefore
+a sanity check, not evidence of superiority. Thresholded CVC drops sharply and
+Macro-F1 is 0.55 points below the R3 seed-42 reference. Constraint pair order is
+higher than R6 seed 42, but acceptance is pending re-evaluation of the frozen R3
+checkpoint under the identical minimal-intervention protocol.
