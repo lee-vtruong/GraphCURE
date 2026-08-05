@@ -35,12 +35,18 @@ def constraint_for(source: str, similarity: str | None) -> int:
     raise ValueError(f"Cannot map generation source to constraint: {value!r}")
 
 
-def resolve_source(value: object, names: list[str]) -> str:
+def resolve_source(value: object, names: list[str] | dict[str, str]) -> str:
     if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
         index = int(value)
-        if not 0 <= index < len(names):
-            raise IndexError(f"source_dataset index {index} outside source_datasets")
-        return names[index]
+        if isinstance(names, dict):
+            if str(index) in names:
+                return names[str(index)]
+            if index in names:  # tolerate dictionaries constructed in Python
+                return names[index]  # type: ignore[index]
+            raise KeyError(f"source_dataset key {index} absent from {sorted(names)}")
+        if 0 <= index < len(names):
+            return names[index]
+        raise IndexError(f"source_dataset index {index} outside source_datasets")
     return str(value)
 
 

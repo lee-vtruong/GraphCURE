@@ -6,6 +6,7 @@ from graphcure.acquisition import choose_evi_action
 from graphcure.losses import counterfactual_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
 from graphcure.data import PackedEmbeddingDataset
+from scripts.annotate_newsclippings_constraints import resolve_source
 
 
 def test_model_shapes():
@@ -69,3 +70,8 @@ def test_packed_dataset_loads_optional_constraint_targets(tmp_path):
     (tmp_path / "records.jsonl").write_text(json.dumps({"sample_id": "x"}) + "\n")
     dataset = PackedEmbeddingDataset(tmp_path)
     assert dataset[0]["constraint_labels"].tolist() == [1, -100, -100, -100]
+
+
+def test_constraint_source_supports_list_and_json_dictionary():
+    assert resolve_source(1, ["semantic", "entity"]) == "entity"
+    assert resolve_source(2, {"2": "scene_resnet_place"}) == "scene_resnet_place"
