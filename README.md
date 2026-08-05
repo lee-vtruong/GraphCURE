@@ -253,6 +253,18 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
   --output-root outputs/ablations/newsclippings_directional_screen
 ```
 
+For intervention-faithful training, use the minimal mode, which swaps only the
+target node's cached views and leaves non-target node inputs unchanged:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_minimal_intervention.yaml \
+  --device cuda \
+  --architectures multi_independent \
+  --seeds 42 \
+  --output-root outputs/ablations/newsclippings_minimal_intervention_screen
+```
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.

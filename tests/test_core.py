@@ -69,7 +69,7 @@ def test_evi_stops_when_every_action_is_costly():
 
 def test_packed_embedding_dataset(tmp_path):
     np.save(tmp_path / "text_embeddings.npy", np.ones((2, 4), dtype=np.float32))
-    np.save(tmp_path / "image_embeddings.npy", np.ones((2, 6), dtype=np.float32))
+    np.save(tmp_path / "image_embeddings.npy", np.arange(12, dtype=np.float32).reshape(2, 6))
     np.save(tmp_path / "labels.npy", np.array([0, 1], dtype=np.int64))
     with (tmp_path / "records.jsonl").open("w", encoding="utf-8") as handle:
         for index in range(2):
@@ -92,7 +92,7 @@ def test_packed_dataset_loads_optional_constraint_targets(tmp_path):
 
 def test_packed_dataset_resolves_counterfactual_pair(tmp_path):
     np.save(tmp_path / "text_embeddings.npy", np.arange(8, dtype=np.float32).reshape(2, 4))
-    np.save(tmp_path / "image_embeddings.npy", np.ones((2, 6), dtype=np.float32))
+    np.save(tmp_path / "image_embeddings.npy", np.arange(12, dtype=np.float32).reshape(2, 6))
     np.save(tmp_path / "labels.npy", np.array([0, 1], dtype=np.int64))
     np.save(tmp_path / "counterfactual_indices.npy", np.array([1, 0]))
     np.save(tmp_path / "changed_masks.npy", np.array([[1, 0, 0, 0], [1, 0, 0, 0]], dtype=bool))
@@ -103,6 +103,9 @@ def test_packed_dataset_resolves_counterfactual_pair(tmp_path):
     assert item["cf_label"].item() == 1
     assert item["cf_text_embedding"].tolist() == [4.0, 5.0, 6.0, 7.0]
     assert item["changed_mask"].tolist() == [True, False, False, False]
+    minimal = PackedEmbeddingDataset(tmp_path, counterfactual_mode="minimal")[0]
+    assert torch.equal(minimal["cf_image_embedding"], minimal["image_embedding"])
+    assert minimal["cf_semantic_image_embedding"].tolist() == [6.0, 7.0, 8.0, 9.0, 10.0, 11.0]
 
 
 def test_constraint_source_supports_list_and_json_dictionary():

@@ -42,7 +42,8 @@ def move(batch: dict, device: torch.device) -> dict:
 
 def model_forward(model: GraphCURE, batch: dict, prefix: str = "") -> dict[str, torch.Tensor]:
     optional = {name: batch[f"{prefix}{name}"] for name in
-                ("sbert_embeddings", "facenet_embeddings", "places_embeddings", "view_mask")
+                ("sbert_embeddings", "facenet_embeddings", "places_embeddings", "view_mask",
+                 "semantic_image_embedding", "contextual_image_embedding")
                 if f"{prefix}{name}" in batch}
     return model(batch[f"{prefix}text_embedding"], batch[f"{prefix}image_embedding"],
                  batch[f"{prefix}metadata"],

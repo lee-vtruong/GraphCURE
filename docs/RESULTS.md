@@ -176,3 +176,34 @@ threshold.
 Decision: advance only R3 and R6 to the registered five-seed screen. Treat the
 result as viable only if pair-order gains are stable and verdict quality is
 non-inferior across seeds; continue to report the negative CVC result.
+
+### R3 versus R6 five-seed confirmation
+
+Seeds: 13, 21, 42, 87, 100.
+
+| Metric | R3 mean ± SD | R6 mean ± SD | Paired delta mean ± SD |
+|---|---:|---:|---:|
+| Macro-F1 | 0.6494 ± 0.0040 | 0.6495 ± 0.0073 | +0.0001 ± 0.0040 |
+| Accuracy | 0.6495 ± 0.0041 | 0.6497 ± 0.0073 | +0.0002 ± 0.0040 |
+| DIA | 0.4678 ± 0.0090 | 0.4700 ± 0.0099 | +0.0021 ± 0.0171 |
+| NDI | 0.7448 ± 0.0089 | 0.7430 ± 0.0100 | -0.0018 ± 0.0089 |
+| CVC | 0.5010 ± 0.0039 | 0.4999 ± 0.0082 | -0.0012 ± 0.0100 |
+| Verdict pair order | 0.7125 ± 0.0048 | 0.7163 ± 0.0111 | +0.0038 ± 0.0128 |
+| Constraint pair order | 0.6210 ± 0.0043 | 0.6236 ± 0.0071 | +0.0026 ± 0.0079 |
+
+Decision: reject R6 as a primary contribution. Effects are small relative to
+seed variation and paired deltas change sign. The underlying intervention is
+not minimal: replacing an image changes CLIP-image, FaceNet, and Places inputs
+simultaneously, while the generation-source mask marks only one constraint.
+Thus the invariance objective can penalize nodes whose actual evidence changed.
+R7 must construct feature-level minimal interventions that replace only the
+target node's views and preserve all non-target inputs exactly.
+
+## R7: feature-level minimal interventions
+
+Status: pending. Config: `configs/newsclippings_minimal_intervention.yaml`.
+Semantic interventions replace only the semantic node's CLIP image; entity
+interventions replace only FaceNet; contextual interventions replace only the
+contextual CLIP image and Places view. Every other node input is copied bitwise
+from the factual member. This is a constructed predictive intervention and must
+not be described as causal discovery.

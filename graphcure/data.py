@@ -97,8 +97,11 @@ class EmbeddingManifestDataset(Dataset):
 class PackedEmbeddingDataset(Dataset):
     """Memory-mapped embedding dataset produced by prepare_newsclippings.py."""
 
-    def __init__(self, directory: str | Path) -> None:
+    def __init__(self, directory: str | Path, counterfactual_mode: str = "paired") -> None:
         self.directory = Path(directory)
+        self.counterfactual_mode = counterfactual_mode
+        if counterfactual_mode not in {"paired", "minimal"}:
+            raise ValueError(f"Unsupported counterfactual_mode: {counterfactual_mode}")
         self.text = np.load(self.directory / "text_embeddings.npy", mmap_mode="r")
         self.image = np.load(self.directory / "image_embeddings.npy", mmap_mode="r")
         self.labels = np.load(self.directory / "labels.npy", mmap_mode="r")
@@ -153,6 +156,32 @@ class PackedEmbeddingDataset(Dataset):
                 item[f"cf_{name}"] = torch.from_numpy(
                     np.array(array[cf_index], copy=True)
                 ).float()
+            if self.counterfactual_mode == "minimal":
+                changed = int(np.flatnonzero(self.changed_masks[index])[0])
+                # Begin from an exact factual copy, then replace only evidence
+                # assigned to the intervened constraint node.
+                item["cf_image_embedding"] = item["image_embedding"].clone()
+                item["cf_semantic_image_embedding"] = item["image_embedding"].clone()
+                item["cf_contextual_image_embedding"] = item["image_embedding"].clone()
+                for name in self.extra:
+                    item[f"cf_{name}"] = item[name].clone()
+                if changed == 0:
+                    item["cf_semantic_image_embedding"] = torch.from_numpy(
+                        np.array(self.image[cf_index], copy=True)
+                    )
+                elif changed == 1 and "facenet_embeddings" in self.extra:
+                    item["cf_facenet_embeddings"] = torch.from_numpy(
+                        np.array(self.extra["facenet_embeddings"][cf_index], copy=True)
+                    ).float()
+                    item["cf_view_mask"][2] = float(self.extra["view_mask"][cf_index, 2])
+                elif changed == 3:
+                    item["cf_contextual_image_embedding"] = torch.from_numpy(
+                        np.array(self.image[cf_index], copy=True)
+                    )
+                    item["cf_places_embeddings"] = torch.from_numpy(
+                        np.array(self.extra["places_embeddings"][cf_index], copy=True)
+                    ).float()
+                    item["cf_view_mask"][3] = float(self.extra["view_mask"][cf_index, 3])
         return item
 
 
@@ -161,7 +190,9 @@ def build_dataset(config: dict[str, Any], split: str) -> Dataset:
     if data_format == "manifest":
         return EmbeddingManifestDataset(config[f"{split}_manifest"])
     if data_format == "packed_npy":
-        return PackedEmbeddingDataset(config[f"{split}_dir"])
+        return PackedEmbeddingDataset(
+            config[f"{split}_dir"], config.get("counterfactual_mode", "paired")
+        )
     raise ValueError(f"Unsupported data format: {data_format}")
 
 

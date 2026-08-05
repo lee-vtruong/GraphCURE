@@ -167,6 +167,8 @@ class GraphCURE(nn.Module):
         facenet_embeddings: torch.Tensor | None = None,
         places_embeddings: torch.Tensor | None = None,
         view_mask: torch.Tensor | None = None,
+        semantic_image_embedding: torch.Tensor | None = None,
+        contextual_image_embedding: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         if metadata is None:
             metadata = text_embedding.new_zeros(
@@ -193,11 +195,13 @@ class GraphCURE(nn.Module):
                 raise ValueError("Multi-view model received a batch without multi-view features")
             assert sbert_embeddings is not None and facenet_embeddings is not None
             assert places_embeddings is not None and view_mask is not None
+            semantic_image = semantic_image_embedding if semantic_image_embedding is not None else image_embedding
+            contextual_image = contextual_image_embedding if contextual_image_embedding is not None else image_embedding
             inputs = (
-                torch.cat([text_embedding, image_embedding, view_mask[:, 0:1]], -1),
+                torch.cat([text_embedding, semantic_image, view_mask[:, 0:1]], -1),
                 torch.cat([sbert_embeddings, facenet_embeddings, view_mask[:, 1:3]], -1),
                 torch.cat([metadata, view_mask[:, 4:5]], -1),
-                torch.cat([image_embedding, places_embeddings,
+                torch.cat([contextual_image, places_embeddings,
                            view_mask[:, 0:1], view_mask[:, 3:4]], -1),
             )
             nodes = torch.stack([init(value) for init, value in zip(self.initializers, inputs)], 1)
