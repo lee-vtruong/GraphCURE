@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 CONSTRAINTS = ("semantic", "entity", "temporal", "contextual")
 EDGES = ((0, 3), (1, 3), (2, 3), (1, 0), (2, 0))
+FULL_EDGES = tuple((src, dst) for src in range(4) for dst in range(4) if src != dst)
 
 
 @dataclass
@@ -22,13 +23,15 @@ class GraphCUREConfig:
     num_labels: int = 3
     graph_layers: int = 2
     dropout: float = 0.1
+    architecture: str = "typed_graph"
 
 
 class TypedGraphLayer(nn.Module):
-    def __init__(self, dim: int, dropout: float) -> None:
+    def __init__(self, dim: int, dropout: float, edges: tuple[tuple[int, int], ...]) -> None:
         super().__init__()
-        self.edge_gate = nn.ModuleList([nn.Linear(dim * 2, 1) for _ in EDGES])
-        self.messages = nn.ModuleList([nn.Linear(dim, dim) for _ in EDGES])
+        self.edges = edges
+        self.edge_gate = nn.ModuleList([nn.Linear(dim * 2, 1) for _ in edges])
+        self.messages = nn.ModuleList([nn.Linear(dim, dim) for _ in edges])
         self.update = nn.GRUCell(dim, dim)
         self.norm = nn.LayerNorm(dim)
         self.dropout = nn.Dropout(dropout)
@@ -37,7 +40,7 @@ class TypedGraphLayer(nn.Module):
         batch, n_nodes, dim = nodes.shape
         incoming = torch.zeros_like(nodes)
         gates = []
-        for edge_id, (src, dst) in enumerate(EDGES):
+        for edge_id, (src, dst) in enumerate(self.edges):
             pair = torch.cat([nodes[:, src], nodes[:, dst]], dim=-1)
             gate = torch.sigmoid(self.edge_gate[edge_id](pair))
             incoming[:, dst] += gate * self.messages[edge_id](nodes[:, src])
@@ -59,7 +62,19 @@ class GraphCURE(nn.Module):
     def __init__(self, cfg: GraphCUREConfig) -> None:
         super().__init__()
         self.cfg = cfg
+        supported = {"linear", "mlp", "independent", "fully_connected", "typed_graph"}
+        if cfg.architecture not in supported:
+            raise ValueError(f"Unknown architecture {cfg.architecture!r}; choose from {sorted(supported)}")
         fused_dim = cfg.text_dim + cfg.vision_dim + cfg.metadata_dim
+        self.direct_verdict: nn.Module | None = None
+        if cfg.architecture == "linear":
+            self.direct_verdict = nn.Linear(fused_dim, cfg.num_labels)
+        elif cfg.architecture == "mlp":
+            self.direct_verdict = nn.Sequential(
+                nn.Linear(fused_dim, cfg.hidden_dim), nn.GELU(), nn.Dropout(cfg.dropout),
+                nn.Linear(cfg.hidden_dim, cfg.num_labels),
+            )
+        self.edges = FULL_EDGES if cfg.architecture == "fully_connected" else EDGES
         self.constraint_tokens = nn.Parameter(torch.randn(4, cfg.hidden_dim) * 0.02)
         self.initializers = nn.ModuleList(
             [
@@ -73,7 +88,9 @@ class GraphCURE(nn.Module):
             ]
         )
         self.graph = nn.ModuleList(
-            [TypedGraphLayer(cfg.hidden_dim, cfg.dropout) for _ in range(cfg.graph_layers)]
+            [TypedGraphLayer(cfg.hidden_dim, cfg.dropout, self.edges) for _ in range(cfg.graph_layers)]
+            if cfg.architecture in {"typed_graph", "fully_connected"}
+            else []
         )
         self.state_heads = nn.ModuleList(
             [nn.Linear(cfg.hidden_dim, cfg.num_states) for _ in CONSTRAINTS]
@@ -83,9 +100,9 @@ class GraphCURE(nn.Module):
         )
         # One compatibility tensor per typed edge. Sigmoid keeps it auditable.
         self.compatibility_logits = nn.Parameter(
-            torch.zeros(len(EDGES), cfg.num_states, cfg.num_states)
+            torch.zeros(len(self.edges), cfg.num_states, cfg.num_states)
         )
-        verdict_dim = cfg.hidden_dim * 4 + 4 * cfg.num_states + len(EDGES)
+        verdict_dim = cfg.hidden_dim * 4 + 4 * cfg.num_states + len(self.edges)
         self.verdict = nn.Sequential(
             nn.Linear(verdict_dim, cfg.hidden_dim),
             nn.GELU(),
@@ -104,6 +121,20 @@ class GraphCURE(nn.Module):
                 text_embedding.shape[0], self.cfg.metadata_dim
             )
         fused = torch.cat([text_embedding, image_embedding, metadata], dim=-1)
+        if self.direct_verdict is not None:
+            batch = fused.size(0)
+            zeros = fused.new_zeros
+            # Preserve the common output contract; auxiliary losses must remain
+            # disabled for direct baselines.
+            return {
+                "verdict_logits": self.direct_verdict(fused),
+                "constraint_logits": zeros(batch, 4, self.cfg.num_states),
+                "constraint_prob": zeros(batch, 4, self.cfg.num_states),
+                "uncertainty": zeros(batch, 4),
+                "conflict": zeros(batch, len(self.edges)),
+                "edge_gates": zeros(batch, 0, len(self.edges)),
+                "nodes": zeros(batch, 4, self.cfg.hidden_dim),
+            }
         nodes = torch.stack(
             [
                 init(torch.cat([fused, self.constraint_tokens[i].expand(fused.size(0), -1)], -1))
@@ -126,7 +157,7 @@ class GraphCURE(nn.Module):
         state_prob = state_logits.softmax(dim=-1)
         compatibility = self.compatibility_logits.sigmoid()
         conflicts = []
-        for edge_id, (src, dst) in enumerate(EDGES):
+        for edge_id, (src, dst) in enumerate(self.edges):
             joint = state_prob[:, src, :, None] * state_prob[:, dst, None, :]
             conflicts.append((joint * compatibility[edge_id]).sum(dim=(1, 2)))
         conflict = torch.stack(conflicts, dim=1)
@@ -139,7 +170,9 @@ class GraphCURE(nn.Module):
             "constraint_prob": state_prob,
             "uncertainty": uncertainty,
             "conflict": conflict,
-            "edge_gates": torch.stack(all_gates, dim=1),
+            "edge_gates": (
+                torch.stack(all_gates, dim=1)
+                if all_gates else nodes.new_zeros(nodes.size(0), 0, len(self.edges))
+            ),
             "nodes": nodes,
         }
-

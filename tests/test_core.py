@@ -18,6 +18,19 @@ def test_model_shapes():
     assert out["conflict"].shape == (2, 5)
 
 
+def test_all_ablation_architectures_share_output_contract():
+    for architecture, conflicts in (("linear", 5), ("mlp", 5),
+                                    ("independent", 5), ("fully_connected", 12),
+                                    ("typed_graph", 5)):
+        model = GraphCURE(GraphCUREConfig(
+            text_dim=8, vision_dim=8, metadata_dim=4, hidden_dim=16,
+            architecture=architecture,
+        ))
+        out = model(torch.randn(2, 8), torch.randn(2, 8), torch.randn(2, 4))
+        assert out["verdict_logits"].shape == (2, 3)
+        assert out["conflict"].shape == (2, conflicts)
+
+
 def test_counterfactual_loss_is_finite():
     p = torch.softmax(torch.randn(3, 4, 3), -1)
     q = torch.softmax(torch.randn(3, 4, 3), -1)

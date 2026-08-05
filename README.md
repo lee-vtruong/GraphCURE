@@ -135,6 +135,36 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.evaluate \
 This is an observational binary-label baseline. Constraint, conflict, and
 counterfactual losses are disabled until their supervision is generated.
 
+### Matched architecture ablations (required next step)
+
+Run a quick one-seed screen first. It trains and evaluates a linear head, MLP,
+independent constraint nodes, fully connected graph, and the typed prior graph:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_embeddings.yaml \
+  --device cuda \
+  --seeds 42 \
+  --output-root outputs/ablations/newsclippings_clip_screen
+```
+
+After the screen succeeds, run the five-seed experiment (preferably in tmux):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_embeddings.yaml \
+  --device cuda \
+  --seeds 13 21 42 87 100 \
+  --skip-existing \
+  2>&1 | tee outputs/newsclippings-ablation.log
+```
+
+The aggregate table is written to
+`outputs/ablations/newsclippings_clip/summary.json`; individual predictions and
+metrics remain under each architecture/seed directory. `--skip-existing`
+resumes completed runs safely. Do not interpret the graph as useful unless the
+typed graph consistently beats both the MLP and fully connected graph.
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.

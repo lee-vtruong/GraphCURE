@@ -21,6 +21,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="configs/base.yaml")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--resume")
+    parser.add_argument("--seed", type=int, help="Override config seed")
+    parser.add_argument("--architecture", choices=["linear", "mlp", "independent", "fully_connected", "typed_graph"])
+    parser.add_argument("--output-dir", help="Override train.output_dir")
     return parser.parse_args()
 
 
@@ -53,6 +56,12 @@ def evaluate(model: GraphCURE, loader: DataLoader, device: torch.device) -> dict
 def main() -> None:
     args = parse_args()
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    if args.seed is not None:
+        cfg["seed"] = args.seed
+    if args.architecture:
+        cfg["model"]["architecture"] = args.architecture
+    if args.output_dir:
+        cfg["train"]["output_dir"] = args.output_dir
     seed_everything(cfg["seed"])
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     train_data = build_dataset(cfg["data"], "train")
@@ -72,7 +81,8 @@ def main() -> None:
         metadata_dim=sample["metadata"].numel(),
         **{
             k: cfg["model"][k]
-            for k in ("hidden_dim", "num_states", "num_labels", "graph_layers", "dropout")
+            for k in ("hidden_dim", "num_states", "num_labels", "graph_layers", "dropout", "architecture")
+            if k in cfg["model"]
         },
     )
     model = GraphCURE(model_cfg).to(device)
@@ -85,6 +95,8 @@ def main() -> None:
     output_dir = Path(cfg["train"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     best = -1.0
+    stale_epochs = 0
+    patience = int(cfg["train"].get("early_stopping_patience", 0))
     weights = cfg["loss"]
     for epoch in range(cfg["train"]["epochs"]):
         model.train()
@@ -110,12 +122,20 @@ def main() -> None:
         print(json.dumps({"epoch": epoch + 1, "loss": running / len(train_loader), **metrics}))
         if metrics["macro_f1"] > best:
             best = metrics["macro_f1"]
+            stale_epochs = 0
             torch.save(
-                {"model": model.state_dict(), "config": model_cfg.__dict__, "metrics": metrics},
+                {"model": model.state_dict(), "config": model_cfg.__dict__, "metrics": metrics,
+                 "seed": cfg["seed"], "architecture": model_cfg.architecture},
                 output_dir / "best.pt",
             )
+        else:
+            stale_epochs += 1
+        if patience and stale_epochs >= patience:
+            print(json.dumps({"early_stop": epoch + 1, "patience": patience}))
+            break
     (output_dir / "metrics.json").write_text(
-        json.dumps({"best_val_macro_f1": best}, indent=2), encoding="utf-8"
+        json.dumps({"best_val_macro_f1": best, "seed": cfg["seed"],
+                    "architecture": model_cfg.architecture}, indent=2), encoding="utf-8"
     )
 
 
