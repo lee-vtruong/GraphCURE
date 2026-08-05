@@ -41,6 +41,7 @@ def main() -> None:
 
     labels: list[int] = []
     predictions: list[int] = []
+    mix_gates: list[np.ndarray] = []
     with torch.inference_mode():
         for batch in loader:
             text = batch["text_embedding"].to(device, non_blocking=True)
@@ -48,7 +49,10 @@ def main() -> None:
             metadata = batch["metadata"].to(device, non_blocking=True)
             moved = {key: value.to(device, non_blocking=True) if torch.is_tensor(value) else value
                      for key, value in batch.items()}
-            logits = model_forward(model, moved)["verdict_logits"]
+            output_batch = model_forward(model, moved)
+            logits = output_batch["verdict_logits"]
+            if model.cfg.architecture == "multi_adaptive_graph":
+                mix_gates.append(output_batch["node_mix_gates"].cpu().numpy())
             labels.extend(batch["label"].tolist())
             predictions.extend(logits.argmax(-1).cpu().tolist())
 
@@ -61,6 +65,10 @@ def main() -> None:
             labels, predictions, output_dict=True, zero_division=0
         ),
     }
+    if mix_gates:
+        gate_array = np.concatenate(mix_gates, axis=0)
+        metrics["node_mix_gate_mean"] = gate_array.mean(axis=0).tolist()
+        metrics["node_mix_gate_std"] = gate_array.std(axis=0).tolist()
     output = Path(args.output) if args.output else Path(args.checkpoint).parent / "test_metrics.json"
     output.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print(json.dumps(metrics, indent=2))

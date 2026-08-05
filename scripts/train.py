@@ -23,7 +23,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume")
     parser.add_argument("--seed", type=int, help="Override config seed")
     parser.add_argument("--architecture", choices=["linear", "mlp", "independent", "fully_connected", "typed_graph",
-                                                   "multi_independent", "multi_fully_connected", "multi_typed_graph"])
+                                                   "multi_independent", "multi_fully_connected", "multi_typed_graph",
+                                                   "multi_adaptive_graph"])
     parser.add_argument("--output-dir", help="Override train.output_dir")
     return parser.parse_args()
 
@@ -93,7 +94,7 @@ def main() -> None:
         places_dim=sample.get("places_embeddings", torch.empty(0)).numel(),
         **{
             k: cfg["model"][k]
-            for k in ("hidden_dim", "num_states", "num_labels", "graph_layers", "dropout", "architecture")
+            for k in ("hidden_dim", "num_states", "num_labels", "graph_layers", "dropout", "architecture", "edge_dropout")
             if k in cfg["model"]
         },
     )

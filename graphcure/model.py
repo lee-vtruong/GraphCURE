@@ -27,11 +27,12 @@ class GraphCUREConfig:
     sbert_dim: int = 0
     facenet_dim: int = 0
     places_dim: int = 0
+    edge_dropout: float = 0.0
 
 
 class TypedGraphLayer(nn.Module):
     def __init__(self, dim: int, dropout: float, edges: tuple[tuple[int, int], ...],
-                 conservative: bool = False) -> None:
+                 conservative: bool = False, edge_dropout: float = 0.0) -> None:
         super().__init__()
         self.edges = edges
         self.edge_gate = nn.ModuleList([nn.Linear(dim * 2, 1) for _ in edges])
@@ -39,6 +40,7 @@ class TypedGraphLayer(nn.Module):
         self.update = nn.GRUCell(dim, dim)
         self.norm = nn.LayerNorm(dim)
         self.dropout = nn.Dropout(dropout)
+        self.edge_dropout = edge_dropout
         self.residual_logit = (
             nn.Parameter(torch.full((4,), -2.0)) if conservative else None
         )
@@ -50,6 +52,8 @@ class TypedGraphLayer(nn.Module):
         for edge_id, (src, dst) in enumerate(self.edges):
             pair = torch.cat([nodes[:, src], nodes[:, dst]], dim=-1)
             gate = torch.sigmoid(self.edge_gate[edge_id](pair))
+            if self.training and self.edge_dropout > 0:
+                gate = gate * (torch.rand_like(gate) >= self.edge_dropout)
             incoming[:, dst] += gate * self.messages[edge_id](nodes[:, src])
             gates.append(gate.squeeze(-1))
         updated = self.update(
@@ -75,7 +79,8 @@ class GraphCURE(nn.Module):
         super().__init__()
         self.cfg = cfg
         supported = {"linear", "mlp", "independent", "fully_connected", "typed_graph",
-                     "multi_independent", "multi_fully_connected", "multi_typed_graph"}
+                     "multi_independent", "multi_fully_connected", "multi_typed_graph",
+                     "multi_adaptive_graph"}
         if cfg.architecture not in supported:
             raise ValueError(f"Unknown architecture {cfg.architecture!r}; choose from {sorted(supported)}")
         fused_dim = cfg.text_dim + cfg.vision_dim + cfg.metadata_dim
@@ -117,13 +122,24 @@ class GraphCURE(nn.Module):
                 for dim in view_dims
             ])
         graph_architectures = {"typed_graph", "fully_connected", "multi_typed_graph",
-                               "multi_fully_connected"}
+                               "multi_fully_connected", "multi_adaptive_graph"}
         self.graph = nn.ModuleList(
             [TypedGraphLayer(cfg.hidden_dim, cfg.dropout, self.edges,
-                             conservative=self.multiview) for _ in range(cfg.graph_layers)]
+                             conservative=self.multiview and cfg.architecture != "multi_adaptive_graph",
+                             edge_dropout=cfg.edge_dropout) for _ in range(cfg.graph_layers)]
             if cfg.architecture in graph_architectures
             else []
         )
+        self.adaptive_mix = nn.ModuleList()
+        if cfg.architecture == "multi_adaptive_graph":
+            for _ in CONSTRAINTS:
+                head = nn.Sequential(
+                    nn.Linear(cfg.hidden_dim * 3, cfg.hidden_dim), nn.GELU(),
+                    nn.Linear(cfg.hidden_dim, 1),
+                )
+                nn.init.zeros_(head[-1].weight)
+                nn.init.constant_(head[-1].bias, -2.0)
+                self.adaptive_mix.append(head)
         self.state_heads = nn.ModuleList(
             [nn.Linear(cfg.hidden_dim, cfg.num_states) for _ in CONSTRAINTS]
         )
@@ -190,10 +206,20 @@ class GraphCURE(nn.Module):
                 init(torch.cat([fused, self.constraint_tokens[i].expand(fused.size(0), -1)], -1))
                 for i, init in enumerate(self.initializers)
             ], dim=1)
+        pre_graph_nodes = nodes
         all_gates = []
         for layer in self.graph:
             nodes, gates = layer(nodes)
             all_gates.append(gates)
+        if self.adaptive_mix:
+            mix = torch.stack([
+                head(torch.cat([pre_graph_nodes[:, i], nodes[:, i],
+                                (nodes[:, i] - pre_graph_nodes[:, i]).abs()], -1))
+                for i, head in enumerate(self.adaptive_mix)
+            ], dim=1).sigmoid()
+            nodes = pre_graph_nodes + mix * (nodes - pre_graph_nodes)
+        else:
+            mix = nodes.new_zeros(nodes.size(0), 4, 1)
         state_logits = torch.stack(
             [head(nodes[:, i]) for i, head in enumerate(self.state_heads)], dim=1
         )
@@ -223,4 +249,5 @@ class GraphCURE(nn.Module):
                 if all_gates else nodes.new_zeros(nodes.size(0), 0, len(self.edges))
             ),
             "nodes": nodes,
+            "node_mix_gates": mix.squeeze(-1),
         }

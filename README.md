@@ -207,6 +207,19 @@ The three variants use identical node inputs and heads. They differ only in
 message passing. Multi-view graph layers use conservative learnable residual
 gates initialized near 0.12 so a node can reject initially harmful messages.
 
+If fixed graph propagation underperforms the independent model, screen the
+adaptive typed graph. It preserves pre-graph nodes through a learnable skip,
+uses per-sample/node mixing gates, and applies edge dropout during training:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_adaptive.yaml \
+  --device cuda \
+  --architectures multi_independent multi_adaptive_graph \
+  --seeds 42 \
+  --output-root outputs/ablations/newsclippings_adaptive_screen
+```
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.

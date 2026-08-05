@@ -79,7 +79,8 @@ def test_constraint_source_supports_list_and_json_dictionary():
 def test_multiview_architectures_use_specialized_inputs():
     for architecture, edges in (("multi_independent", 5),
                                 ("multi_fully_connected", 12),
-                                ("multi_typed_graph", 5)):
+                                ("multi_typed_graph", 5),
+                                ("multi_adaptive_graph", 5)):
         model = GraphCURE(GraphCUREConfig(
             text_dim=8, vision_dim=8, metadata_dim=4, hidden_dim=16,
             sbert_dim=6, facenet_dim=5, places_dim=7,
@@ -94,3 +95,7 @@ def test_multiview_architectures_use_specialized_inputs():
         )
         assert out["verdict_logits"].shape == (2, 3)
         assert out["conflict"].shape == (2, edges)
+        if architecture == "multi_adaptive_graph":
+            assert out["node_mix_gates"].shape == (2, 4)
+            assert torch.all((out["node_mix_gates"] > 0) &
+                             (out["node_mix_gates"] < 0.5))
