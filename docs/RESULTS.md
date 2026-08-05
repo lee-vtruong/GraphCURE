@@ -144,5 +144,17 @@ while reducing the symmetric JS weight.
 
 ## R6: directional intervention objective
 
-Status: pending. Config: `configs/newsclippings_directional.yaml`. Acceptance
-requires CVC and DIA above R3 while maintaining Macro-F1 near or above 0.6529.
+Config: `configs/newsclippings_directional.yaml`. Seed 42.
+
+| Accuracy | Macro-F1 | DIA | NDI | CVC |
+|---:|---:|---:|---:|---:|
+| 0.6536 | 0.6534 | 0.4642 | 0.7510 | 0.4939 |
+
+Confusion matrix: `[[2469, 1163], [1353, 2279]]`.
+
+Interpretation: R6 recovered verdict quality and slightly exceeded the R3
+single-seed Macro-F1 by 0.05 points. NDI improved 1.04 points and DIA improved
+0.41 points over R3, but thresholded CVC fell 1.24 points. Because the
+directional objective optimizes pairwise score order rather than thresholded
+label flips, final acceptance is pending a checkpoint-only re-evaluation with
+verdict and changed-constraint pair-order accuracy. Do not run five seeds yet.

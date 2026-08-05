@@ -45,6 +45,7 @@ def main() -> None:
     predictions: list[int] = []
     mix_gates: list[np.ndarray] = []
     cf_changed, cf_unchanged, cf_verdict_flip = [], [], []
+    verdict_pair_order, constraint_pair_order = [], []
     with torch.inference_mode():
         for batch in loader:
             text = batch["text_embedding"].to(device, non_blocking=True)
@@ -65,6 +66,21 @@ def main() -> None:
                 cf_unchanged.extend((factual_state[~changed] == paired_state[~changed]).cpu().tolist())
                 cf_verdict_flip.extend(
                     (logits.argmax(-1) != cf_output["verdict_logits"].argmax(-1)).cpu().tolist()
+                )
+                direction = (moved["cf_label"].float() - moved["label"].float()).sign()
+                factual_verdict_score = logits[:, 1] - logits[:, 0]
+                paired_verdict_score = (
+                    cf_output["verdict_logits"][:, 1] - cf_output["verdict_logits"][:, 0]
+                )
+                verdict_pair_order.extend(
+                    (direction * (paired_verdict_score - factual_verdict_score) > 0).cpu().tolist()
+                )
+                factual_violated = output_batch["constraint_prob"][..., 1]
+                paired_violated = cf_output["constraint_prob"][..., 1]
+                selected_delta = (paired_violated - factual_violated)[changed]
+                selected_direction = direction[:, None].expand_as(changed)[changed]
+                constraint_pair_order.extend(
+                    (selected_direction * selected_delta > 0).cpu().tolist()
                 )
             labels.extend(batch["label"].tolist())
             predictions.extend(logits.argmax(-1).cpu().tolist())
@@ -100,6 +116,8 @@ def main() -> None:
             "descendant_intervention_accuracy": float(np.mean(cf_changed)),
             "non_descendant_invariance": float(np.mean(cf_unchanged)),
             "counterfactual_verdict_consistency": float(np.mean(cf_verdict_flip)),
+            "verdict_pair_order_accuracy": float(np.mean(verdict_pair_order)),
+            "constraint_pair_order_accuracy": float(np.mean(constraint_pair_order)),
             "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip",
         }
     output = Path(args.output) if args.output else Path(args.checkpoint).parent / "test_metrics.json"
