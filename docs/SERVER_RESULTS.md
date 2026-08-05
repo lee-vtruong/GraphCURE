@@ -1,18 +1,19 @@
 # Server results snapshot
 
-Generated: 2026-08-05T10:19:42.028753+00:00
+Generated: 2026-08-05T10:23:17.458038+00:00
 
-Git commit: `a202d8f7053d7332a6022c03f04574f51c516cad`
+Git commit: `b653494dd131b982108874c8cc5b21d46bd34ef9`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
-Discovered test metric files: 15
+Discovered test metric files: 16
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
 |---|---|---:|---:|---:|---:|
 | `outputs/ablations/multi_fully_connected/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.641520 | 0.641067 |
 | `outputs/ablations/multi_independent/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.652946 | 0.652922 |
 | `outputs/ablations/multi_typed_graph/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.644824 | 0.644310 |
+| `outputs/ablations/newsclippings_adaptive_screen/multi_adaptive_graph/seed_42/test_metrics.json` | multi_adaptive_graph | 42 | 7264 | 0.637252 | 0.637141 |
 | `outputs/ablations/newsclippings_clip_screen/fully_connected/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.634774 | 0.633860 |
 | `outputs/ablations/newsclippings_clip_screen/independent/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.636839 | 0.636569 |
 | `outputs/ablations/newsclippings_clip_screen/linear/seed_42/test_metrics.json` | legacy | NA | 7264 | 0.535380 | 0.535328 |
@@ -43,6 +44,15 @@ Discovered test metric files: 15
 - Confusion matrix: `[[2480, 1152], [1428, 2204]]`
 - Class 0: precision=0.634596, recall=0.682819, F1=0.657825
 - Class 1: precision=0.656734, recall=0.606828, F1=0.630796
+
+## `outputs/ablations/newsclippings_adaptive_screen/multi_adaptive_graph/seed_42/test_metrics.json`
+
+- Confusion matrix: `[[2251, 1381], [1254, 2378]]`
+- Provenance: `{"architecture": "multi_adaptive_graph", "checkpoint": "outputs/ablations/newsclippings_adaptive_screen/multi_adaptive_graph/seed_42/best.pt", "config_file": "configs/newsclippings_adaptive.yaml", "config_sha256": "0912bf05ed5ce5a2c9dffc5faa38ec282441fb205253735d2fd839a47f1043df", "cuda_runtime": "13.0", "git_commit": "b653494dd131b982108874c8cc5b21d46bd34ef9", "gpu": "NVIDIA GeForce RTX 5090", "seed": 42, "torch": "2.13.0+cu130"}`
+- Node mix gate mean `[semantic, entity, temporal, contextual]`: `[0.8219451308250427, 0.22429713606834412, 0.5543850064277649, 0.7950358390808105]`
+- Node mix gate std: `[0.2824525535106659, 0.10313897579908371, 3.838471820927225e-05, 0.19432076811790466]`
+- Class 0: precision=0.642225, recall=0.619769, F1=0.630797
+- Class 1: precision=0.632615, recall=0.654736, F1=0.643485
 
 ## `outputs/ablations/newsclippings_clip_screen/fully_connected/seed_42/test_metrics.json`
 
