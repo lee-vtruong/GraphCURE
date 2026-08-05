@@ -157,4 +157,22 @@ single-seed Macro-F1 by 0.05 points. NDI improved 1.04 points and DIA improved
 0.41 points over R3, but thresholded CVC fell 1.24 points. Because the
 directional objective optimizes pairwise score order rather than thresholded
 label flips, final acceptance is pending a checkpoint-only re-evaluation with
-verdict and changed-constraint pair-order accuracy. Do not run five seeds yet.
+verdict and changed-constraint pair-order accuracy.
+
+Checkpoint-only pair-order re-evaluation:
+
+| Model | Macro-F1 | DIA | NDI | CVC | Verdict order | Constraint order |
+|---|---:|---:|---:|---:|---:|---:|
+| R3 reference | 0.6529 | 0.4601 | 0.7406 | **0.5063** | 0.7131 | 0.6187 |
+| R5 symmetric JS | 0.6458 | **0.4821** | **0.7676** | 0.5008 | 0.7018 | 0.6110 |
+| R6 directional | **0.6534** | 0.4642 | 0.7510 | 0.4939 | **0.7269** | **0.6228** |
+
+Relative to R3, R6 improved Macro-F1 by 0.05 points, DIA by 0.41,
+NDI by 1.04, verdict pair order by 1.38, and constraint pair order by 0.41;
+thresholded CVC decreased by 1.24 points. Pair-order metrics directly match the
+training objective, whereas CVC additionally depends on the classification
+threshold.
+
+Decision: advance only R3 and R6 to the registered five-seed screen. Treat the
+result as viable only if pair-order gains are stable and verdict quality is
+non-inferior across seeds; continue to report the negative CVC result.
