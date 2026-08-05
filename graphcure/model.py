@@ -24,10 +24,14 @@ class GraphCUREConfig:
     graph_layers: int = 2
     dropout: float = 0.1
     architecture: str = "typed_graph"
+    sbert_dim: int = 0
+    facenet_dim: int = 0
+    places_dim: int = 0
 
 
 class TypedGraphLayer(nn.Module):
-    def __init__(self, dim: int, dropout: float, edges: tuple[tuple[int, int], ...]) -> None:
+    def __init__(self, dim: int, dropout: float, edges: tuple[tuple[int, int], ...],
+                 conservative: bool = False) -> None:
         super().__init__()
         self.edges = edges
         self.edge_gate = nn.ModuleList([nn.Linear(dim * 2, 1) for _ in edges])
@@ -35,6 +39,9 @@ class TypedGraphLayer(nn.Module):
         self.update = nn.GRUCell(dim, dim)
         self.norm = nn.LayerNorm(dim)
         self.dropout = nn.Dropout(dropout)
+        self.residual_logit = (
+            nn.Parameter(torch.full((4,), -2.0)) if conservative else None
+        )
 
     def forward(self, nodes: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         batch, n_nodes, dim = nodes.shape
@@ -49,7 +56,12 @@ class TypedGraphLayer(nn.Module):
             incoming.reshape(batch * n_nodes, dim),
             nodes.reshape(batch * n_nodes, dim),
         ).reshape(batch, n_nodes, dim)
-        return self.norm(nodes + self.dropout(updated)), torch.stack(gates, dim=1)
+        if self.residual_logit is not None:
+            scale = self.residual_logit.sigmoid().view(1, n_nodes, 1)
+            updated = nodes + scale * self.dropout(updated)
+        else:
+            updated = nodes + self.dropout(updated)
+        return self.norm(updated), torch.stack(gates, dim=1)
 
 
 class GraphCURE(nn.Module):
@@ -62,7 +74,8 @@ class GraphCURE(nn.Module):
     def __init__(self, cfg: GraphCUREConfig) -> None:
         super().__init__()
         self.cfg = cfg
-        supported = {"linear", "mlp", "independent", "fully_connected", "typed_graph"}
+        supported = {"linear", "mlp", "independent", "fully_connected", "typed_graph",
+                     "multi_independent", "multi_fully_connected", "multi_typed_graph"}
         if cfg.architecture not in supported:
             raise ValueError(f"Unknown architecture {cfg.architecture!r}; choose from {sorted(supported)}")
         fused_dim = cfg.text_dim + cfg.vision_dim + cfg.metadata_dim
@@ -74,7 +87,8 @@ class GraphCURE(nn.Module):
                 nn.Linear(fused_dim, cfg.hidden_dim), nn.GELU(), nn.Dropout(cfg.dropout),
                 nn.Linear(cfg.hidden_dim, cfg.num_labels),
             )
-        self.edges = FULL_EDGES if cfg.architecture == "fully_connected" else EDGES
+        self.multiview = cfg.architecture.startswith("multi_")
+        self.edges = FULL_EDGES if cfg.architecture in {"fully_connected", "multi_fully_connected"} else EDGES
         self.constraint_tokens = nn.Parameter(torch.randn(4, cfg.hidden_dim) * 0.02)
         self.initializers = nn.ModuleList(
             [
@@ -87,9 +101,27 @@ class GraphCURE(nn.Module):
                 for _ in CONSTRAINTS
             ]
         )
+        if self.multiview:
+            if min(cfg.sbert_dim, cfg.facenet_dim, cfg.places_dim) <= 0:
+                raise ValueError("Multi-view architectures require positive SBERT, FaceNet and Places dimensions")
+            view_dims = (
+                cfg.text_dim + cfg.vision_dim + 1,
+                cfg.sbert_dim + cfg.facenet_dim + 2,
+                cfg.metadata_dim + 1,
+                cfg.vision_dim + cfg.places_dim + 2,
+            )
+            self.initializers = nn.ModuleList([
+                nn.Sequential(nn.LayerNorm(dim), nn.Linear(dim, cfg.hidden_dim),
+                              nn.GELU(), nn.Dropout(cfg.dropout),
+                              nn.LayerNorm(cfg.hidden_dim))
+                for dim in view_dims
+            ])
+        graph_architectures = {"typed_graph", "fully_connected", "multi_typed_graph",
+                               "multi_fully_connected"}
         self.graph = nn.ModuleList(
-            [TypedGraphLayer(cfg.hidden_dim, cfg.dropout, self.edges) for _ in range(cfg.graph_layers)]
-            if cfg.architecture in {"typed_graph", "fully_connected"}
+            [TypedGraphLayer(cfg.hidden_dim, cfg.dropout, self.edges,
+                             conservative=self.multiview) for _ in range(cfg.graph_layers)]
+            if cfg.architecture in graph_architectures
             else []
         )
         self.state_heads = nn.ModuleList(
@@ -115,6 +147,10 @@ class GraphCURE(nn.Module):
         text_embedding: torch.Tensor,
         image_embedding: torch.Tensor,
         metadata: torch.Tensor | None = None,
+        sbert_embeddings: torch.Tensor | None = None,
+        facenet_embeddings: torch.Tensor | None = None,
+        places_embeddings: torch.Tensor | None = None,
+        view_mask: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         if metadata is None:
             metadata = text_embedding.new_zeros(
@@ -135,13 +171,25 @@ class GraphCURE(nn.Module):
                 "edge_gates": zeros(batch, 0, len(self.edges)),
                 "nodes": zeros(batch, 4, self.cfg.hidden_dim),
             }
-        nodes = torch.stack(
-            [
+        if self.multiview:
+            if any(value is None for value in
+                   (sbert_embeddings, facenet_embeddings, places_embeddings, view_mask)):
+                raise ValueError("Multi-view model received a batch without multi-view features")
+            assert sbert_embeddings is not None and facenet_embeddings is not None
+            assert places_embeddings is not None and view_mask is not None
+            inputs = (
+                torch.cat([text_embedding, image_embedding, view_mask[:, 0:1]], -1),
+                torch.cat([sbert_embeddings, facenet_embeddings, view_mask[:, 1:3]], -1),
+                torch.cat([metadata, view_mask[:, 4:5]], -1),
+                torch.cat([image_embedding, places_embeddings,
+                           view_mask[:, 0:1], view_mask[:, 3:4]], -1),
+            )
+            nodes = torch.stack([init(value) for init, value in zip(self.initializers, inputs)], 1)
+        else:
+            nodes = torch.stack([
                 init(torch.cat([fused, self.constraint_tokens[i].expand(fused.size(0), -1)], -1))
                 for i, init in enumerate(self.initializers)
-            ],
-            dim=1,
-        )
+            ], dim=1)
         all_gates = []
         for layer in self.graph:
             nodes, gates = layer(nodes)

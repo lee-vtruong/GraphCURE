@@ -186,6 +186,27 @@ These are pseudo-labels derived from dataset construction, not human-verified
 constraint annotations. Temporal targets remain unknown because the official
 benchmark has no dedicated temporal manipulation subset.
 
+### Constraint-specific multi-view model
+
+Add the official SBERT, FaceNet, and Places365 views to the already packed
+samples. Face embeddings are mean pooled and every optional view carries an
+availability mask:
+
+```bash
+python -m scripts.prepare_newsclippings_multiview
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_ablations \
+  --config configs/newsclippings_multiview.yaml \
+  --device cuda \
+  --architectures multi_independent multi_fully_connected multi_typed_graph \
+  --seeds 42 \
+  --output-root outputs/ablations/newsclippings_multiview_screen
+```
+
+The three variants use identical node inputs and heads. They differ only in
+message passing. Multi-view graph layers use conservative learnable residual
+gates initialized near 0.12 so a node can reject initially harmful messages.
+
 For multi-GPU, first keep the single-GPU run as a reproducibility reference,
 then launch the same module through Accelerate or `torchrun` after adding the
 distributed wrapper.

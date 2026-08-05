@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 
 from graphcure.data import build_dataset, collate_manifest
 from graphcure.model import GraphCURE, GraphCUREConfig
+from scripts.train import model_forward
 
 
 def main() -> None:
@@ -45,7 +46,9 @@ def main() -> None:
             text = batch["text_embedding"].to(device, non_blocking=True)
             image = batch["image_embedding"].to(device, non_blocking=True)
             metadata = batch["metadata"].to(device, non_blocking=True)
-            logits = model(text, image, metadata)["verdict_logits"]
+            moved = {key: value.to(device, non_blocking=True) if torch.is_tensor(value) else value
+                     for key, value in batch.items()}
+            logits = model_forward(model, moved)["verdict_logits"]
             labels.extend(batch["label"].tolist())
             predictions.extend(logits.argmax(-1).cpu().tolist())
 

@@ -22,7 +22,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--resume")
     parser.add_argument("--seed", type=int, help="Override config seed")
-    parser.add_argument("--architecture", choices=["linear", "mlp", "independent", "fully_connected", "typed_graph"])
+    parser.add_argument("--architecture", choices=["linear", "mlp", "independent", "fully_connected", "typed_graph",
+                                                   "multi_independent", "multi_fully_connected", "multi_typed_graph"])
     parser.add_argument("--output-dir", help="Override train.output_dir")
     return parser.parse_args()
 
@@ -38,13 +39,21 @@ def move(batch: dict, device: torch.device) -> dict:
     return {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}
 
 
+def model_forward(model: GraphCURE, batch: dict) -> dict[str, torch.Tensor]:
+    optional = {name: batch[name] for name in
+                ("sbert_embeddings", "facenet_embeddings", "places_embeddings", "view_mask")
+                if name in batch}
+    return model(batch["text_embedding"], batch["image_embedding"], batch["metadata"],
+                 **optional)
+
+
 @torch.no_grad()
 def evaluate(model: GraphCURE, loader: DataLoader, device: torch.device) -> dict:
     model.eval()
     labels, predictions = [], []
     for batch in loader:
         batch = move(batch, device)
-        out = model(batch["text_embedding"], batch["image_embedding"], batch["metadata"])
+        out = model_forward(model, batch)
         labels.extend(batch["label"].cpu().tolist())
         predictions.extend(out["verdict_logits"].argmax(-1).cpu().tolist())
     return {
@@ -79,6 +88,9 @@ def main() -> None:
         text_dim=sample["text_embedding"].numel(),
         vision_dim=sample["image_embedding"].numel(),
         metadata_dim=sample["metadata"].numel(),
+        sbert_dim=sample.get("sbert_embeddings", torch.empty(0)).numel(),
+        facenet_dim=sample.get("facenet_embeddings", torch.empty(0)).numel(),
+        places_dim=sample.get("places_embeddings", torch.empty(0)).numel(),
         **{
             k: cfg["model"][k]
             for k in ("hidden_dim", "num_states", "num_labels", "graph_layers", "dropout", "architecture")
@@ -105,7 +117,7 @@ def main() -> None:
             batch = move(batch, device)
             optimizer.zero_grad(set_to_none=True)
             with torch.autocast(device_type=device.type, enabled=scaler.is_enabled()):
-                out = model(batch["text_embedding"], batch["image_embedding"], batch["metadata"])
+                out = model_forward(model, batch)
                 cf_out = None
                 if "cf_text_embedding" in batch:
                     cf_out = model(

@@ -77,6 +77,12 @@ class PackedEmbeddingDataset(Dataset):
         self.constraint_labels = (
             np.load(constraint_path, mmap_mode="r") if constraint_path.exists() else None
         )
+        self.extra = {}
+        for name in ("sbert_embeddings", "facenet_embeddings", "places_embeddings",
+                     "view_mask"):
+            path = self.directory / f"{name}.npy"
+            if path.exists():
+                self.extra[name] = np.load(path, mmap_mode="r")
         self.ids = read_jsonl(self.directory / "records.jsonl")
         if not (len(self.text) == len(self.image) == len(self.labels) == len(self.ids)):
             raise ValueError(f"Inconsistent packed dataset lengths in {self.directory}")
@@ -86,7 +92,7 @@ class PackedEmbeddingDataset(Dataset):
 
     def __getitem__(self, index: int) -> dict[str, Any]:
         # np.array(copy=True) avoids returning non-writable mmap views to torch.
-        return {
+        item = {
             "id": self.ids[index]["sample_id"],
             "text_embedding": torch.from_numpy(np.array(self.text[index], copy=True)),
             "image_embedding": torch.from_numpy(np.array(self.image[index], copy=True)),
@@ -99,6 +105,9 @@ class PackedEmbeddingDataset(Dataset):
             ),
             "conflict_labels": torch.full((5,), -1.0, dtype=torch.float32),
         }
+        for name, array in self.extra.items():
+            item[name] = torch.from_numpy(np.array(array[index], copy=True)).float()
+        return item
 
 
 def build_dataset(config: dict[str, Any], split: str) -> Dataset:
