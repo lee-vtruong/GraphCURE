@@ -335,3 +335,22 @@ described as a gradient-conflict solution and does not advance to five seeds.
 The remaining implementation difference from R7 is FP32 versus AMP. R8-C
 (`configs/newsclippings_minimal_fp32.yaml`) is a seed-42 validation control with
 identical losses and FP32 training but no projection.
+
+FP32 negative control:
+
+| Model | Macro-F1 | DIA | CVC | Verdict order | Constraint order |
+|---|---:|---:|---:|---:|---:|
+| R7 AMP | **0.6435** | **0.4636** | 0.2984 | 0.6338 | 0.6264 |
+| R8 projection FP32 | 0.6434 | 0.4624 | **0.3166** | **0.6402** | 0.6307 |
+| R8-C FP32 no projection | 0.6425 | 0.4428 | **0.3166** | 0.6388 | **0.6347** |
+
+R8-C exactly matches R8 CVC, nearly matches verdict order, and exceeds its
+constraint order. Projection retains higher DIA than the FP32 control, but its
+observed conflict rate is only 0.17% and this is a single-seed comparison.
+Decision: reject gradient surgery as a contribution and do not run more R8
+seeds. Treat the apparent R8 gains as an FP32/training control effect unless a
+future independent benchmark provides contrary preregistered evidence.
+
+NewsCLIPpings development is closed. The next research stage is external
+evidence-grounded transfer and sequential acquisition on MOCHEG; no further
+NewsCLIPpings test-guided optimization is allowed.
