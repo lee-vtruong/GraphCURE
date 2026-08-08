@@ -66,6 +66,12 @@ def main() -> None:
             inputs = processor(images=batch, return_tensors="pt").to(device)
             with torch.inference_mode():
                 feats = vision_model.get_image_features(**inputs)
+                # transformers 5 may return BaseModelOutputWithPooling while
+                # older releases return the projected tensor directly.
+                if not isinstance(feats, torch.Tensor):
+                    feats = getattr(feats, "pooler_output", None)
+                    if feats is None:
+                        raise RuntimeError("CLIP image output has no pooler_output")
                 feats = torch.nn.functional.normalize(feats.float(), dim=-1)
             image_features.append(feats.cpu())
             image_mask.extend(masks)
