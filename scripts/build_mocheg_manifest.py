@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any
 
 
-LABELS = {"true": 0, "refuted": 1, "false": 1, "nei": 2, "mixture": 2}
+LABELS = {
+    "true": 0,
+    "supported": 0,
+    "refuted": 1,
+    "false": 1,
+    "nei": 2,
+    "mixture": 2,
+}
 
 
 def rows(path: Path) -> list[dict[str, str]]:
