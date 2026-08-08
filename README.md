@@ -87,6 +87,20 @@ bash scripts/download_mocheg.sh --connections 8
 Add `--extract` only when enough disk is available. The archive is stored under
 `data/raw/mocheg_dataset/`, separate from the official code clone.
 
+After extraction, audit the CSV schema and every image payload before deleting
+the archive or constructing manifests:
+
+```bash
+mkdir -p outputs/data_audit
+python -m scripts.inspect_mocheg \
+  --verify-all-images \
+  --output outputs/data_audit/mocheg_schema.json \
+  | tee outputs/data_audit/mocheg-schema.log
+```
+
+This avoids deserializing the release's untrusted pickle files and preserves a
+machine-readable data audit for reproducibility.
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:
