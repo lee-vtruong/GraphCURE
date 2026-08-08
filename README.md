@@ -101,6 +101,17 @@ python -m scripts.inspect_mocheg \
 This avoids deserializing the release's untrusted pickle files and preserves a
 machine-readable data audit for reproducibility.
 
+Build the claim-level MOCHEG evidence manifest after the audit passes:
+
+```bash
+python -m scripts.build_mocheg_manifest \
+  --root data/raw/mocheg_dataset/extracted/mocheg \
+  --output-root data/processed/mocheg_manifest
+```
+
+This preserves MOCHEG's three labels and records text/image qrels, resolved
+image paths, missing references, and per-split summaries.
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:
