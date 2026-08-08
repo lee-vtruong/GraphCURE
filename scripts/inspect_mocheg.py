@@ -15,6 +15,7 @@ CSV_NAMES = ("Corpus2.csv", "img_evidence_qrels.csv",
              "text_evidence_qrels_sentence_level.csv")
 MAGIC = {b"\xff\xd8\xff": "jpeg", b"\x89PNG\r\n\x1a\n": "png", b"BM": "bmp",
          b"GIF87a": "gif", b"GIF89a": "gif", b"II*\x00": "tiff", b"MM\x00*": "tiff"}
+MAGIC[b"8BPS"] = "psd"
 
 
 def image_kind(path: Path) -> str | None:
