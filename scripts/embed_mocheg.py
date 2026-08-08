@@ -43,10 +43,17 @@ def main() -> None:
             print(f"skip existing: {output}")
             continue
         rows = load_rows(args.manifest_root / f"{split}.jsonl")
-        texts = []
+        claims, evidences, texts = [], [], []
         for row in rows:
             evidence = " ".join(row.get("evidence_texts", []))
-            texts.append((row.get("claim", "") + " [EVIDENCE] " + evidence).strip())
+            claim = row.get("claim", "").strip()
+            claims.append(claim)
+            evidences.append(evidence)
+            texts.append((claim + " [EVIDENCE] " + evidence).strip())
+        claim_text = text_model.encode(claims, batch_size=args.batch_size, convert_to_numpy=True,
+                                       normalize_embeddings=True, show_progress_bar=True)
+        evidence_text = text_model.encode(evidences, batch_size=args.batch_size, convert_to_numpy=True,
+                                          normalize_embeddings=True, show_progress_bar=True)
         text = text_model.encode(texts, batch_size=args.batch_size, convert_to_numpy=True,
                                  normalize_embeddings=True, show_progress_bar=True)
 
@@ -80,6 +87,8 @@ def main() -> None:
             "ids": [row["id"] for row in rows],
             "labels": torch.tensor([row["label"] for row in rows], dtype=torch.long),
             "text_embeddings": torch.from_numpy(np.asarray(text, dtype=np.float32)),
+            "claim_embeddings": torch.from_numpy(np.asarray(claim_text, dtype=np.float32)),
+            "evidence_embeddings": torch.from_numpy(np.asarray(evidence_text, dtype=np.float32)),
             "image_embeddings": torch.cat(image_features),
             "image_mask": torch.tensor(image_mask, dtype=torch.bool),
             "metadata": {"text_model": args.text_model, "vision_model": args.vision_model,

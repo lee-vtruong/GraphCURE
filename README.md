@@ -143,6 +143,9 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train \
   --config configs/mocheg_baseline.yaml --device cuda
 ```
 
+The cached tensors also include separate claim/evidence text views. Set
+`data.text_source` to `claim`, `evidence`, or `combined` for modality controls.
+
 The class-weighted control compensates for the train split's label imbalance:
 
 ```bash

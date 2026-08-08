@@ -188,11 +188,15 @@ class PackedEmbeddingDataset(Dataset):
 class MochegEmbeddingDataset(Dataset):
     """Cached three-class MOCHEG embeddings produced by embed_mocheg.py."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, text_source: str = "combined") -> None:
         payload = torch.load(path, map_location="cpu", weights_only=True)
         self.ids = payload["ids"]
         self.labels = payload["labels"].long()
-        self.text = payload["text_embeddings"].float()
+        key = {"combined": "text_embeddings", "claim": "claim_embeddings",
+               "evidence": "evidence_embeddings"}.get(text_source)
+        if key is None or key not in payload:
+            raise ValueError(f"Unsupported/missing MOCHEG text_source: {text_source}")
+        self.text = payload[key].float()
         self.image = payload["image_embeddings"].float()
         self.mask = payload.get("image_mask", torch.ones(len(self.labels), dtype=torch.bool))
         if not (len(self.ids) == len(self.labels) == len(self.text) == len(self.image)):
@@ -223,7 +227,7 @@ def build_dataset(config: dict[str, Any], split: str) -> Dataset:
             config[f"{split}_dir"], config.get("counterfactual_mode", "paired")
         )
     if data_format == "mocheg_pt":
-        return MochegEmbeddingDataset(config[f"{split}_embedding"])
+        return MochegEmbeddingDataset(config[f"{split}_embedding"], config.get("text_source", "combined"))
     raise ValueError(f"Unsupported data format: {data_format}")
 
 
