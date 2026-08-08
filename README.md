@@ -112,6 +112,14 @@ python -m scripts.build_mocheg_manifest \
 This preserves MOCHEG's three labels and records text/image qrels, resolved
 image paths, missing references, and per-split summaries.
 
+Before training, check that claim IDs and claim text do not cross splits:
+
+```bash
+python -m scripts.audit_mocheg_splits \
+  --root data/processed/mocheg_manifest \
+  --output outputs/data_audit/mocheg_split_leakage.json
+```
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:
