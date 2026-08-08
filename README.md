@@ -127,6 +127,15 @@ create a second version with split priority train > val > test:
 python -m scripts.deduplicate_mocheg_manifests
 ```
 
+Encode the strict manifests (models are downloaded once from Hugging Face):
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.embed_mocheg \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --output-root data/processed/mocheg_embeddings_strict \
+  --device cuda --batch-size 64
+```
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:

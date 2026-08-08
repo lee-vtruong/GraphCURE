@@ -83,6 +83,7 @@ def build(root: Path, split: str, output: Path) -> dict[str, Any]:
             "label": label,
             "label_name": raw_label,
             "claim": first.get("Claim", ""),
+            "evidence_texts": [row.get("Evidence", "") for row in evidence_rows if row.get("Evidence", "")],
             "ruling_outline": first.get("ruling_outline", ""),
             "origin": first.get("Origin", ""),
             "headline": first.get("Headline", ""),
