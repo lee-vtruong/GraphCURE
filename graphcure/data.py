@@ -185,6 +185,35 @@ class PackedEmbeddingDataset(Dataset):
         return item
 
 
+class MochegEmbeddingDataset(Dataset):
+    """Cached three-class MOCHEG embeddings produced by embed_mocheg.py."""
+
+    def __init__(self, path: str | Path) -> None:
+        payload = torch.load(path, map_location="cpu", weights_only=True)
+        self.ids = payload["ids"]
+        self.labels = payload["labels"].long()
+        self.text = payload["text_embeddings"].float()
+        self.image = payload["image_embeddings"].float()
+        self.mask = payload.get("image_mask", torch.ones(len(self.labels), dtype=torch.bool))
+        if not (len(self.ids) == len(self.labels) == len(self.text) == len(self.image)):
+            raise ValueError(f"Inconsistent MOCHEG embedding lengths in {path}")
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        return {
+            "id": self.ids[index],
+            "text_embedding": self.text[index],
+            "image_embedding": self.image[index],
+            "metadata": torch.zeros(16, dtype=torch.float32),
+            "label": self.labels[index],
+            "image_mask": self.mask[index],
+            "constraint_labels": torch.full((4,), -100, dtype=torch.long),
+            "conflict_labels": torch.full((5,), -1.0, dtype=torch.float32),
+        }
+
+
 def build_dataset(config: dict[str, Any], split: str) -> Dataset:
     data_format = config.get("format", "manifest")
     if data_format == "manifest":
@@ -193,6 +222,8 @@ def build_dataset(config: dict[str, Any], split: str) -> Dataset:
         return PackedEmbeddingDataset(
             config[f"{split}_dir"], config.get("counterfactual_mode", "paired")
         )
+    if data_format == "mocheg_pt":
+        return MochegEmbeddingDataset(config[f"{split}_embedding"])
     raise ValueError(f"Unsupported data format: {data_format}")
 
 

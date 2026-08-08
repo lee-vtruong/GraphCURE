@@ -136,6 +136,13 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.embed_mocheg \
   --device cuda --batch-size 64
 ```
 
+Run the first cached-embedding MOCHEG three-class baseline:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train \
+  --config configs/mocheg_baseline.yaml --device cuda
+```
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:
