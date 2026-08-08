@@ -75,9 +75,12 @@ def total_loss(
     batch: dict[str, torch.Tensor],
     weights: dict[str, float],
     cf_output: dict[str, torch.Tensor] | None = None,
+    label_class_weights: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     parts = {
-        "label": F.cross_entropy(output["verdict_logits"], batch["label"]),
+        "label": F.cross_entropy(
+            output["verdict_logits"], batch["label"], weight=label_class_weights
+        ),
         "constraint": masked_constraint_loss(
             output["constraint_logits"], batch["constraint_labels"]
         ),

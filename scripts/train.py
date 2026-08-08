@@ -114,6 +114,11 @@ def main() -> None:
     stale_epochs = 0
     patience = int(cfg["train"].get("early_stopping_patience", 0))
     weights = cfg["loss"]
+    class_weights = weights.get("class_weights")
+    label_class_weights = (
+        torch.tensor(class_weights, dtype=torch.float32, device=device)
+        if class_weights is not None else None
+    )
     gradient_surgery = cfg["train"].get("gradient_surgery", "none")
     if gradient_surgery not in {"none", "primary_projection"}:
         raise ValueError(f"Unsupported gradient_surgery: {gradient_surgery}")
@@ -133,7 +138,7 @@ def main() -> None:
                 cf_out = None
                 if "cf_text_embedding" in batch:
                     cf_out = model_forward(model, batch, prefix="cf_")
-                loss, parts = total_loss(out, batch, weights, cf_out)
+            loss, parts = total_loss(out, batch, weights, cf_out, label_class_weights)
             if gradient_surgery == "primary_projection":
                 primary = sum(weights.get(name, 0.0) * parts[name]
                               for name in ("label", "constraint", "conflict"))

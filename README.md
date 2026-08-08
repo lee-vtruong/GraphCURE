@@ -143,6 +143,13 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train \
   --config configs/mocheg_baseline.yaml --device cuda
 ```
 
+The class-weighted control compensates for the train split's label imbalance:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train \
+  --config configs/mocheg_weighted.yaml --device cuda
+```
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:
