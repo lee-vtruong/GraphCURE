@@ -120,6 +120,13 @@ python -m scripts.audit_mocheg_splits \
   --output outputs/data_audit/mocheg_split_leakage.json
 ```
 
+For a strict leakage-controlled protocol, keep official manifests unchanged and
+create a second version with split priority train > val > test:
+
+```bash
+python -m scripts.deduplicate_mocheg_manifests
+```
+
 ## 4. Unified manifest
 
 Training consumes one JSON object per line:
