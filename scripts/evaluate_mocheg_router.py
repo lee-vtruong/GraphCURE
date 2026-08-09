@@ -29,7 +29,7 @@ def main():
         assert np.array_equal(y, y2)
         conf = np.array([json.loads(x)["retrieval_confidence"] for x in (a.retrieval_root / f"{split}.jsonl").read_text().splitlines() if x])
         result[split] = {"y": y.tolist(), "claim": claim.tolist(), "open": open_.tolist(), "confidence": conf.tolist()}
-    candidates = np.arange(0.0, 0.501, 0.01); best = None
+    candidates = np.arange(0.0, 1.001, 0.01); best = None
     for t in candidates:
         r = result["val"]; pred = np.where(r["confidence"] >= t, np.argmax(r["open"], 1), np.argmax(r["claim"], 1)); f = f1_score(r["y"], pred, average="macro"); cov = float(np.mean(r["confidence"] >= t))
         item = (f, -cov, float(t))
