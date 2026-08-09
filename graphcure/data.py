@@ -199,6 +199,7 @@ class MochegEmbeddingDataset(Dataset):
         self.text = payload[key].float()
         self.image = payload["image_embeddings"].float()
         self.mask = payload.get("image_mask", torch.ones(len(self.labels), dtype=torch.bool))
+        self.metadata = payload.get("nli_metadata", torch.zeros(len(self.labels), 16)).float()
         if not (len(self.ids) == len(self.labels) == len(self.text) == len(self.image)):
             raise ValueError(f"Inconsistent MOCHEG embedding lengths in {path}")
 
@@ -210,7 +211,7 @@ class MochegEmbeddingDataset(Dataset):
             "id": self.ids[index],
             "text_embedding": self.text[index],
             "image_embedding": self.image[index],
-            "metadata": torch.zeros(16, dtype=torch.float32),
+            "metadata": self.metadata[index],
             "label": self.labels[index],
             "image_mask": self.mask[index],
             "constraint_labels": torch.full((4,), -100, dtype=torch.long),

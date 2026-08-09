@@ -29,6 +29,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--max-images", type=int, default=4)
     parser.add_argument("--splits", nargs="+", default=["train", "val", "test"])
+    parser.add_argument("--nli-root", type=Path)
     args = parser.parse_args()
     device = torch.device(args.device if args.device == "cpu" or torch.cuda.is_available() else "cpu")
     args.output_root.mkdir(parents=True, exist_ok=True)
@@ -43,6 +44,9 @@ def main() -> None:
             print(f"skip existing: {output}")
             continue
         rows = load_rows(args.manifest_root / f"{split}.jsonl")
+        nli = {}
+        if args.nli_root:
+            nli = {x["id"]: x for x in load_rows(args.nli_root / f"{split}.jsonl")}
         claims, evidences, texts = [], [], []
         for row in rows:
             evidence = " ".join(row.get("evidence_texts", []))
@@ -91,6 +95,7 @@ def main() -> None:
             "evidence_embeddings": torch.from_numpy(np.asarray(evidence_text, dtype=np.float32)),
             "image_embeddings": torch.cat(image_features),
             "image_mask": torch.tensor(image_mask, dtype=torch.bool),
+            "nli_metadata": torch.tensor([[nli.get(row["id"], {}).get(k, 0.0) for k in ("nli_support", "nli_contradiction", "nli_neutral", "nli_margin")] for row in rows], dtype=torch.float32),
             "metadata": {"text_model": args.text_model, "vision_model": args.vision_model,
                          "max_images": args.max_images, "device": str(device)},
         }
