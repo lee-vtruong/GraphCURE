@@ -35,7 +35,7 @@ def main():
         item = (f, -cov, float(t))
         if best is None or item > best[0]: best = (item, {"threshold": float(t), "val_macro_f1": float(f), "val_accuracy": float(accuracy_score(r["y"], pred)), "val_open_coverage": cov})
     threshold = best[1]["threshold"]; r = result["test"]; confidence = np.asarray(r["confidence"]); pred = np.where(confidence >= threshold, np.argmax(r["open"], 1), np.argmax(r["claim"], 1))
-    result["selection"] = best[1]; result["test"] = {"accuracy": float(accuracy_score(r["y"], pred)), "macro_f1": float(f1_score(r["y"], pred, average="macro")), "open_coverage": float(np.mean(r["confidence"] >= threshold)), "threshold": threshold}
+    result["selection"] = best[1]; result["test"] = {"accuracy": float(accuracy_score(r["y"], pred)), "macro_f1": float(f1_score(r["y"], pred, average="macro")), "open_coverage": float(np.mean(confidence >= threshold)), "threshold": threshold}
     a.output.parent.mkdir(parents=True, exist_ok=True); a.output.write_text(json.dumps(result, indent=2) + "\n"); print(json.dumps({"selection": result["selection"], "test": result["test"]}, indent=2))
 
 if __name__ == "__main__": main()
