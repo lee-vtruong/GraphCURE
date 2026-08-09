@@ -31,9 +31,10 @@ def main():
         out_rows, hits, rr = [], [], []
         for i, claim in enumerate(claims):
             order = np.argsort(-scores[i])[:a.top_k]; retrieved = [ids[j] for j in order]
+            retrieved_scores = [float(scores[i, j]) for j in order]
             gold = set(claim.get("text_evidence_ids", [])); rank = next((r + 1 for r, x in enumerate(retrieved) if x in gold), None)
             hits.append(float(rank is not None)); rr.append(1 / rank if rank else 0.0)
-            out_rows.append({"id": claim["id"], "claim_id": claim["claim_id"], "label": claim["label"], "retrieved_evidence_ids": retrieved, "gold_evidence_ids": sorted(gold), "first_gold_rank": rank})
+            out_rows.append({"id": claim["id"], "claim_id": claim["claim_id"], "label": claim["label"], "retrieved_evidence_ids": retrieved, "retrieved_scores": retrieved_scores, "retrieval_confidence": retrieved_scores[0] if retrieved_scores else 0.0, "gold_evidence_ids": sorted(gold), "first_gold_rank": rank})
         (a.output_root / f"{split}.jsonl").write_text("\n".join(json.dumps(x) for x in out_rows) + "\n", encoding="utf-8")
         summary[split] = {"claims": len(claims), "corpus_documents": len(docs), f"recall@{a.top_k}": float(np.mean(hits)), "mrr": float(np.mean(rr))}
         print(split, summary[split])
