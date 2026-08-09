@@ -452,3 +452,11 @@ The adaptive router improved Macro-F1 by `+0.0072` over the closed baseline
 while opening evidence for 57.1% of test claims. This is the first positive
 open/closed routing result and must be confirmed with multiple seeds before it
 is treated as the primary claim.
+
+Five-seed confirmation (13, 21, 42, 87, 100) gave Accuracy `0.4610 +/- 0.0067`
+and Macro-F1 `0.4413 +/- 0.0056`; the per-seed Macro-F1 values were
+`[0.4395, 0.4400, 0.4422, 0.4349, 0.4501]`. Relative to the seed-42 closed
+baseline Macro-F1 `0.4350`, the mean gain was `+0.0063`. Open coverage averaged
+`0.5154 +/- 0.2660` with values `[0.4326, 0.4326, 0.5711, 0.9310, 0.2095]`.
+The accuracy gain is promising, but this coverage variance requires calibrated
+budget control before making a strong efficiency claim.
