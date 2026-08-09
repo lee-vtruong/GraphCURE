@@ -417,3 +417,21 @@ Official test per-class recall was 0.3733 (supported), 0.7079 (refuted), and
 claim wording is not driving the observed transfer result. The remaining
 failure mode is class confusion, especially the low recall of NEI and
 supported claims, rather than split leakage.
+
+### Adaptive open/closed router
+
+Using TF-IDF retrieval confidence, a threshold was selected on validation and
+then locked for test. The router used the closed MPNet claim-only checkpoint
+below the threshold and the open retrieved-evidence checkpoint above it.
+
+| Protocol | Macro-F1 | Accuracy | Open coverage |
+|---|---:|---:|---:|
+| Closed claim-only | 0.4350 | 0.4606 | 0.0% |
+| Open fixed | 0.4045 | 0.4084 | 100.0% |
+| Adaptive router | 0.4302 | 0.4515 | 13.1% |
+
+The validation-selected threshold was `0.42` (validation Macro-F1 `0.4640`,
+open coverage `10.4%`). On test, the router opened evidence for only `13.1%`
+of claims and stayed within `0.0048` Macro-F1 of the closed baseline. It did
+not exceed the closed baseline, so this is reported as a cost-sensitive
+near-non-inferiority result rather than a definitive accuracy improvement.
