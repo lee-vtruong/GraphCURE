@@ -435,3 +435,20 @@ open coverage `10.4%`). On test, the router opened evidence for only `13.1%`
 of claims and stayed within `0.0048` Macro-F1 of the closed baseline. It did
 not exceed the closed baseline, so this is reported as a cost-sensitive
 near-non-inferiority result rather than a definitive accuracy improvement.
+
+### Dense top-1 adaptive router
+
+Replacing TF-IDF with dense MPNet retrieval gave test Recall@1 `0.7436`. Using
+the dense top-1 evidence checkpoint and expanding threshold selection to the
+full cosine-score range `[0, 1]`, validation selected threshold `0.66`:
+
+| Protocol | Macro-F1 | Accuracy | Open coverage |
+|---|---:|---:|---:|
+| Closed MPNet claim-only | 0.4350 | 0.4606 | 0.0% |
+| Dense top-1 open fixed | 0.4209 | 0.4339 | 100.0% |
+| Dense top-1 adaptive | **0.4422** | **0.4630** | 57.1% |
+
+The adaptive router improved Macro-F1 by `+0.0072` over the closed baseline
+while opening evidence for 57.1% of test claims. This is the first positive
+open/closed routing result and must be confirmed with multiple seeds before it
+is treated as the primary claim.
