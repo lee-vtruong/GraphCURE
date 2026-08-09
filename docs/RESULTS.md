@@ -354,3 +354,50 @@ future independent benchmark provides contrary preregistered evidence.
 NewsCLIPpings development is closed. The next research stage is external
 evidence-grounded transfer and sequential acquisition on MOCHEG; no further
 NewsCLIPpings test-guided optimization is allowed.
+
+## MOCHEG external transfer audit
+
+MOCHEG was downloaded from the official release, extracted, and validated with
+magic-byte checks for all split images. The audit passed with 78,031 train,
+12,267 validation, and 22,777 test images; no zero-byte or invalid payloads
+were found (one valid PSD file was stored with a `.jpg` suffix). Claim-level
+manifests contain 11,669/1,490/2,442 official train/val/test claims. A strict
+protocol removed 38/34/8 duplicate claim texts from train/val/test, leaving
+11,631/1,456/2,434 claims. The strict leakage audit then reported zero overlap
+for claim IDs and normalized claim text in every split pair.
+
+### MOCHEG modality and architecture controls
+
+All results below use the strict split, seed 42 unless stated otherwise, and
+three labels (`supported=0`, `refuted=1`, `NEI=2`).
+
+| Model/control | Accuracy | Macro-F1 | Decision |
+|---|---:|---:|---|
+| MiniLM claim-only | 0.4499 | 0.4237 | baseline control |
+| MiniLM claim + evidence | 0.4523 | 0.4053 | evidence pooling rejected |
+| MiniLM evidence-only | 0.4507 | 0.3960 | rejected |
+| MPNet claim-only | 0.4606 | 0.4350 | best single-seed model |
+| MPNet claim + evidence | 0.4437 | 0.3974 | negative transfer |
+| MPNet class-weighted | 0.4445 | 0.3850 | negative control |
+
+MPNet claim-only five-seed results were Accuracy `0.4607 +/- 0.0072` and
+Macro-F1 `0.4382 +/- 0.0083`; per-seed Macro-F1 values were
+`[0.4373, 0.4266, 0.4350, 0.4439, 0.4483]`.
+
+The MPNet claim-only architecture screen was:
+
+| Architecture | Accuracy | Macro-F1 |
+|---|---:|---:|
+| independent | 0.4606 | 0.4350 |
+| typed_graph | 0.4528 | 0.4269 |
+| fully_connected | 0.4478 | 0.4185 |
+| mlp | 0.4454 | 0.4201 |
+| linear | 0.3981 | 0.3519 |
+
+MOCHEG therefore does not provide evidence that the current typed graph or
+multimodal fusion improves over an independent claim representation. We retain
+these results as a negative-transfer cross-dataset diagnostic, not as a claim
+of a graph improvement. The primary GraphCURE contribution remains the
+intervention-faithful acquisition protocol established on NewsCLIPpings;
+MOCHEG supplies a strict external transfer check and exposes evidence-pooling
+failure modes.
