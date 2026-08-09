@@ -460,3 +460,19 @@ baseline Macro-F1 `0.4350`, the mean gain was `+0.0063`. Open coverage averaged
 `0.5154 +/- 0.2660` with values `[0.4326, 0.4326, 0.5711, 0.9310, 0.2095]`.
 The accuracy gain is promising, but this coverage variance requires calibrated
 budget control before making a strong efficiency claim.
+
+### Fixed-budget routing
+
+To remove seed-dependent coverage variance, thresholds were selected on
+validation quantiles for fixed open budgets. The dense top-1 router produced:
+
+| Target budget | Val coverage | Test coverage | Test Accuracy | Test Macro-F1 |
+|---:|---:|---:|---:|---:|
+| 10% | 10.0% | 10.5% | **0.4688** | **0.4445** |
+| 25% | 25.0% | 25.8% | 0.4659 | 0.4409 |
+| 50% | 50.0% | 54.8% | 0.4651 | 0.4435 |
+
+The 10% budget is the strongest cost-sensitive result: it improves Macro-F1
+by `+0.0095` over closed claim-only (`0.4350`) while opening evidence for only
+10.5% of test claims. This fixed-budget protocol is preferred over unconstrained
+per-seed threshold selection for the main comparison.
