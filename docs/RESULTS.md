@@ -401,3 +401,19 @@ of a graph improvement. The primary GraphCURE contribution remains the
 intervention-faithful acquisition protocol established on NewsCLIPpings;
 MOCHEG supplies a strict external transfer check and exposes evidence-pooling
 failure modes.
+
+### Official versus strict MOCHEG protocol
+
+The best MPNet claim-only model was also evaluated on the untouched official
+split (2,442 test claims) using the same seed and architecture. Results are:
+
+| Protocol | Samples | Accuracy | Macro-F1 |
+|---|---:|---:|---:|
+| Strict deduplicated | 2,434 | 0.4606 | 0.4350 |
+| Official | 2,442 | 0.4566 | 0.4387 |
+
+Official test per-class recall was 0.3733 (supported), 0.7079 (refuted), and
+0.2825 (NEI). The close agreement between protocols indicates that duplicate
+claim wording is not driving the observed transfer result. The remaining
+failure mode is class confusion, especially the low recall of NEI and
+supported claims, rather than split leakage.
