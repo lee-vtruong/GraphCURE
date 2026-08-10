@@ -476,3 +476,20 @@ The 10% budget is the strongest cost-sensitive result: it improves Macro-F1
 by `+0.0095` over closed claim-only (`0.4350`) while opening evidence for only
 10.5% of test claims. This fixed-budget protocol is preferred over unconstrained
 per-seed threshold selection for the main comparison.
+
+### Fine-tuned reranker budget routing
+
+Fine-tuning the cross-encoder on MOCHEG relevance pairs improved retrieval to
+test Recall@5 `0.9018` and MRR `0.8306`. The downstream fixed-budget router then
+gave:
+
+| Budget | Test coverage | Accuracy | Macro-F1 |
+|---:|---:|---:|---:|
+| 10% | 9.2% | 0.4610 | 0.4361 |
+| 25% | 23.3% | 0.4671 | 0.4427 |
+| 50% | 47.2% | **0.4729** | **0.4491** |
+
+The 50% fine-tuned budget improves Macro-F1 by `+0.0141` over the closed
+claim-only baseline (`0.4350`) and by `+0.0046` over the previous dense top-1
+10% router (`0.4445`). This is the strongest current MOCHEG result, pending
+multi-seed confirmation.
