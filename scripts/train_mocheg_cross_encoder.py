@@ -22,6 +22,6 @@ def main():
         neg=[x for x in all_ids if x not in pos]
         for eid in random.sample(neg,min(4,len(neg))):
             if claim and docs.get(eid): examples.append(InputExample(texts=[claim,docs[eid]],label=0.0))
-    model=CrossEncoder(a.base_model,num_labels=1,device=a.device); loader=DataLoader(examples,shuffle=True,batch_size=a.batch_size); warmup=max(1,int(len(loader)*a.epochs*0.1)); model.fit(train_dataloader=loader,epochs=a.epochs,warmup_steps=warmup,output_path=str(a.output),show_progress_bar=True)
+    model=CrossEncoder(a.base_model,num_labels=1,device=a.device); loader=DataLoader(examples,shuffle=True,batch_size=a.batch_size); warmup=max(1,int(len(loader)*a.epochs*0.1)); model.fit(train_dataloader=loader,epochs=a.epochs,warmup_steps=warmup,show_progress_bar=True); a.output.mkdir(parents=True,exist_ok=True); model.save(str(a.output))
     print("examples",len(examples),"saved",a.output)
 if __name__=="__main__": main()
