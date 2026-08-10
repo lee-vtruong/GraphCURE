@@ -493,3 +493,9 @@ The 50% fine-tuned budget improves Macro-F1 by `+0.0141` over the closed
 claim-only baseline (`0.4350`) and by `+0.0046` over the previous dense top-1
 10% router (`0.4445`). This is the strongest current MOCHEG result, pending
 multi-seed confirmation.
+
+Five-seed confirmation at the fixed 50% budget gave Accuracy `0.4629 +/-
+0.0113` and Macro-F1 `0.4413 +/- 0.0118`, with exactly `47.25%` test open
+coverage in every seed. The seed-42 peak (`0.4491`) is therefore not used as
+the main claim; the reproducible mean is near the earlier adaptive router mean
+and only modestly above the closed baseline.
