@@ -557,3 +557,10 @@ obtained Accuracy `0.4459 +/- 0.0073` and Macro-F1 `0.4309 +/- 0.0127`.
 Per-seed Macro-F1 values were `[0.4343, 0.4280, 0.4511, 0.4204, 0.4206]`.
 This control is weaker than the fixed-budget relation-aware router
 (`0.4492 +/- 0.0084`) and is not used as the primary method.
+
+### Gated retrieved v2 negative control
+
+The regularized gated verifier collapsed on retrieved relation embeddings,
+obtaining Accuracy `0.3907` and Macro-F1 `0.3892`, with gate mean
+`1.8e-6`. This confirms that the gate is unstable under noisy retrieved
+evidence and is not used as the primary method.
