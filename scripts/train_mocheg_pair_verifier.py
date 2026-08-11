@@ -20,11 +20,11 @@ class Pairs(Dataset):
 
 def main():
     p=argparse.ArgumentParser(); p.add_argument('--manifest-root',type=Path,default=Path('data/processed/mocheg_gold_manifest')); p.add_argument('--model',default='microsoft/deberta-v3-base'); p.add_argument('--out',type=Path,default=Path('outputs/mocheg_pair_verifier')); p.add_argument('--epochs',type=int,default=3); p.add_argument('--batch-size',type=int,default=16); p.add_argument('--device',default='cuda'); a=p.parse_args(); a.out.mkdir(parents=True,exist_ok=True)
-    tok=AutoTokenizer.from_pretrained(a.model); model=AutoModelForSequenceClassification.from_pretrained(a.model,num_labels=3).to(a.device); tr=Pairs(a.manifest_root/'train.jsonl',tok); va=Pairs(a.manifest_root/'val.jsonl',tok); te=Pairs(a.manifest_root/'test.jsonl',tok); loader=DataLoader(tr,batch_size=a.batch_size,shuffle=True); opt=torch.optim.AdamW(model.parameters(),lr=2e-5,weight_decay=.01); sch=get_linear_schedule_with_warmup(opt,int(len(loader)*.1),len(loader)*a.epochs); best=-1
+    tok=AutoTokenizer.from_pretrained(a.model); model=AutoModelForSequenceClassification.from_pretrained(a.model,num_labels=3).to(a.device); tr=Pairs(a.manifest_root/'train.jsonl',tok); va=Pairs(a.manifest_root/'val.jsonl',tok); te=Pairs(a.manifest_root/'test.jsonl',tok); counts=torch.bincount(torch.tensor([x[2] for x in tr.rows]),minlength=3).float(); class_w=(counts.sum()/(3*counts)).to(a.device); loader=DataLoader(tr,batch_size=a.batch_size,shuffle=True); opt=torch.optim.AdamW(model.parameters(),lr=1e-5,weight_decay=.01); sch=get_linear_schedule_with_warmup(opt,int(len(loader)*.1),len(loader)*a.epochs); best=-1
     for ep in range(1,a.epochs+1):
         model.train()
         for b in loader:
-            b={k:v.to(a.device) for k,v in b.items()}; opt.zero_grad(); loss=model(**b).loss; loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(),1.0); opt.step(); sch.step()
+            b={k:v.to(a.device) for k,v in b.items()}; opt.zero_grad(); labels=b.pop('labels'); logits=model(**b).logits; loss=torch.nn.functional.cross_entropy(logits,labels,weight=class_w); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(),1.0); opt.step(); sch.step()
         model.eval(); ys=[];ps=[]
         with torch.no_grad():
             for b in DataLoader(va,batch_size=a.batch_size):
