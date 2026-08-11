@@ -516,3 +516,11 @@ seed-42 result:
 The relation-aware 50% router improves Macro-F1 by `+0.0259` over closed
 claim-only (`0.4350`) and by `+0.0119` over the previous fine-tuned 50% router
 (`0.4491`). This is a seed-42 result and requires five-seed confirmation.
+
+Five-seed relation-aware confirmation at fixed 50% budget gave Accuracy
+`0.4685 +/- 0.0076` and Macro-F1 `0.4492 +/- 0.0084`, with exactly `47.25%`
+open coverage in every seed. Per-seed Macro-F1 values were
+`[0.4513, 0.4374, 0.4609, 0.4472, 0.4405]`. The mean improves over closed
+claim-only (`0.4350`) by `+0.0142` and over the previous fine-tuned router
+(`0.4413`) by `+0.0079`. This fixed-budget relation-aware configuration is the
+current primary MOCHEG result.
