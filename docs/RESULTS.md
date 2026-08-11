@@ -532,3 +532,10 @@ article-level relevant qrels. This is an upper-bound diagnostic, not a
 deployable protocol. Comparing claim-only, retrieved-evidence, and gold-
 evidence scores determines whether the next gain should target retrieval or
 the verifier/aggregation module.
+
+The first oracle-evidence run (MPNet, independent architecture, seed 42)
+obtained test Accuracy `0.4643` and Macro-F1 `0.4130` (validation Macro-F1
+`0.5095`). The test confusion matrix shows a strong refuted bias and weak NEI
+recall (NEI F1 `0.2568`). Thus naive evidence concatenation is not sufficient;
+the next controlled experiment is class-balanced training, followed by a
+claim-anchored gated fusion implementation if this does not recover NEI.
