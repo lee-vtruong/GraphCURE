@@ -499,3 +499,20 @@ Five-seed confirmation at the fixed 50% budget gave Accuracy `0.4629 +/-
 coverage in every seed. The seed-42 peak (`0.4491`) is therefore not used as
 the main claim; the reproducible mean is near the earlier adaptive router mean
 and only modestly above the closed baseline.
+
+### Relation-aware evidence aggregation
+
+Adding NLI relation metadata (support, contradiction, neutral, and support-
+contradiction margin) to the fine-tuned reranked evidence representation raised
+open-only test Macro-F1 to `0.4511`. Fixed-budget routing further improved the
+seed-42 result:
+
+| Budget | Test coverage | Accuracy | Macro-F1 |
+|---:|---:|---:|---:|
+| 10% | 9.2% | 0.4626 | 0.4387 |
+| 25% | 23.3% | 0.4700 | 0.4488 |
+| 50% | 47.2% | **0.4782** | **0.4609** |
+
+The relation-aware 50% router improves Macro-F1 by `+0.0259` over closed
+claim-only (`0.4350`) and by `+0.0119` over the previous fine-tuned 50% router
+(`0.4491`). This is a seed-42 result and requires five-seed confirmation.
