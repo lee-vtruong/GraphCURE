@@ -524,3 +524,11 @@ open coverage in every seed. Per-seed Macro-F1 values were
 claim-only (`0.4350`) by `+0.0142` and over the previous fine-tuned router
 (`0.4413`) by `+0.0079`. This fixed-budget relation-aware configuration is the
 current primary MOCHEG result.
+
+### Gold-evidence upper-bound diagnostic
+
+`scripts/prepare_mocheg_gold_manifest.py` creates an oracle manifest using
+article-level relevant qrels. This is an upper-bound diagnostic, not a
+deployable protocol. Comparing claim-only, retrieved-evidence, and gold-
+evidence scores determines whether the next gain should target retrieval or
+the verifier/aggregation module.
