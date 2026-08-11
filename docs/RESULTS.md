@@ -539,3 +539,13 @@ obtained test Accuracy `0.4643` and Macro-F1 `0.4130` (validation Macro-F1
 recall (NEI F1 `0.2568`). Thus naive evidence concatenation is not sufficient;
 the next controlled experiment is class-balanced training, followed by a
 claim-anchored gated fusion implementation if this does not recover NEI.
+
+    
+### Gold evidence with class-balanced loss
+
+The class-balanced oracle-evidence control achieved test Accuracy
+`0.4803` and Macro-F1 `0.4389`, improving over the unweighted oracle
+baseline (`0.4643` Accuracy, `0.4130` Macro-F1). Per-class F1 was
+`0.4308/0.5963/0.2896` for supported/refuted/NEI. The result remains
+below the relation-aware router (`0.4492 +/- 0.0084` Macro-F1), indicating
+that class reweighting alone is insufficient.
