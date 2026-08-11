@@ -24,7 +24,7 @@ def main():
     for ep in range(1,a.epochs+1):
         model.train()
         for b in loader:
-            b={k:v.to(a.device) for k,v in b.items()}; opt.zero_grad(); labels=b.pop('labels'); logits=model(**b).logits; loss=torch.nn.functional.cross_entropy(logits,labels,weight=class_w); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(),1.0); opt.step(); sch.step()
+            b={k:v.to(a.device) for k,v in b.items()}; opt.zero_grad(); labels=b.pop('labels'); logits=model(**b).logits; loss=torch.nn.functional.cross_entropy(logits.float(),labels,weight=class_w.float()); loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(),1.0); opt.step(); sch.step()
         model.eval(); ys=[];ps=[]
         with torch.no_grad():
             for b in DataLoader(va,batch_size=a.batch_size):
