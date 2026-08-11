@@ -549,3 +549,11 @@ baseline (`0.4643` Accuracy, `0.4130` Macro-F1). Per-class F1 was
 `0.4308/0.5963/0.2896` for supported/refuted/NEI. The result remains
 below the relation-aware router (`0.4492 +/- 0.0084` Macro-F1), indicating
 that class reweighting alone is insufficient.
+
+### Final relation embedding five-seed control
+
+The direct relation-aware embedding model was evaluated over five seeds and
+obtained Accuracy `0.4459 +/- 0.0073` and Macro-F1 `0.4309 +/- 0.0127`.
+Per-seed Macro-F1 values were `[0.4343, 0.4280, 0.4511, 0.4204, 0.4206]`.
+This control is weaker than the fixed-budget relation-aware router
+(`0.4492 +/- 0.0084`) and is not used as the primary method.
