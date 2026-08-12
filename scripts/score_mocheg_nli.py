@@ -18,7 +18,7 @@ def main():
         claims={json.loads(x)["id"]:json.loads(x) for x in (a.manifest_root/f"{split}.jsonl").read_text().splitlines() if x.strip()}; out=[]
         for line in (a.retrieval_root/f"{split}.jsonl").read_text().splitlines():
             r=json.loads(line); claim=claims[r["id"]]["claim"]; ids=[x for x in r.get("retrieved_evidence_ids",[]) if docs.get(x)]; scores=model.predict([(claim,docs[x]) for x in ids],apply_softmax=True,show_progress_bar=False) if ids else np.zeros((0,3));
-            mean=scores.mean(0) if len(scores) else np.zeros(3); r["nli_support"]=float(mean[support_idx]); r["nli_neutral"]=float(mean[neutral_idx]); r["nli_contradiction"]=float(mean[contra_idx]); r["nli_margin"]=float(mean[support_idx]-mean[contra_idx]); out.append(r)
+            mean=scores.mean(0) if len(scores) else np.zeros(3); r["nli_support"]=float(mean[support_idx]); r["nli_neutral"]=float(mean[neutral_idx]); r["nli_contradiction"]=float(mean[contra_idx]); r["nli_margin"]=float(mean[support_idx]-mean[contra_idx]); r["nli_scores"]=[{"support":float(s[support_idx]),"neutral":float(s[neutral_idx]),"contradiction":float(s[contra_idx])} for s in scores]; out.append(r)
         (a.output_root/f"{split}.jsonl").write_text("\n".join(json.dumps(x) for x in out)+"\n")
         print(split,len(out))
 if __name__=="__main__": main()
