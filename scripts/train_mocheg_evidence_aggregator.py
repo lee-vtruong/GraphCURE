@@ -15,7 +15,7 @@ def rows(path): return [json.loads(x) for x in path.read_text().splitlines() if 
 
 def feat(r, k):
     ns=r.get('nli_scores',[])[:k]; rs=np.asarray(r.get('retrieved_scores',[])[:len(ns)],dtype=np.float32)
-    if not ns: return np.zeros(34,dtype=np.float32)
+    if not ns: return np.zeros(19,dtype=np.float32)
     a=np.asarray([[x['support'],x['contradiction'],x['neutral']] for x in ns],dtype=np.float32)
     if len(rs)!=len(a): rs=np.zeros(len(a),dtype=np.float32)
     w=np.exp(rs-rs.max()); w=w/(w.sum()+1e-8)
