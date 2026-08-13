@@ -37,8 +37,8 @@ class CrossAttnVerifier(nn.Module):
         super().__init__(); self.enc=AutoModel.from_pretrained(name); d=self.enc.config.hidden_size
         self.attn=nn.MultiheadAttention(d,8,dropout=dropout,batch_first=True); self.norm=nn.LayerNorm(d); self.head=nn.Sequential(nn.Linear(d,256),nn.GELU(),nn.Dropout(dropout),nn.Linear(256,labels))
     def forward(self,claim_input_ids,claim_attention_mask,evidence_input_ids,evidence_attention_mask):
-        b,k,l=evidence_input_ids.shape; c=self.enc(input_ids=claim_input_ids,attention_mask=claim_attention_mask).last_hidden_state[:,0:1]
-        e=self.enc(input_ids=evidence_input_ids.reshape(b*k,l),attention_mask=evidence_attention_mask.reshape(b*k,l)).last_hidden_state[:,0].reshape(b,k,-1)
+        b,k,l=evidence_input_ids.shape; c=self.enc(input_ids=claim_input_ids,attention_mask=claim_attention_mask).last_hidden_state[:,0:1].float()
+        e=self.enc(input_ids=evidence_input_ids.reshape(b*k,l),attention_mask=evidence_attention_mask.reshape(b*k,l)).last_hidden_state[:,0].reshape(b,k,-1).float()
         q,_=self.attn(c,e,e); h=self.norm(c.squeeze(1)+q.squeeze(1)); return self.head(h)
 
 def main():
