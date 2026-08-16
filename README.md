@@ -20,6 +20,9 @@ SigLIP, DINOv2, or MLLM embeddings.
 The current code is a research baseline, not yet an A* result. The A* claim
 must be earned by the experiment protocol in `docs/EXPERIMENTS.md`.
 
+The modern fixed-corpus retrieval and claim-level evidence-set verifier are
+documented in [`docs/MODERN_CLOSED_CORPUS.md`](docs/MODERN_CLOSED_CORPUS.md).
+
 ## 1. Server setup
 
 Recommended: Ubuntu, Python 3.11, CUDA 12.x.

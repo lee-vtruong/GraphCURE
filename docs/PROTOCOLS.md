@@ -5,10 +5,12 @@ This file freezes the four-stage research program.
 1. **A — Protocol and leakage audit.** Materialize ID-aligned close,
    retrieved-evidence, and gold-evidence manifests. Gold evidence is never
    called closed-book.
-2. **B — Closed expert.** Train without external/qrel evidence and evaluate on
-   NewsCLIPpings plus a real-world, modality-balanced external benchmark.
-3. **C — Open expert.** Train and evaluate with system-retrieved evidence;
-   report gold evidence only as an oracle diagnostic.
+2. **B — Closed-corpus expert.** Retrieval from the frozen benchmark corpus is
+   allowed, but live Internet/search-engine access is forbidden. A no-retrieval
+   model remains a P0 diagnostic rather than the main Phase-B system.
+3. **C — Open-web expert.** Live search, iterative query reformulation, and
+   newly retrieved external evidence are allowed; gold benchmark evidence is
+   still only an oracle diagnostic.
 4. **D — Cost-aware router.** Freeze the two experts and route by expected
    verification gain minus measured retrieval/inference cost.
 
@@ -16,14 +18,15 @@ This file freezes the four-stage research program.
 
 | Protocol | Model-visible inputs | Valid use |
 |---|---|---|
-| `close` | claim and a claim-owned image, if the release identifies one | closed baseline |
-| `open_retrieved` | close inputs plus system-retrieved evidence | deployable open system |
+| `close` | claim and a claim-owned image, if the release identifies one | P0 no-retrieval diagnostic |
+| `open_retrieved` | close inputs plus system-retrieved evidence from the frozen local corpus | P1 closed-corpus expert (legacy artifact name) |
 | `open_gold_oracle` | close inputs plus qrel text/image evidence | oracle diagnostic only |
 
 The current strict MOCHEG manifest stores qrel-derived `image_paths`. Those
 paths are evidence images, not automatically claim-owned images. Therefore the
 protocol builder removes them from `close`. If `close_claim_images` is zero in
-the audit, MOCHEG close-book is text-only under the currently available schema.
+the audit, the P0 diagnostic is text-only under the currently available schema.
+It must not be compared directly with papers that use system-retrieved evidence.
 
 Generate and audit the frozen manifests:
 

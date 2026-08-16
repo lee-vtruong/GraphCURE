@@ -11,3 +11,4 @@ wandb/
 *.aux
 *.log
 *.out
+tmp/

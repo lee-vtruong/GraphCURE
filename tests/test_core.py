@@ -8,6 +8,13 @@ from graphcure.model import GraphCURE, GraphCUREConfig
 from graphcure.data import PackedEmbeddingDataset, resolve_newsclippings_source
 from graphcure.optimization import project_auxiliary_gradients
 from scripts.prepare_mocheg_protocols import close_row
+from graphcure.evidence_set import EvidenceSetHead, evidence_set_loss, last_token_pool
+from graphcure.retrieval import (
+    contradiction_features,
+    reciprocal_rank_fusion,
+    retrieval_confidence,
+    top_indices,
+)
 
 
 def test_model_shapes():
@@ -171,3 +178,50 @@ def test_mocheg_close_protocol_removes_qrel_evidence():
     assert closed["image_evidence_ids"] == []
     assert "ruling_outline" not in closed
     assert closed["evidence_provenance"] == "none"
+
+
+def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():
+    fused = reciprocal_rank_fusion([[1, 2, 3], [3, 1, 4]], rank_constant=1)
+    assert fused[0][0] == 1
+    assert {item[0] for item in fused} == {1, 2, 3, 4}
+
+
+def test_top_indices_and_retrieval_confidence():
+    assert top_indices(np.array([0.1, 0.8, 0.4]), 2).tolist() == [1, 2]
+    assert retrieval_confidence([4.0, 1.0]) > retrieval_confidence([1.1, 1.0])
+
+
+def test_contradiction_features_detect_fact_traps():
+    features = contradiction_features(
+        "The event killed 12 people.",
+        "The report says the event did not kill 20 people.",
+    )
+    assert features["negation_mismatch"]
+    assert features["number_mismatch"]
+
+
+def test_last_token_pool_supports_right_padding():
+    hidden = torch.arange(24, dtype=torch.float32).reshape(2, 3, 4)
+    mask = torch.tensor([[1, 1, 0], [1, 1, 1]])
+    pooled = last_token_pool(hidden, mask)
+    assert torch.equal(pooled[0], hidden[0, 1])
+    assert torch.equal(pooled[1], hidden[1, 2])
+
+
+def test_evidence_set_head_and_multitask_loss_are_finite():
+    head = EvidenceSetHead(encoder_dim=8, hidden_dim=16)
+    mask = torch.tensor([[1, 1, 0], [1, 1, 1]], dtype=torch.bool)
+    relevance = torch.tensor([[1, 0, 0], [0, 1, 0]], dtype=torch.float32)
+    output = head(
+        torch.randn(2, 8),
+        torch.randn(2, 3, 8),
+        mask,
+        torch.randn(2, 3, 3),
+    )
+    loss, parts = evidence_set_loss(
+        output, torch.tensor([0, 1]), relevance, mask
+    )
+    assert output["verdict_logits"].shape == (2, 3)
+    assert output["attention"].shape == (2, 3)
+    assert torch.isfinite(loss)
+    assert all(torch.isfinite(value) for value in parts.values())
