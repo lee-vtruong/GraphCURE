@@ -38,3 +38,38 @@ python -m scripts.prepare_mocheg_protocols \
 The command exits non-zero on ID, label, retrieval, or closed-evidence leakage.
 Its authoritative report is
 `data/processed/mocheg_protocols/protocol_audit.json`.
+
+## Matched protocol embeddings
+
+Use the same MPNet text backbone in all three protocols. Close and
+text-retrieved settings skip CLIP entirely because the audited schema exposes
+no claim-owned image; gold-oracle alone may encode qrel images.
+
+```bash
+python -m scripts.embed_mocheg \
+  --manifest-root data/processed/mocheg_protocols/close \
+  --output-root data/processed/mocheg_protocol_embeddings/close \
+  --text-model sentence-transformers/all-mpnet-base-v2 \
+  --skip-images --device cuda --batch-size 64
+
+python -m scripts.embed_mocheg \
+  --manifest-root data/processed/mocheg_protocols/open_retrieved \
+  --output-root data/processed/mocheg_protocol_embeddings/open_retrieved \
+  --text-model sentence-transformers/all-mpnet-base-v2 \
+  --skip-images --device cuda --batch-size 64
+
+python -m scripts.embed_mocheg \
+  --manifest-root data/processed/mocheg_protocols/open_gold_oracle \
+  --output-root data/processed/mocheg_protocol_embeddings/open_gold_oracle \
+  --text-model sentence-transformers/all-mpnet-base-v2 \
+  --device cuda --batch-size 64
+```
+
+Verify alignment before any matched experiment:
+
+```bash
+python -m scripts.verify_mocheg_protocol_embeddings \
+  --close-root data/processed/mocheg_protocol_embeddings/close \
+  --retrieved-root data/processed/mocheg_protocol_embeddings/open_retrieved \
+  --gold-root data/processed/mocheg_protocol_embeddings/open_gold_oracle
+```

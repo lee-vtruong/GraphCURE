@@ -1,0 +1,25 @@
+seed: 42
+data:
+  format: mocheg_pt
+  text_source: claim
+  train_embedding: data/processed/mocheg_protocol_embeddings/close/train.pt
+  val_embedding: data/processed/mocheg_protocol_embeddings/close/val.pt
+  test_embedding: data/processed/mocheg_protocol_embeddings/close/test.pt
+model:
+  hidden_dim: 256
+  num_states: 3
+  num_labels: 3
+  graph_layers: 2
+  dropout: 0.1
+  architecture: independent
+  edge_dropout: 0.0
+train:
+  epochs: 15
+  batch_size: 128
+  num_workers: 4
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  amp: true
+  early_stopping_patience: 5
+  output_dir: outputs/mocheg_close_protocol
+loss: {label: 1.0, constraint: 0.0, conflict: 0.0, counterfactual: 0.0, budget: 0.0}

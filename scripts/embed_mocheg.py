@@ -28,6 +28,17 @@ def main() -> None:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--max-images", type=int, default=4)
+    parser.add_argument(
+        "--skip-images",
+        action="store_true",
+        help="Store zero image features without loading CLIP (for text-only protocols).",
+    )
+    parser.add_argument(
+        "--vision-dim",
+        type=int,
+        default=512,
+        help="Image feature width used with --skip-images.",
+    )
     parser.add_argument("--splits", nargs="+", default=["train", "val", "test"])
     parser.add_argument("--nli-root", type=Path)
     args = parser.parse_args()
@@ -35,8 +46,11 @@ def main() -> None:
     args.output_root.mkdir(parents=True, exist_ok=True)
 
     text_model = SentenceTransformer(args.text_model, device=str(device))
-    processor = CLIPProcessor.from_pretrained(args.vision_model)
-    vision_model = CLIPModel.from_pretrained(args.vision_model).to(device).eval()
+    processor = None
+    vision_model = None
+    if not args.skip_images:
+        processor = CLIPProcessor.from_pretrained(args.vision_model)
+        vision_model = CLIPModel.from_pretrained(args.vision_model).to(device).eval()
 
     for split in args.splits:
         output = args.output_root / f"{split}.pt"
@@ -61,31 +75,40 @@ def main() -> None:
         text = text_model.encode(texts, batch_size=args.batch_size, convert_to_numpy=True,
                                  normalize_embeddings=True, show_progress_bar=True)
 
-        image_features, image_mask = [], []
-        for start in tqdm(range(0, len(rows), args.batch_size), desc=f"{split} images"):
-            batch, masks = [], []
-            for row in rows[start:start + args.batch_size]:
-                paths = row.get("image_paths", [])[: args.max_images]
-                valid = []
-                for path in paths:
-                    try:
-                        valid.append(Image.open(path).convert("RGB"))
-                    except Exception:
-                        continue
-                masks.append(bool(valid))
-                batch.append(valid[0] if valid else Image.new("RGB", (224, 224), "black"))
-            inputs = processor(images=batch, return_tensors="pt").to(device)
-            with torch.inference_mode():
-                feats = vision_model.get_image_features(**inputs)
-                # transformers 5 may return BaseModelOutputWithPooling while
-                # older releases return the projected tensor directly.
-                if not isinstance(feats, torch.Tensor):
-                    feats = getattr(feats, "pooler_output", None)
-                    if feats is None:
-                        raise RuntimeError("CLIP image output has no pooler_output")
-                feats = torch.nn.functional.normalize(feats.float(), dim=-1)
-            image_features.append(feats.cpu())
-            image_mask.extend(masks)
+        if args.skip_images:
+            image_tensor = torch.zeros(len(rows), args.vision_dim, dtype=torch.float32)
+            image_mask = [False] * len(rows)
+        else:
+            assert processor is not None and vision_model is not None
+            image_features, image_mask = [], []
+            for start in tqdm(range(0, len(rows), args.batch_size), desc=f"{split} images"):
+                batch, masks = [], []
+                for row in rows[start:start + args.batch_size]:
+                    paths = row.get("image_paths", [])[: args.max_images]
+                    valid = []
+                    for path in paths:
+                        try:
+                            valid.append(Image.open(path).convert("RGB"))
+                        except Exception:
+                            continue
+                    masks.append(bool(valid))
+                    batch.append(valid[0] if valid else Image.new("RGB", (224, 224), "black"))
+                inputs = processor(images=batch, return_tensors="pt").to(device)
+                with torch.inference_mode():
+                    feats = vision_model.get_image_features(**inputs)
+                    # transformers 5 may return BaseModelOutputWithPooling while
+                    # older releases return the projected tensor directly.
+                    if not isinstance(feats, torch.Tensor):
+                        feats = getattr(feats, "pooler_output", None)
+                        if feats is None:
+                            raise RuntimeError("CLIP image output has no pooler_output")
+                    feats = torch.nn.functional.normalize(feats.float(), dim=-1)
+                image_features.append(feats.cpu())
+                image_mask.extend(masks)
+            image_tensor = torch.cat(image_features)
+
+        protocols = sorted({row.get("protocol", "legacy_unspecified") for row in rows})
+        provenances = sorted({row.get("evidence_provenance", "legacy_unspecified") for row in rows})
 
         payload = {
             "ids": [row["id"] for row in rows],
@@ -93,11 +116,13 @@ def main() -> None:
             "text_embeddings": torch.from_numpy(np.asarray(text, dtype=np.float32)),
             "claim_embeddings": torch.from_numpy(np.asarray(claim_text, dtype=np.float32)),
             "evidence_embeddings": torch.from_numpy(np.asarray(evidence_text, dtype=np.float32)),
-            "image_embeddings": torch.cat(image_features),
+            "image_embeddings": image_tensor,
             "image_mask": torch.tensor(image_mask, dtype=torch.bool),
             "nli_metadata": torch.tensor([[nli.get(row["id"], {}).get(k, 0.0) for k in ("nli_support", "nli_contradiction", "nli_neutral", "nli_margin")] for row in rows], dtype=torch.float32),
             "metadata": {"text_model": args.text_model, "vision_model": args.vision_model,
-                         "max_images": args.max_images, "device": str(device)},
+                         "max_images": args.max_images, "device": str(device),
+                         "protocols": protocols, "evidence_provenance": provenances,
+                         "image_encoder_skipped": args.skip_images},
         }
         torch.save(payload, output)
         print(f"saved {output} ({len(rows)} rows)")
