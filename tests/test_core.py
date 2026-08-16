@@ -7,6 +7,7 @@ from graphcure.losses import counterfactual_loss, directional_intervention_loss
 from graphcure.model import GraphCURE, GraphCUREConfig
 from graphcure.data import PackedEmbeddingDataset, resolve_newsclippings_source
 from graphcure.optimization import project_auxiliary_gradients
+from scripts.prepare_mocheg_protocols import close_row
 
 
 def test_model_shapes():
@@ -147,3 +148,26 @@ def test_multiview_architectures_use_specialized_inputs():
             assert out["node_mix_gates"].shape == (2, 4)
             assert torch.all((out["node_mix_gates"] > 0) &
                              (out["node_mix_gates"] < 0.5))
+
+
+def test_mocheg_close_protocol_removes_qrel_evidence():
+    source = {
+        "id": "mocheg-test-claim-1",
+        "claim_id": "1",
+        "label": 0,
+        "label_name": "supported",
+        "claim": "A claim",
+        "evidence_texts": ["gold text"],
+        "text_evidence_ids": ["e-1"],
+        "image_paths": ["gold.jpg"],
+        "image_evidence_ids": ["gold.jpg"],
+        "ruling_outline": "leaky fact-check text",
+    }
+    closed = close_row(source)
+    assert closed["claim"] == "A claim"
+    assert closed["evidence_texts"] == []
+    assert closed["text_evidence_ids"] == []
+    assert closed["image_paths"] == []
+    assert closed["image_evidence_ids"] == []
+    assert "ruling_outline" not in closed
+    assert closed["evidence_provenance"] == "none"
