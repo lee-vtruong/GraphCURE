@@ -129,21 +129,36 @@ python -m scripts.mine_mocheg_reasoning_negatives \
   --output data/processed/mocheg_reasoning_negatives/train.jsonl
 ```
 
-Train the claim-level verifier. The effective batch size below is 16.
+Cache the frozen encoder once. This prevents the top-k evidence encoder from
+being recomputed with backward passes in every epoch.
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python -m scripts.train_mocheg_reasoning_verifier \
+CUDA_VISIBLE_DEVICES=1 python -m scripts.cache_mocheg_reasoning_features \
   --manifest-root data/processed/mocheg_manifest_strict \
   --retrieval-root outputs/retrieval_mocheg_qwen3_reranked \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
   --encoder Qwen/Qwen3-Embedding-0.6B \
-  --output outputs/mocheg_reasoning_verifier_seed42 \
-  --top-k 8 --batch-size 2 --gradient-accumulation 8 \
-  --epochs 5 --seed 42 \
-  2>&1 | tee outputs/mocheg-reasoning-verifier-seed42.log
-
-cat outputs/mocheg_reasoning_verifier_seed42/val_metrics.json
+  --output-root data/processed/mocheg_reasoning_cache \
+  --top-k 8 --batch-size 32 --max-length 256 \
+  --splits train val \
+  2>&1 | tee outputs/mocheg-reasoning-cache.log
 ```
+
+Train only the claim-conditioned evidence-set head during model screening:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 python -m scripts.train_mocheg_cached_verifier \
+  --cache-root data/processed/mocheg_reasoning_cache \
+  --output outputs/mocheg_cached_verifier_seed42 \
+  --batch-size 256 --epochs 60 --patience 10 --seed 42 \
+  2>&1 | tee outputs/mocheg-cached-verifier-seed42.log
+
+cat outputs/mocheg_cached_verifier_seed42/val_metrics.json
+```
+
+The end-to-end encoder trainer is retained as an experimental LoRA/fine-tuning
+path, but must not be used for the initial screen: it repeatedly encodes nine
+sequences per sample and is prohibitively slow on the current shared GPU.
 
 The key verifier diagnostics are `retrieval_gold_coverage`,
 `evidence_selection_hit_at_1`, and `ece_10`, in addition to Accuracy and
@@ -170,15 +185,19 @@ CUDA_VISIBLE_DEVICES=1 python -m scripts.rerank_mocheg_qwen3 \
   --candidate-k 50 --top-k 10 --batch-size 4 --max-length 1536 \
   --splits test
 
-CUDA_VISIBLE_DEVICES=1 python -m scripts.train_mocheg_reasoning_verifier \
+CUDA_VISIBLE_DEVICES=1 python -m scripts.cache_mocheg_reasoning_features \
   --manifest-root data/processed/mocheg_manifest_strict \
   --retrieval-root outputs/retrieval_mocheg_qwen3_reranked \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
   --encoder Qwen/Qwen3-Embedding-0.6B \
-  --output outputs/mocheg_reasoning_verifier_seed42 \
-  --top-k 8 --batch-size 2 \
-  --checkpoint outputs/mocheg_reasoning_verifier_seed42/best.pt \
+  --output-root data/processed/mocheg_reasoning_cache \
+  --top-k 8 --batch-size 32 --max-length 256 --splits test
+
+CUDA_VISIBLE_DEVICES=1 python -m scripts.train_mocheg_cached_verifier \
+  --cache-root data/processed/mocheg_reasoning_cache \
+  --output outputs/mocheg_cached_verifier_seed42 \
+  --checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
   --evaluate-test
 
-cat outputs/mocheg_reasoning_verifier_seed42/test_metrics.json
+cat outputs/mocheg_cached_verifier_seed42/test_metrics.json
 ```

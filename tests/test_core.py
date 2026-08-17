@@ -11,9 +11,14 @@ from scripts.prepare_mocheg_protocols import close_row
 from graphcure.evidence_set import EvidenceSetHead, evidence_set_loss, last_token_pool
 from graphcure.retrieval import (
     contradiction_features,
+    evidence_candidate_features,
     reciprocal_rank_fusion,
     retrieval_confidence,
     top_indices,
+)
+from scripts.train_mocheg_cached_verifier import (
+    CachedEvidenceDataset,
+    validate_cache_pair,
 )
 
 
@@ -200,6 +205,23 @@ def test_contradiction_features_detect_fact_traps():
     assert features["number_mismatch"]
 
 
+def test_candidate_features_upweight_non_gold_reasoning_traps():
+    features, weight = evidence_candidate_features(
+        "The event killed 12 people.",
+        "The event did not kill 20 people.",
+        score=0.8,
+        top_score=0.9,
+        rank=2,
+        is_gold=False,
+    )
+    assert len(features) == 6
+    assert weight > 1.0
+    _, gold_weight = evidence_candidate_features(
+        "claim", "evidence", 0.9, 0.9, 1, True
+    )
+    assert gold_weight == 1.0
+
+
 def test_last_token_pool_supports_right_padding():
     hidden = torch.arange(24, dtype=torch.float32).reshape(2, 3, 4)
     mask = torch.tensor([[1, 1, 0], [1, 1, 1]])
@@ -229,3 +251,29 @@ def test_evidence_set_head_and_multitask_loss_are_finite():
     assert output["attention"].shape == (2, 3)
     assert torch.isfinite(loss)
     assert all(torch.isfinite(value) for value in parts.values())
+
+
+def test_cached_evidence_dataset_alignment(tmp_path):
+    payload = {
+        "ids": ["a", "b"],
+        "claim_embeddings": torch.randn(2, 8).half(),
+        "evidence_embeddings": torch.randn(2, 3, 8).half(),
+        "evidence_mask": torch.ones(2, 3, dtype=torch.bool),
+        "retrieval_features": torch.randn(2, 3, 6),
+        "relevance": torch.zeros(2, 3),
+        "relevance_weights": torch.ones(2, 3),
+        "labels": torch.tensor([0, 1]),
+        "metadata": {
+            "encoder": "test", "embedding_dim": 8, "top_k": 3,
+            "max_length": 16,
+        },
+    }
+    train_path = tmp_path / "train.pt"
+    val_path = tmp_path / "val.pt"
+    torch.save(payload, train_path)
+    torch.save(payload, val_path)
+    train = CachedEvidenceDataset(train_path)
+    val = CachedEvidenceDataset(val_path)
+    validate_cache_pair(train, val)
+    assert len(train) == 2
+    assert train[0]["retrieval_features"].shape == (3, 6)

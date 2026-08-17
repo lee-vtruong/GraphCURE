@@ -16,6 +16,12 @@ _NEGATIONS = re.compile(
 _NUMBER = re.compile(r"\b\d+(?:[.,]\d+)?%?\b")
 _TOKEN = re.compile(r"[A-Za-z0-9]+")
 
+FACT_CHECK_RETRIEVAL_INSTRUCTION = (
+    "Given a fact-checking claim, retrieve documents that provide direct, "
+    "independent evidence to support, refute, or resolve the claim. Preserve "
+    "entities, dates, locations, quantities, and negation."
+)
+
 
 def reciprocal_rank_fusion(
     rankings: Sequence[Sequence[int]],
@@ -83,6 +89,38 @@ def contradiction_features(claim: str, evidence: str) -> dict[str, float | bool]
         "number_mismatch": bool(claim_numbers and evidence_numbers)
         and claim_numbers.isdisjoint(evidence_numbers),
     }
+
+
+def evidence_candidate_features(
+    claim: str,
+    evidence: str,
+    score: float,
+    top_score: float,
+    rank: int,
+    is_gold: bool,
+) -> tuple[list[float], float]:
+    """Create inference-available trap features and a conservative train weight."""
+    if rank <= 0:
+        raise ValueError("rank must be positive")
+    traps = contradiction_features(claim, evidence)
+    features = [
+        float(score),
+        1.0 / rank,
+        float(top_score) - float(score),
+        float(traps["lexical_jaccard"]),
+        float(traps["negation_mismatch"]),
+        float(traps["number_mismatch"]),
+    ]
+    trap_strength = float(
+        bool(traps["negation_mismatch"]) or bool(traps["number_mismatch"])
+    )
+    lexical_strength = float(float(traps["lexical_jaccard"]) >= 0.18)
+    weight = (
+        1.0
+        if is_gold
+        else 1.0 + 0.25 * trap_strength + 0.10 * lexical_strength
+    )
+    return features, weight
 
 
 def retrieval_confidence(scores: Sequence[float]) -> float:

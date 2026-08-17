@@ -18,7 +18,7 @@ from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer, get_cosine_schedule_with_warmup
 
 from graphcure.evidence_set import EvidenceSetHead, evidence_set_loss, last_token_pool
-from graphcure.retrieval import contradiction_features
+from graphcure.retrieval import evidence_candidate_features
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -79,23 +79,17 @@ class MochegEvidenceSet(Dataset):
             relevance_weights = []
             for index, text in enumerate(evidence):
                 score = float(scores[index]) if index < len(scores) else 0.0
-                traps = contradiction_features(claim.get("claim", ""), text)
-                features.append([
-                    score,
-                    1.0 / (index + 1),
-                    top_score - score,
-                    float(traps["lexical_jaccard"]),
-                    float(traps["negation_mismatch"]),
-                    float(traps["number_mismatch"]),
-                ])
                 is_gold = ids[index] in gold
-                trap_strength = float(
-                    bool(traps["negation_mismatch"]) or bool(traps["number_mismatch"])
+                candidate_features, candidate_weight = evidence_candidate_features(
+                    claim.get("claim", ""),
+                    text,
+                    score,
+                    top_score,
+                    index + 1,
+                    is_gold,
                 )
-                lexical_strength = float(float(traps["lexical_jaccard"]) >= 0.18)
-                relevance_weights.append(
-                    1.0 if is_gold else 1.0 + 0.25 * trap_strength + 0.10 * lexical_strength
-                )
+                features.append(candidate_features)
+                relevance_weights.append(candidate_weight)
             valid = [True] * len(ids)
             relevance = [value in gold for value in ids]
             while len(ids) < top_k:

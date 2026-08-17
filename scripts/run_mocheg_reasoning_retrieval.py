@@ -19,17 +19,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
 
 from graphcure.retrieval import (
+    FACT_CHECK_RETRIEVAL_INSTRUCTION,
     first_relevant_rank,
     reciprocal_rank_fusion,
     retrieval_confidence,
     top_indices,
-)
-
-
-DEFAULT_INSTRUCTION = (
-    "Given a fact-checking claim, retrieve documents that provide direct, "
-    "independent evidence to support, refute, or resolve the claim. Preserve "
-    "entities, dates, locations, quantities, and negation."
 )
 
 
@@ -108,7 +102,7 @@ def main() -> None:
     parser.add_argument("--cache-root", type=Path,
                         default=Path("data/processed/retrieval_cache"))
     parser.add_argument("--dense-model", default="Qwen/Qwen3-Embedding-4B")
-    parser.add_argument("--instruction", default=DEFAULT_INSTRUCTION)
+    parser.add_argument("--instruction", default=FACT_CHECK_RETRIEVAL_INSTRUCTION)
     parser.add_argument("--candidate-k", type=int, default=200)
     parser.add_argument("--output-k", type=int, default=50)
     parser.add_argument("--dense-weight", type=float, default=0.75)
