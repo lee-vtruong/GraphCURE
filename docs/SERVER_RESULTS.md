@@ -36,6 +36,20 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   prefix/suffix exactly as specified by the official model card. Rerun as
   `R2V-RER-01` on validation only.
 
+### R2V-RER-01 — corrected Qwen3-Reranker-4B
+
+- Split: MOCHEG strict validation (`n=1456`), Qwen3 hybrid top-50 candidates
+- Output: `outputs/retrieval_mocheg_qwen3_reranked/summary.json`
+- Recall@10: **0.945742**
+- MRR: **0.886368**
+- Delta versus Qwen3 hybrid pre-reranking: Recall@10 **+0.018544**,
+  MRR **+0.057296**
+- Reachable-hit retention: `0.945742 / 0.953984 = 0.99136`; the reranker
+  retains 99.1% of validation claims whose gold evidence exists in candidate
+  top-50 while moving relevant evidence substantially earlier.
+- Decision: **reranking gate passed**; materialize train retrieval/reranking,
+  then train the claim-level evidence-set verifier. Official test remains locked.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

@@ -177,11 +177,14 @@ def main() -> None:
         result = {
             "claims": len(output),
             "model": args.model,
-            f"recall@{args.top_k}": float(np.mean([rank is not None for rank in ranks])),
             "mrr": float(np.mean([
                 1.0 / rank if rank is not None else 0.0 for rank in ranks
             ])),
         }
+        for cutoff in sorted({1, 5, args.top_k}):
+            result[f"recall@{cutoff}"] = float(np.mean([
+                rank is not None and rank <= cutoff for rank in ranks
+            ]))
         summary[split] = result
         print(json.dumps({split: result}, indent=2))
     summary_path.write_text(
