@@ -209,17 +209,21 @@ def test_last_token_pool_supports_right_padding():
 
 
 def test_evidence_set_head_and_multitask_loss_are_finite():
-    head = EvidenceSetHead(encoder_dim=8, hidden_dim=16)
+    head = EvidenceSetHead(encoder_dim=8, hidden_dim=16, retrieval_dim=6)
     mask = torch.tensor([[1, 1, 0], [1, 1, 1]], dtype=torch.bool)
     relevance = torch.tensor([[1, 0, 0], [0, 1, 0]], dtype=torch.float32)
     output = head(
         torch.randn(2, 8),
         torch.randn(2, 3, 8),
         mask,
-        torch.randn(2, 3, 3),
+        torch.randn(2, 3, 6),
     )
     loss, parts = evidence_set_loss(
-        output, torch.tensor([0, 1]), relevance, mask
+        output,
+        torch.tensor([0, 1]),
+        relevance,
+        mask,
+        relevance_weights=torch.tensor([[1.0, 1.25, 0.0], [1.0, 1.1, 1.25]]),
     )
     assert output["verdict_logits"].shape == (2, 3)
     assert output["attention"].shape == (2, 3)

@@ -109,6 +109,7 @@ def evidence_set_loss(
     labels: torch.Tensor,
     relevance: torch.Tensor,
     evidence_mask: torch.Tensor,
+    relevance_weights: torch.Tensor | None = None,
     class_weights: torch.Tensor | None = None,
     relevance_weight: float = 0.25,
     stance_weight: float = 0.15,
@@ -118,9 +119,16 @@ def evidence_set_loss(
     mask = evidence_mask.bool()
     relevant = relevance.bool() & mask
     verdict = F.cross_entropy(outputs["verdict_logits"].float(), labels, weight=class_weights)
-    relevance_loss = F.binary_cross_entropy_with_logits(
-        outputs["utility_logits"][mask].float(), relevance[mask].float()
+    relevance_terms = F.binary_cross_entropy_with_logits(
+        outputs["utility_logits"][mask].float(),
+        relevance[mask].float(),
+        reduction="none",
     )
+    if relevance_weights is not None:
+        weights = relevance_weights[mask].float()
+        relevance_loss = torch.sum(relevance_terms * weights) / weights.sum().clamp_min(1.0)
+    else:
+        relevance_loss = relevance_terms.mean()
     stance_mask = relevant
     if stance_mask.any():
         stance_targets = labels.unsqueeze(1).expand_as(relevance)[stance_mask]

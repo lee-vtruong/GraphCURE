@@ -18,6 +18,7 @@ from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer, get_cosine_schedule_with_warmup
 
 from graphcure.evidence_set import EvidenceSetHead, evidence_set_loss, last_token_pool
+from graphcure.retrieval import contradiction_features
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -74,20 +75,34 @@ class MochegEvidenceSet(Dataset):
                 ids, scores = [""], [0.0]
             top_score = float(scores[0]) if scores else 0.0
             evidence = [documents.get(value, "") for value in ids]
-            features = [
-                [
-                    float(scores[index]) if index < len(scores) else 0.0,
+            features = []
+            relevance_weights = []
+            for index, text in enumerate(evidence):
+                score = float(scores[index]) if index < len(scores) else 0.0
+                traps = contradiction_features(claim.get("claim", ""), text)
+                features.append([
+                    score,
                     1.0 / (index + 1),
-                    top_score - (float(scores[index]) if index < len(scores) else 0.0),
-                ]
-                for index in range(len(ids))
-            ]
+                    top_score - score,
+                    float(traps["lexical_jaccard"]),
+                    float(traps["negation_mismatch"]),
+                    float(traps["number_mismatch"]),
+                ])
+                is_gold = ids[index] in gold
+                trap_strength = float(
+                    bool(traps["negation_mismatch"]) or bool(traps["number_mismatch"])
+                )
+                lexical_strength = float(float(traps["lexical_jaccard"]) >= 0.18)
+                relevance_weights.append(
+                    1.0 if is_gold else 1.0 + 0.25 * trap_strength + 0.10 * lexical_strength
+                )
             valid = [True] * len(ids)
             relevance = [value in gold for value in ids]
             while len(ids) < top_k:
                 ids.append("")
                 evidence.append("")
-                features.append([0.0, 0.0, 0.0])
+                features.append([0.0] * 6)
+                relevance_weights.append(0.0)
                 valid.append(False)
                 relevance.append(False)
             self.rows.append({
@@ -98,6 +113,7 @@ class MochegEvidenceSet(Dataset):
                 "features": features[:top_k],
                 "valid": valid[:top_k],
                 "relevance": relevance[:top_k],
+                "relevance_weights": relevance_weights[:top_k],
             })
 
     def __len__(self) -> int:
@@ -128,6 +144,9 @@ class MochegEvidenceSet(Dataset):
             "evidence_mask": torch.tensor(row["valid"], dtype=torch.bool),
             "retrieval_features": torch.tensor(row["features"], dtype=torch.float32),
             "relevance": torch.tensor(row["relevance"], dtype=torch.float32),
+            "relevance_weights": torch.tensor(
+                row["relevance_weights"], dtype=torch.float32
+            ),
             "labels": torch.tensor(row["label"], dtype=torch.long),
         }
 
@@ -162,7 +181,7 @@ class ReasoningVerifier(nn.Module):
         self.head = EvidenceSetHead(
             encoder_dim=dimension,
             hidden_dim=hidden_dim,
-            retrieval_dim=3,
+            retrieval_dim=6,
             dropout=dropout,
         )
 
@@ -230,6 +249,7 @@ def evaluate(model, dataset, batch_size, workers, device) -> tuple[dict, list[di
         ids = batch.pop("id")
         target = batch.pop("labels")
         relevance = batch.pop("relevance")
+        batch.pop("relevance_weights")
         output = model(**{key: value.to(device) for key, value in batch.items()})
         prob = torch.softmax(output["verdict_logits"].float(), -1).cpu()
         pred = prob.argmax(-1)
@@ -429,6 +449,7 @@ def main() -> None:
             batch.pop("id")
             labels = batch.pop("labels").to(device)
             relevance = batch.pop("relevance").to(device)
+            relevance_weights = batch.pop("relevance_weights").to(device)
             evidence_mask = batch["evidence_mask"].to(device)
             inputs = {key: value.to(device) for key, value in batch.items()}
             amp = torch.autocast("cuda", dtype=torch.bfloat16) if use_amp else nullcontext()
@@ -439,6 +460,7 @@ def main() -> None:
                     labels,
                     relevance,
                     evidence_mask,
+                    relevance_weights=relevance_weights,
                     class_weights=class_weights,
                     relevance_weight=args.relevance_weight,
                     stance_weight=args.stance_weight,
