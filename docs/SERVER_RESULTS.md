@@ -80,6 +80,20 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Decision: **train reranking gate passed**; mine structured reasoning traps and
   train the evidence-utility/sufficiency verifier. Official test remains locked.
 
+### R2V-NEG-01 — structured reasoning-negative audit
+
+- Claims: `11631`; claims without annotated text positives: `4294`
+- Mined non-qrel candidates: `102520` (`8.81` per claim on average)
+- Semantic hard: `44299` (`43.21%`)
+- Negation traps: `37272` (`36.36%`)
+- Quantity traps: `19446` (`18.97%`)
+- Lexical-overlap traps: `1503` (`1.47%`)
+- Interpretation: the candidate pool contains substantial negation and numeric
+  confounders rather than only generic dense neighbors. Because qrels may be
+  incomplete, the verifier uses conservative auxiliary relevance weights
+  (`1.25` for negation/quantity traps and `1.10` for lexical traps), while the
+  claim-level verdict remains the primary objective.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
