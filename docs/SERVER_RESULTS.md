@@ -66,6 +66,20 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   primarily annotation availability; both raw and coverage-conditional metrics
   must be reported.
 
+### R2V-RER-TRAIN-01 — Qwen3-Reranker-4B train materialization
+
+- Split: MOCHEG strict train (`n=11631`), Qwen3 hybrid top-50 candidates
+- Raw Recall@1/5/10: `0.485599 / 0.567535 / 0.581377`
+- Raw MRR: `0.521653`
+- Conditional on the `7337` claims with annotated text evidence,
+  Recall@1/5/10: `0.769797 / 0.899687 / 0.921630`
+- Conditional MRR: `0.826952`
+- Delta versus pre-reranking train candidates: Recall@1 `+0.055971`,
+  Recall@5 `+0.032757`, Recall@10 `+0.019345`, MRR `+0.045130`
+- Candidate-hit retention in top-10: `0.581377 / 0.592382 = 0.981422`
+- Decision: **train reranking gate passed**; mine structured reasoning traps and
+  train the evidence-utility/sufficiency verifier. Official test remains locked.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
