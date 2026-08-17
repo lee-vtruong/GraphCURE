@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 from pathlib import Path
 
@@ -30,8 +31,18 @@ SUFFIX = '<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n'
 
 
 def read_jsonl(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    rows: list[dict] = []
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            if index != len(lines) - 1:
+                raise
+            print(f"warning: ignoring interrupted final JSONL line in {path}")
+    return rows
 
 
 def read_docs(path: Path) -> dict[str, str]:
@@ -122,9 +133,25 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--splits", nargs="+", default=["train", "val", "test"])
+    parser.add_argument("--resume", action="store_true",
+                        help="Append missing claim IDs to an interrupted output")
+    parser.add_argument("--flush-every", type=int, default=25)
     args = parser.parse_args()
     if args.top_k > args.candidate_k:
         parser.error("--top-k cannot exceed --candidate-k")
+    if args.flush_every <= 0:
+        parser.error("--flush-every must be positive")
+
+    signature_payload = {
+        "model": args.model,
+        "instruction": args.instruction,
+        "candidate_k": args.candidate_k,
+        "top_k": args.top_k,
+        "max_length": args.max_length,
+    }
+    reranker_signature = hashlib.sha256(
+        json.dumps(signature_payload, sort_keys=True).encode()
+    ).hexdigest()
 
     args.output_root.mkdir(parents=True, exist_ok=True)
     reranker = QwenReranker(args.model, args.device, args.max_length)
@@ -140,40 +167,64 @@ def main() -> None:
             for row in read_jsonl(args.manifest_root / f"{split}.jsonl")
         }
         retrieved = read_jsonl(args.retrieval_root / f"{split}.jsonl")
-        output: list[dict] = []
-        ranks: list[int | None] = []
-        for row in tqdm(retrieved, desc=f"{split} Qwen3 reranking"):
-            claim = claims[row["id"]]
-            candidates = [
-                evidence_id
-                for evidence_id in row.get("retrieved_evidence_ids", [])[:args.candidate_k]
-                if documents.get(evidence_id)
-            ]
-            scores = reranker.score(
-                [(claim.get("claim", ""), documents[evidence_id])
-                 for evidence_id in candidates],
-                args.instruction,
-                args.batch_size,
-            ) if candidates else np.empty(0, dtype=np.float32)
-            order = np.argsort(-scores, kind="stable")[:args.top_k]
-            ids = [candidates[index] for index in order]
-            values = [float(scores[index]) for index in order]
-            gold = {str(value) for value in claim.get("text_evidence_ids", [])}
-            rank = first_relevant_rank(ids, gold)
-            ranks.append(rank)
-            output.append({
-                **row,
-                "retrieved_evidence_ids": ids,
-                "retrieved_scores": values,
-                "reranker_scores": values,
-                "retrieval_confidence": retrieval_confidence(values),
-                "first_gold_rank": rank,
-                "reranker_model": args.model,
-            })
-        (args.output_root / f"{split}.jsonl").write_text(
+        target = args.output_root / f"{split}.jsonl"
+        output: list[dict] = read_jsonl(target) if args.resume and target.exists() else []
+        if output and any(
+            row.get("reranker_signature") != reranker_signature for row in output
+        ):
+            parser.error(
+                f"cannot resume {target}: reranker settings differ; choose a new "
+                "output root or rerun without --resume"
+            )
+        completed = {row["id"] for row in output}
+        pending = [row for row in retrieved if row["id"] not in completed]
+        if completed:
+            print(f"{split}: resuming after {len(completed)} completed claims")
+        if not args.resume or not target.exists():
+            target.write_text("", encoding="utf-8")
+        with target.open("a", encoding="utf-8", buffering=1) as handle:
+            for item_index, row in enumerate(
+                tqdm(pending, desc=f"{split} Qwen3 reranking"), start=1
+            ):
+                claim = claims[row["id"]]
+                candidates = [
+                    evidence_id
+                    for evidence_id in row.get("retrieved_evidence_ids", [])[:args.candidate_k]
+                    if documents.get(evidence_id)
+                ]
+                scores = reranker.score(
+                    [(claim.get("claim", ""), documents[evidence_id])
+                     for evidence_id in candidates],
+                    args.instruction,
+                    args.batch_size,
+                ) if candidates else np.empty(0, dtype=np.float32)
+                order = np.argsort(-scores, kind="stable")[:args.top_k]
+                ids = [candidates[index] for index in order]
+                values = [float(scores[index]) for index in order]
+                gold = {str(value) for value in claim.get("text_evidence_ids", [])}
+                rank = first_relevant_rank(ids, gold)
+                result_row = {
+                    **row,
+                    "retrieved_evidence_ids": ids,
+                    "retrieved_scores": values,
+                    "reranker_scores": values,
+                    "retrieval_confidence": retrieval_confidence(values),
+                    "first_gold_rank": rank,
+                    "reranker_model": args.model,
+                    "reranker_signature": reranker_signature,
+                }
+                output.append(result_row)
+                handle.write(json.dumps(result_row, ensure_ascii=False) + "\n")
+                if item_index % args.flush_every == 0:
+                    handle.flush()
+        order_by_id = {row["id"]: index for index, row in enumerate(retrieved)}
+        output.sort(key=lambda row: order_by_id[row["id"]])
+        # Rewrite once in canonical input order after a successful run.
+        target.write_text(
             "\n".join(json.dumps(row, ensure_ascii=False) for row in output) + "\n",
             encoding="utf-8",
         )
+        ranks = [row.get("first_gold_rank") for row in output]
         result = {
             "claims": len(output),
             "model": args.model,

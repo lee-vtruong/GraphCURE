@@ -50,6 +50,22 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Decision: **reranking gate passed**; materialize train retrieval/reranking,
   then train the claim-level evidence-set verifier. Official test remains locked.
 
+### R2V-RET-TRAIN-01 — Qwen3 hybrid train materialization
+
+- Split: MOCHEG strict train (`n=11631`), frozen corpus (`18989` docs)
+- Claims with annotated text evidence: `7337`; raw retrieval ceiling when
+  no-text-qrel claims count as misses: `7337/11631 = 0.630814`
+- Raw Recall@1/5/10/50: `0.429628 / 0.534778 / 0.562032 / 0.592382`
+- Raw MRR: `0.476523`
+- Conditional on claims with annotated text evidence, Recall@1/5/10/50:
+  `0.681069 / 0.847758 / 0.890964 / 0.939076`
+- Conditional MRR: `0.755410`
+- Matched dense-top50 train reference: raw Recall@50 `0.581549`, MRR
+  `0.474593`
+- Decision: **train candidate gate passed**. The raw train/validation gap is
+  primarily annotation availability; both raw and coverage-conditional metrics
+  must be reported.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
