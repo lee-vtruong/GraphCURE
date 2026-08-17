@@ -6,6 +6,36 @@ Git commit: `86616c3aa87237666212961e134ea8bf49bab642`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
+## GraphCURE-R2V validation ledger (2026-08-17)
+
+The entries in this section are validation-only development results. Official
+test retrieval remains locked until architecture and hyperparameters freeze.
+
+### R2V-RET-01 — Qwen3-Embedding-4B hybrid candidate retrieval
+
+- Split: MOCHEG strict validation (`n=1456`), frozen local corpus (`4067` docs)
+- Output: `outputs/retrieval_mocheg_qwen3_hybrid/summary.json`
+- Recall@1: **0.774725**
+- Recall@5: **0.896978**
+- Recall@10: **0.927198**
+- Recall@50: **0.953984**
+- MRR: **0.829072**
+- Matched dense-top50 reference: Recall@50 `0.943681`, MRR `0.817854`
+- Delta versus matched reference: Recall@50 **+0.010302**, MRR **+0.011218**
+- Decision: **candidate-retrieval gate passed**; proceed to validation-only
+  Qwen3-Reranker-4B screening.
+
+### R2V-RER-00 — invalid Qwen3 reranker implementation
+
+- Observed Recall@10: `0.916896`; MRR: `0.289560`
+- Status: **invalidated; exclude from scientific comparison**
+- Cause: the first implementation truncated the fully formatted prompt. Long
+  evidence could remove the required assistant suffix, so the final-token
+  `yes`/`no` logits were not valid relevance scores.
+- Resolution: truncate only query-document content, then append the fixed Qwen
+  prefix/suffix exactly as specified by the official model card. Rerun as
+  `R2V-RER-01` on validation only.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

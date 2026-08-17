@@ -21,10 +21,12 @@ DEFAULT_INSTRUCTION = (
     "negation; lexical similarity alone is insufficient."
 )
 
-SYSTEM = (
-    "Judge whether the Document meets the requirements based on the Query and "
-    "the Instruct provided. The answer can only be yes or no."
+PREFIX = (
+    '<|im_start|>system\nJudge whether the Document meets the requirements '
+    'based on the Query and the Instruct provided. Note that the answer can '
+    'only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
 )
+SUFFIX = '<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n'
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -56,28 +58,19 @@ class QwenReranker:
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name, torch_dtype=dtype, trust_remote_code=True
         ).to(self.device).eval()
-        self.yes_id = self._single_token("yes")
-        self.no_id = self._single_token("no")
+        self.yes_id = int(self.tokenizer.convert_tokens_to_ids("yes"))
+        self.no_id = int(self.tokenizer.convert_tokens_to_ids("no"))
+        self.prefix_tokens = self.tokenizer.encode(PREFIX, add_special_tokens=False)
+        self.suffix_tokens = self.tokenizer.encode(SUFFIX, add_special_tokens=False)
+        self.content_length = max_length - len(self.prefix_tokens) - len(self.suffix_tokens)
+        if self.content_length <= 0:
+            raise ValueError("max_length is shorter than the fixed reranker prompt")
 
-    def _single_token(self, text: str) -> int:
-        tokens = self.tokenizer.encode(text, add_special_tokens=False)
-        if not tokens:
-            raise RuntimeError(f"tokenizer produced no token for {text!r}")
-        return int(tokens[-1])
-
-    def prompt(self, query: str, document: str, instruction: str) -> str:
-        user = (
+    @staticmethod
+    def prompt(query: str, document: str, instruction: str) -> str:
+        return (
             f"<Instruct>: {instruction}\n<Query>: {query}\n<Document>: {document}"
         )
-        messages = [
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": user},
-        ]
-        return self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        ) + "<think>\n\n</think>\n\n"
 
     @torch.inference_mode()
     def score(
@@ -91,14 +84,24 @@ class QwenReranker:
         for start in range(0, len(prompts), batch_size):
             batch = self.tokenizer(
                 prompts[start:start + batch_size],
+                padding=False,
+                truncation="longest_first",
+                return_attention_mask=False,
+                max_length=self.content_length,
+            )
+            batch["input_ids"] = [
+                self.prefix_tokens + tokens + self.suffix_tokens
+                for tokens in batch["input_ids"]
+            ]
+            batch = self.tokenizer.pad(
+                batch,
                 padding=True,
-                truncation=True,
                 max_length=self.max_length,
                 return_tensors="pt",
             ).to(self.device)
             logits = self.model(**batch).logits[:, -1]
             binary = torch.stack((logits[:, self.no_id], logits[:, self.yes_id]), -1)
-            scores.extend(torch.softmax(binary.float(), -1)[:, 1].cpu().tolist())
+            scores.extend(torch.log_softmax(binary.float(), -1)[:, 1].exp().cpu().tolist())
         return np.asarray(scores, dtype=np.float32)
 
 
