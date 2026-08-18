@@ -275,6 +275,17 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   two-claim Qwen3-VL reranker smoke benchmark before authorizing the full
   `1456 x 400 = 582400` validation pair pass.
 
+### R2V-VIS-RERANK-SMOKE-01 — invalid truncation configuration
+
+- Scope: two validation claims, ten candidates each; zero pairs completed
+- Failure: `max_length=1024` truncated expanded visual tokens, producing a
+  processor image-token count mismatch before the first score was written.
+- Runtime before failure: `80.208` seconds, including model initialization.
+- Classification: engineering/configuration failure; **not an experimental
+  result** and excluded from comparisons.
+- Resolution: use the Qwen official multimodal reranker cap `max_length=10240`
+  with dynamic padding, then repeat the same smoke gate.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

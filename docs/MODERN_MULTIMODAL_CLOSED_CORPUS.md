@@ -185,7 +185,8 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.rerank_mocheg_visual_qwen3 \
   --output-root outputs/retrieval_mocheg_visual_reranker_smoke \
   --model Qwen/Qwen3-VL-Reranker-2B \
   --candidate-k 10 --output-k 10 --batch-size 2 \
-  --score-chunk-size 4 --limit-claims 2 --device cuda --splits val
+  --score-chunk-size 4 --max-length 10240 \
+  --limit-claims 2 --device cuda --splits val
 ```
 
 If the smoke test completes, run validation with a resumable top-400 to top-100
@@ -198,9 +199,17 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.rerank_mocheg_visual_qwen3 \
   --output-root outputs/retrieval_mocheg_visual_reranked \
   --model Qwen/Qwen3-VL-Reranker-2B \
   --candidate-k 400 --output-k 100 --batch-size 2 \
-  --score-chunk-size 16 --device cuda --splits val --resume
+  --score-chunk-size 16 --max-length 10240 \
+  --device cuda --splits val --resume
 ```
 
 Use a new output root when changing any reranker setting. The run is accepted
 only if conditional Recall@10 improves over `0.4873` and conditional Recall@50
 improves over `0.6077`, without using test results.
+
+The first two-claim launch used `max_length=1024` and was invalidated before
+scoring any pair: Transformers detected that truncation removed expanded image
+tokens (`processed_claims=0`). This is an engineering configuration failure,
+not an experimental result. The reranker now follows Qwen's official default
+cap of `10240`; dynamic padding avoids allocating that full length for every
+pair.

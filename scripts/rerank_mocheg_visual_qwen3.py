@@ -116,7 +116,12 @@ def main() -> None:
     parser.add_argument("--output-k", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--score-chunk-size", type=int, default=16)
-    parser.add_argument("--max-length", type=int, default=1024)
+    # Qwen's official multimodal reranker uses 10,240 tokens by default.
+    # A 1,024-token cap can truncate the expanded visual-token sequence and
+    # make Transformers reject the input because image placeholder counts no
+    # longer match. Dynamic padding means this is a cap, not forced padding of
+    # every pair to 10,240 tokens.
+    parser.add_argument("--max-length", type=int, default=10240)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--splits", nargs="+", default=["val"])
     parser.add_argument("--limit-claims", type=int, default=0,
