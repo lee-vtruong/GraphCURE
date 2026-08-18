@@ -199,6 +199,21 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   one-line structured descriptor, repetition penalty `1.15`, and no-repeat
   4-gram decoding. Test remains locked.
 
+### R2V-VIS-CAP-SMOKE-02 — invalidated structured descriptor decoding
+
+- Split: first 32 strict-validation images; signature
+  `d0207071b0cc83697b7f8c8d1cf8b7b32d53c3f74583b5802f1b413518ab8917`
+- Repeated 4-gram outputs: `0/32`; word count min/mean/max:
+  `28 / 60.53 / 78`
+- Structured four-field compliance: `15/32`, below the preregistered `24/32`
+  smoke gate.
+- Root cause confirmed in runtime warnings: decoder-only generation used right
+  padding. Several outputs began mid-word or ended mid-field; the four-field
+  prompt was also too long for stable 2B-model compliance.
+- Decision: **invalidated; do not materialize full v2**. V3 uses left padding,
+  processor-scoped padding arguments, a three-field 55-word prompt, one-line
+  normalization, repetition penalty `1.05`, and no-repeat 4-grams.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

@@ -20,7 +20,8 @@ from scripts.run_mocheg_visual_retrieval import (
 )
 
 
-DESCRIPTOR_PROMPT = """Create one compact evidence-retrieval descriptor using only visibly supported information. Output exactly one line of at most 70 words in this format: Visual: <people/entities, objects, actions, event, scene, landmarks>; Text: <exact readable text, dates, quantities, logos, or none>; Type: <photo, screenshot, meme, document, chart, map, or other>; Clues: <location, time, source-image reuse clues, or none>. Never repeat a phrase. Do not guess an identity, date, or location."""
+DESCRIPTOR_GENERATION_VERSION = "v3-left-padding-compact"
+DESCRIPTOR_PROMPT = """Using only visible information, output exactly one line of at most 55 words with three fields: Visual: <main people or entities, objects, actions, event, scene>; Text: <exact readable words, dates, numbers, logos, or none>; Type/Clues: <photo, screenshot, meme, document, chart or map, plus visible place, time, or source-reuse clues>. Never repeat. Identify a person or place only when visually unmistakable."""
 
 
 def descriptor_signature(model: str, prompt: str, fingerprint: str,
@@ -35,6 +36,7 @@ def descriptor_signature(model: str, prompt: str, fingerprint: str,
         "max_new_tokens": max_new_tokens,
         "repetition_penalty": repetition_penalty,
         "no_repeat_ngram_size": no_repeat_ngram_size,
+        "generation_version": DESCRIPTOR_GENERATION_VERSION,
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True).encode()
@@ -73,6 +75,11 @@ def conversations(paths: list[str], prompt: str) -> list[list[dict]]:
     }] for path in paths]
 
 
+def clean_descriptor(text: str) -> str:
+    """Make model output a stable single-line retrieval document."""
+    return " ".join(text.replace("\x00", " ").split()).strip()
+
+
 def generate_descriptors(model: Any, processor: Any, paths: list[str],
                          prompt: str, device: str,
                          max_new_tokens: int, repetition_penalty: float,
@@ -81,14 +88,23 @@ def generate_descriptors(model: Any, processor: Any, paths: list[str],
 
     chats = conversations(paths, prompt)
     try:
-        inputs = processor.apply_chat_template(
-            chats,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_dict=True,
-            return_tensors="pt",
-            padding=True,
-        ).to(device)
+        template_args = {
+            "tokenize": True,
+            "add_generation_prompt": True,
+            "return_dict": True,
+            "return_tensors": "pt",
+        }
+        try:
+            inputs = processor.apply_chat_template(
+                chats,
+                processor_kwargs={"padding": True},
+                **template_args,
+            ).to(device)
+        except TypeError:
+            # Compatibility with older Transformers releases.
+            inputs = processor.apply_chat_template(
+                chats, padding=True, **template_args
+            ).to(device)
         with torch.inference_mode():
             generated = model.generate(
                 **inputs,
@@ -103,7 +119,7 @@ def generate_descriptors(model: Any, processor: Any, paths: list[str],
             for input_ids, output in zip(inputs.input_ids, generated, strict=True)
         ]
         return [
-            text.strip() for text in processor.batch_decode(
+            clean_descriptor(text) for text in processor.batch_decode(
                 trimmed,
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False,
@@ -137,8 +153,8 @@ def main() -> None:
     parser.add_argument("--model", default="Qwen/Qwen3-VL-2B-Instruct")
     parser.add_argument("--prompt", default=DESCRIPTOR_PROMPT)
     parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--max-new-tokens", type=int, default=96)
-    parser.add_argument("--repetition-penalty", type=float, default=1.15)
+    parser.add_argument("--max-new-tokens", type=int, default=80)
+    parser.add_argument("--repetition-penalty", type=float, default=1.05)
     parser.add_argument("--no-repeat-ngram-size", type=int, default=4)
     parser.add_argument("--max-pixels", type=int, default=1003520)
     parser.add_argument("--device", default="cuda")
@@ -173,6 +189,8 @@ def main() -> None:
     processor = AutoProcessor.from_pretrained(
         args.model, max_pixels=args.max_pixels
     )
+    if hasattr(processor, "tokenizer"):
+        processor.tokenizer.padding_side = "left"
     dtype = torch.bfloat16 if args.device.startswith("cuda") else torch.float32
     model = ModelClass.from_pretrained(
         args.model, torch_dtype=dtype
@@ -204,6 +222,7 @@ def main() -> None:
                 "max_new_tokens": args.max_new_tokens,
                 "repetition_penalty": args.repetition_penalty,
                 "no_repeat_ngram_size": args.no_repeat_ngram_size,
+                "generation_version": DESCRIPTOR_GENERATION_VERSION,
                 "images": len(names),
                 "corpus_fingerprint": fingerprint,
                 "descriptor_signature": signature,

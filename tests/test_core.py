@@ -38,6 +38,7 @@ from scripts.run_mocheg_visual_ensemble import (
     fuse_visual_orders,
 )
 from scripts.caption_mocheg_images import (
+    clean_descriptor,
     conversations,
     descriptor_signature,
     read_completed,
@@ -399,6 +400,11 @@ def test_pixel_descriptor_resume_and_alignment(tmp_path):
     descriptors, signature = read_descriptors(path, ["b.jpg", "a.jpg"])
     assert descriptors == ["blue bus", "red car"]
     assert signature == "sig"
+
+
+def test_pixel_descriptor_cleanup_is_single_line():
+    assert clean_descriptor(" Visual: car\n\nText: 42\x00 ") == \
+           "Visual: car Text: 42"
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():
