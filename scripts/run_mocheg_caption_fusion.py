@@ -90,6 +90,34 @@ def encode_documents(model, texts: list[str], target: Path,
     return embeddings
 
 
+def candidate_union_diagnostics(direct_hits: list[bool],
+                                caption_hits: list[bool],
+                                union_hits: list[bool],
+                                annotated: list[bool]) -> dict:
+    if not (
+        len(direct_hits) == len(caption_hits) == len(union_hits) == len(annotated)
+    ):
+        raise ValueError("candidate diagnostic vectors must align")
+    indices = [index for index, value in enumerate(annotated) if value]
+    conditional = lambda values: (
+        float(np.mean([values[index] for index in indices])) if indices else 0.0
+    )
+    caption_only = sum(
+        annotated[index] and caption_hits[index] and not direct_hits[index]
+        for index in range(len(annotated))
+    )
+    return {
+        "raw_direct_candidate_recall": float(np.mean(direct_hits)),
+        "raw_caption_candidate_recall": float(np.mean(caption_hits)),
+        "raw_union_candidate_recall": float(np.mean(union_hits)),
+        "conditional_direct_candidate_recall": conditional(direct_hits),
+        "conditional_caption_candidate_recall": conditional(caption_hits),
+        "conditional_union_candidate_recall": conditional(union_hits),
+        "caption_only_gold_recoveries": int(caption_only),
+        "claims_with_gold_images": len(indices),
+    }
+
+
 def main() -> None:
     import torch
 
@@ -198,6 +226,9 @@ def main() -> None:
             "direct": [], "caption_dense": [],
             "caption_lexical": [], "fused": [],
         }
+        direct_hits: list[bool] = []
+        caption_hits: list[bool] = []
+        union_hits: list[bool] = []
 
         for start in tqdm(
             range(0, len(claims), args.score_batch_size),
@@ -232,6 +263,16 @@ def main() -> None:
                     "caption_dense": dense_order,
                     "caption_lexical": lexical_order,
                 }
+                direct_set = {
+                    image_names[index] for index in direct_order
+                }
+                caption_set = {
+                    image_names[index]
+                    for order in (dense_order, lexical_order) for index in order
+                }
+                direct_hits.append(bool(gold & direct_set))
+                caption_hits.append(bool(gold & caption_set))
+                union_hits.append(bool(gold & (direct_set | caption_set)))
                 per_view_rank = {}
                 for name, order in named_orders.items():
                     ids = [image_names[index] for index in order]
@@ -293,6 +334,9 @@ def main() -> None:
                 )
                 for name, values in ranks.items() if name != "fused"
             },
+            "candidate_union": candidate_union_diagnostics(
+                direct_hits, caption_hits, union_hits, annotated
+            ),
         })
         (args.output_root / f"{split}.jsonl").write_text(
             "\n".join(json.dumps(row, ensure_ascii=False) for row in output) + "\n",

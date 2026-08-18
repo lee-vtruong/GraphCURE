@@ -229,6 +229,18 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   stamp normalization version `unicode-colon-v1` in caption-fusion provenance.
   Re-audit the existing 32 descriptors; no pixel regeneration is required.
 
+### R2V-VIS-CAP-VAL-01 — full validation descriptor materialization
+
+- Split: strict validation image corpus
+- Images/descriptors: `12267/12267`; status: **complete**
+- Model: `Qwen/Qwen3-VL-2B-Instruct`
+- Descriptor signature:
+  `ff9e34ed57d758d6f31ca4b46c4928cf82d0a08ebab2576101fd5dc98f397072`
+- Protocol: descriptors are claim-independent and derived from pixels only;
+  claim text, qrels, labels, and filename topic IDs are not model inputs.
+- Decision: materialization gate **passed**. Run validation-only caption
+  dense+lexical retrieval, direct-visual fusion, and candidate-union analysis.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

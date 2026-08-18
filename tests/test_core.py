@@ -43,7 +43,10 @@ from scripts.caption_mocheg_images import (
     descriptor_signature,
     read_completed,
 )
-from scripts.run_mocheg_caption_fusion import read_descriptors
+from scripts.run_mocheg_caption_fusion import (
+    candidate_union_diagnostics,
+    read_descriptors,
+)
 
 
 def test_model_shapes():
@@ -405,6 +408,19 @@ def test_pixel_descriptor_resume_and_alignment(tmp_path):
 def test_pixel_descriptor_cleanup_is_single_line():
     assert clean_descriptor(" Visual: car\n\nText: 42\x00 Type/Clues：photo ") == \
            "Visual: car Text: 42 Type/Clues:photo"
+
+
+def test_caption_candidate_union_reports_complementary_recoveries():
+    result = candidate_union_diagnostics(
+        direct_hits=[True, False, False, False],
+        caption_hits=[False, True, False, True],
+        union_hits=[True, True, False, True],
+        annotated=[True, True, True, False],
+    )
+    assert result["conditional_direct_candidate_recall"] == 1 / 3
+    assert result["conditional_caption_candidate_recall"] == 1 / 3
+    assert result["conditional_union_candidate_recall"] == 2 / 3
+    assert result["caption_only_gold_recoveries"] == 1
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():
