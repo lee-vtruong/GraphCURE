@@ -1,4 +1,4 @@
-# MOCHEG protocol-matched comparison
+# MOCHEG protocol-aware comparison
 
 Last checked: 2026-08-18.
 
@@ -15,17 +15,24 @@ Gold-evidence and open-web results are not directly comparable with P1.
 | HGTMFC | 0.486 | 0.468 | retrieved text + image | published |
 | MetaSumPerceiver | 0.486 | not reported reproducibly | retrieved text + image | published |
 | AMuFC | **0.546** | **0.540** | retrieved text + image; Analyzer + VLM Verifier | current target |
-| GraphCURE-R2V | 0.4961 +/- 0.0108 | 0.4711 +/- 0.0118 | retrieved text only; five seeds | frozen result |
+| GraphCURE-R2V | 0.4961 +/- 0.0108 | 0.4711 +/- 0.0118 | retrieved text only; five seeds | strict deduplicated split |
 
 Primary comparison source for the common table: AMuFC, Table 3,
 <https://arxiv.org/abs/2604.04692> and
 <https://openreview.net/pdf?id=IPGgVvGPwQ>.
 
-GraphCURE-R2V exceeds the preregistered HGTMFC milestone by `+0.0100`
-Accuracy and `+0.0033` Macro-F1 using the exact target values stored in the
-freeze manifest. It does **not** exceed AMuFC: the remaining gaps are `-0.0499`
-Accuracy and `-0.0689` Macro-F1. Consequently, R2V is a strong text-retrieved
-control, not a claim of overall MOCHEG SOTA.
+GraphCURE-R2V numerically exceeds the preregistered HGTMFC milestone by
+`+0.0100` Accuracy and `+0.0033` Macro-F1 using the exact target values stored
+in the freeze manifest. This is not yet an exact paper-to-paper comparison:
+GraphCURE uses the leakage-controlled, cross-split-deduplicated test set
+(`n=2434`), whereas published MOCHEG tables use the official test set
+(`n=2442`). The final paper must report both an official-split comparability
+track and this strict robustness track.
+
+Even before that caveat is resolved, GraphCURE does **not** exceed AMuFC: the
+remaining numerical gaps are `-0.0499` Accuracy and `-0.0689` Macro-F1.
+Consequently, R2V is a strong text-retrieved control, not a claim of overall
+MOCHEG SOTA.
 
 ## Diagnostic interpretation
 
@@ -45,4 +52,3 @@ control, not a claim of overall MOCHEG SOTA.
 - M-RAV reports stronger LLM results under its own gold/system-evidence setup;
   those numbers should be quoted with its exact evidence and metric definitions,
   not merged blindly into the P1 table.
-

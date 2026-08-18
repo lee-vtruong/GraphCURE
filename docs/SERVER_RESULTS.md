@@ -135,13 +135,17 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Macro-F1: **0.4711 +/- 0.0118**
 - Evidence selection hit@1: **0.8204 +/- 0.0307**
 - ECE-10: `0.2481 +/- 0.1259`
-- Delta versus the preregistered HGTMFC milestone: Accuracy **+0.0100**,
-  Macro-F1 **+0.0033**
+- Numerical delta versus the preregistered HGTMFC milestone: Accuracy
+  **+0.0100**, Macro-F1 **+0.0033**. This is not an exact protocol match because
+  published baselines use the official `n=2442` test split while this result
+  uses the cross-split-deduplicated `n=2434` strict split.
 - Current matched AMuFC target: Accuracy `0.546`, Macro-F1 `0.540`; GraphCURE
   gaps: Accuracy `-0.0499`, Macro-F1 `-0.0689`
 - Conclusion: the frozen text-retrieved R2V system is a strong reproducible
-  control and exceeds HGTMFC, but is not the current overall P1 SOTA. Proceed
-  to validation-only adaptive visual-evidence development (R2V-v2).
+  strict-split control and numerically clears the HGTMFC milestone, but is not
+  the current overall P1 SOTA. Preserve this strict result and later add an
+  official-split comparability track. Proceed now to validation-only adaptive
+  visual-evidence development (R2V-v2).
 - Detailed comparison: `docs/MOCHEG_SOTA_COMPARISON.md`
 
 Discovered test metric files: 50
