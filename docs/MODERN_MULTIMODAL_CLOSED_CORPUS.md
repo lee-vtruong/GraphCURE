@@ -91,3 +91,52 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_visual_ensemble \
 The ensemble passes if conditional Recall@200 is at least `0.75`. If it does
 not, generate pixel-derived captions/OCR and add them as a complementary
 retrieval view; do not use filename-derived topic identifiers.
+
+### Observed result: R2V-VIS-VAL-02
+
+The four-view prompt ensemble failed: fused conditional Recall@200 was
+`0.6884`, below both the `0.75` gate and the direct-retrieval value `0.6972`.
+Prompt variation did not produce sufficiently diverse neighborhoods. The run
+is retained as a negative result and excluded from the frozen system.
+
+The next screen generates claim-independent descriptors directly from pixels
+with `Qwen/Qwen3-VL-2B-Instruct`. Descriptors include visible entities, scenes,
+OCR, numbers, dates, document/meme type, and reuse clues. Generation is JSONL
+checkpointed after every batch and may be resumed.
+
+Smoke-test 32 validation images, then resume the same output to completion:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.caption_mocheg_images \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --output-root data/processed/mocheg_visual_descriptors \
+  --cache-root data/processed/retrieval_cache \
+  --model Qwen/Qwen3-VL-2B-Instruct \
+  --batch-size 4 --max-new-tokens 96 --max-pixels 1003520 \
+  --device cuda --splits val --limit 32
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.caption_mocheg_images \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --output-root data/processed/mocheg_visual_descriptors \
+  --cache-root data/processed/retrieval_cache \
+  --model Qwen/Qwen3-VL-2B-Instruct \
+  --batch-size 4 --max-new-tokens 96 --max-pixels 1003520 \
+  --device cuda --splits val
+```
+
+After all `12267` descriptors exist, run dense+lexical descriptor retrieval and
+fuse it with the direct visual top-200 candidates:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_caption_fusion \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --descriptor-root data/processed/mocheg_visual_descriptors \
+  --direct-root outputs/retrieval_mocheg_qwen3vl_images_top200 \
+  --output-root outputs/retrieval_mocheg_caption_fusion \
+  --cache-root data/processed/retrieval_cache \
+  --text-model Qwen/Qwen3-Embedding-4B \
+  --candidate-k 300 --output-k 200 --rrf-k 60 \
+  --fusion-weights 1.0 1.0 0.5 \
+  --batch-size 8 --score-batch-size 32 --device cuda --splits val
+```

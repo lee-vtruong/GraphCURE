@@ -37,6 +37,12 @@ from scripts.run_mocheg_visual_ensemble import (
     aligned_gold_images,
     fuse_visual_orders,
 )
+from scripts.caption_mocheg_images import (
+    conversations,
+    descriptor_signature,
+    read_completed,
+)
+from scripts.run_mocheg_caption_fusion import read_descriptors
 
 
 def test_model_shapes():
@@ -364,6 +370,35 @@ def test_aligned_gold_images_ignores_non_corpus_ids():
         "image_evidence_ids": ["proof.jpg"],
     }, {"candidate.jpg", "proof.jpg"})
     assert gold == {"candidate.jpg", "proof.jpg"}
+
+
+def test_pixel_descriptor_signature_and_prompt_are_deterministic(tmp_path):
+    first = descriptor_signature("model", "prompt", "corpus", 10, 20)
+    second = descriptor_signature("model", "prompt", "corpus", 10, 20)
+    changed = descriptor_signature("model", "prompt changed", "corpus", 10, 20)
+    assert first == second
+    assert first != changed
+    chat = conversations(["image.png"], "describe")[0][0]
+    assert chat["content"][0] == {"type": "image", "image": "image.png"}
+    assert chat["content"][1] == {"type": "text", "text": "describe"}
+
+
+def test_pixel_descriptor_resume_and_alignment(tmp_path):
+    path = tmp_path / "val.jsonl"
+    rows = [
+        {"image_id": "a.jpg", "descriptor": "red car",
+         "descriptor_signature": "sig"},
+        {"image_id": "b.jpg", "descriptor": "blue bus",
+         "descriptor_signature": "sig"},
+    ]
+    path.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    assert set(read_completed(path)) == {"a.jpg", "b.jpg"}
+    descriptors, signature = read_descriptors(path, ["b.jpg", "a.jpg"])
+    assert descriptors == ["blue bus", "red car"]
+    assert signature == "sig"
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():

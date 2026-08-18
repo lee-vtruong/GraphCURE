@@ -170,6 +170,22 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Decision: **partial pass; do not evaluate test**. Add a leakage-safe,
   constraint-aligned multi-intent candidate ensemble before visual reranking.
 
+### R2V-VIS-VAL-02 — constraint-aligned prompt ensemble
+
+- Split: MOCHEG strict validation only; four semantic/entity/temporal-context
+  query views over the frozen Qwen3-VL image embedding corpus
+- Fused conditional Recall@1/5/10/50/100/200:
+  `0.3193 / 0.4309 / 0.4718 / 0.5967 / 0.6376 / 0.6884`
+- Fused conditional MRR: `0.3735`
+- Best individual conditional Recall@200: semantic `0.6972`; entity `0.6950`;
+  temporal/provenance `0.6895`; contextual/OCR `0.6464`
+- Conditional Recall@300 by view: semantic `0.7370`; entity `0.7359`;
+  temporal/provenance `0.7271`; contextual/OCR `0.6829`
+- Decision: **failed**. Prompt-only views remain too correlated and fusion
+  underperforms direct retrieval at top-200. Exclude the prompt ensemble from
+  the frozen system. Next screen: claim-independent, pixel-derived caption/OCR
+  descriptors fused with direct visual retrieval. Test remains locked.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
