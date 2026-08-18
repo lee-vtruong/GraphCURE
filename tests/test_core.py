@@ -25,6 +25,7 @@ from scripts.run_mocheg_cached_validation import (
     summarize_validation,
 )
 from scripts.evaluate_mocheg_frozen_r2v import validate_freeze
+from scripts.run_mocheg_visual_retrieval import retrieval_summary
 
 
 def test_model_shapes():
@@ -243,6 +244,20 @@ def test_frozen_evaluator_requires_matching_passed_validation_seeds():
         assert "validation-only" in str(error)
     else:
         raise AssertionError("test-contaminated validation summary was accepted")
+
+
+def test_visual_retrieval_reports_raw_and_annotation_conditional_recall():
+    result = retrieval_summary(
+        ranks=[1, None, 7, None],
+        annotated=[True, False, True, True],
+        cutoffs=[1, 10],
+    )
+    assert result["claims"] == 4
+    assert result["claims_with_gold_images"] == 3
+    assert result["recall@1"] == 0.25
+    assert result["conditional_recall@1"] == 1 / 3
+    assert result["recall@10"] == 0.5
+    assert result["conditional_recall@10"] == 2 / 3
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():
