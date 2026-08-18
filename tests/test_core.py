@@ -28,6 +28,7 @@ from scripts.run_mocheg_cached_validation import (
 from scripts.evaluate_mocheg_frozen_r2v import validate_freeze
 from scripts.run_mocheg_visual_retrieval import (
     encode_images,
+    encode_queries,
     is_torchvision_supported_image,
     normalize_image_paths,
     retrieval_summary,
@@ -316,6 +317,30 @@ def test_visual_retrieval_image_embedding_cache_is_resumable(tmp_path):
     )
     assert np.array_equal(first, second)
     assert cached_model.calls == 0
+
+
+def test_visual_retrieval_query_instruction_uses_prompt_api(tmp_path):
+    class FakeModel:
+        def __init__(self):
+            self.inputs = None
+            self.kwargs = None
+
+        def encode(self, inputs, **kwargs):
+            self.inputs = inputs
+            self.kwargs = kwargs
+            return np.ones((len(inputs), 4), dtype=np.float32)
+
+    claims = [
+        {"id": "a", "claim": "first claim"},
+        {"id": "b", "claim": "second claim"},
+    ]
+    model = FakeModel()
+    result = encode_queries(
+        model, claims, tmp_path, "val", "fake", "Retrieve evidence.", 2
+    )
+    assert result.shape == (2, 4)
+    assert model.inputs == ["first claim", "second claim"]
+    assert model.kwargs["prompt"] == "Retrieve evidence."
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():

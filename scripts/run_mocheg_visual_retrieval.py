@@ -178,6 +178,59 @@ def encode_images(model: Any, names: list[str], paths: list[str],
     return embeddings
 
 
+def encode_queries(model: Any, claims: list[dict], cache_root: Path,
+                   split: str, model_name: str, instruction: str,
+                   batch_size: int) -> np.ndarray:
+    """Encode text queries with the SentenceTransformers prompt API."""
+    texts = [str(row.get("claim", "")) for row in claims]
+    digest = hashlib.sha256()
+    digest.update(model_name.encode())
+    digest.update(b"\0")
+    digest.update(instruction.encode())
+    digest.update(b"\0")
+    for row, claim in zip(claims, texts, strict=True):
+        digest.update(str(row.get("id", "")).encode())
+        digest.update(b"\0")
+        digest.update(claim.encode())
+        digest.update(b"\n")
+    fingerprint = digest.hexdigest()
+    target = cache_root / f"mocheg-{split}-queries-{fingerprint[:16]}.npy"
+    metadata_path = target.with_suffix(".json")
+    if target.exists() and metadata_path.exists():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if (
+            metadata.get("fingerprint") == fingerprint
+            and metadata.get("claims") == len(claims)
+        ):
+            print(f"loading cached query embeddings: {target}")
+            return np.load(target, mmap_mode="r")
+
+    # The SentenceTransformers integration accepts modality dictionaries with
+    # text/image/video keys only. Its documented instruction interface is the
+    # prompt argument, not an `instruction` key inside each input dictionary.
+    embeddings = model.encode(
+        texts,
+        prompt=instruction,
+        batch_size=batch_size,
+        show_progress_bar=True,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    ).astype(np.float32)
+    cache_root.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".tmp")
+    with temporary.open("wb") as handle:
+        np.save(handle, embeddings)
+    temporary.replace(target)
+    metadata_path.write_text(json.dumps({
+        "model": model_name,
+        "split": split,
+        "instruction": instruction,
+        "fingerprint": fingerprint,
+        "claims": len(claims),
+    }, ensure_ascii=False) + "\n", encoding="utf-8")
+    return embeddings
+
+
 def retrieval_summary(ranks: list[int | None], annotated: list[bool],
                       cutoffs: list[int]) -> dict:
     result = {
@@ -256,17 +309,10 @@ def main() -> None:
             model, image_names, image_paths, args.cache_root, split,
             args.model, args.batch_size, args.image_shard_size,
         )
-        query_inputs = [
-            {"text": row.get("claim", ""), "instruction": args.instruction}
-            for row in claims
-        ]
-        query_embeddings = model.encode(
-            query_inputs,
-            batch_size=args.query_batch_size,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        ).astype(np.float32)
+        query_embeddings = encode_queries(
+            model, claims, args.cache_root, split, args.model,
+            args.instruction, args.query_batch_size,
+        )
 
         output = []
         ranks: list[int | None] = []
