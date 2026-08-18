@@ -125,6 +125,16 @@ def aggregate_test(paths: dict[int, Path], freeze: dict, freeze_sha256: str,
     rows = []
     for seed, path in sorted(paths.items()):
         metrics = json.loads(path.read_text(encoding="utf-8"))
+        provenance = metrics.get("provenance", {})
+        if int(provenance.get("seed", -1)) != seed:
+            raise ValueError(f"test metric seed mismatch in {path}")
+        metric_cache = provenance.get("cache_metadata", {})
+        for key in (
+            "manifest_sha256", "retrieval_sha256", "encoder", "embedding_dim",
+            "top_k", "max_length",
+        ):
+            if metric_cache.get(key) != test_cache_metadata.get(key):
+                raise ValueError(f"stale or mismatched test metric cache in {path}: {key}")
         rows.append({
             "seed": seed,
             **{key: float(metrics[key]) for key in TEST_METRICS},
