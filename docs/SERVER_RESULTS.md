@@ -114,6 +114,36 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Test policy: materialize retrieval/cache once, then report the matched
   five-seed mean and standard deviation without selecting a test seed.
 
+### R2V-RET-TEST-01 — frozen test retrieval and reranking
+
+- Split: MOCHEG strict test (`n=2434`), fixed local corpus (`6268` docs)
+- Hybrid Qwen3-Embedding-4B Recall@1/5/10/50:
+  `0.742810 / 0.889071 / 0.925637 / 0.954807`
+- Hybrid MRR: `0.807668`
+- Qwen3-Reranker-4B Recall@1/5/10:
+  `0.822104 / 0.929745 / 0.945357`
+- Reranked MRR: `0.869985`
+- Reranker delta: Recall@1 `+0.079293`, Recall@5 `+0.040674`,
+  Recall@10 `+0.019721`, MRR `+0.062317`
+- Top-10 retention of reachable top-50 hits: `0.945357 / 0.954807 = 0.99010`
+
+### R2V-VER-TEST-01 — frozen five-seed test result
+
+- Protocol: `P1_closed_corpus_retrieved_evidence`
+- Seeds: `13, 21, 42, 87, 100`; no seed selected using test performance
+- Accuracy: **0.4961 +/- 0.0108**
+- Macro-F1: **0.4711 +/- 0.0118**
+- Evidence selection hit@1: **0.8204 +/- 0.0307**
+- ECE-10: `0.2481 +/- 0.1259`
+- Delta versus the preregistered HGTMFC milestone: Accuracy **+0.0100**,
+  Macro-F1 **+0.0033**
+- Current matched AMuFC target: Accuracy `0.546`, Macro-F1 `0.540`; GraphCURE
+  gaps: Accuracy `-0.0499`, Macro-F1 `-0.0689`
+- Conclusion: the frozen text-retrieved R2V system is a strong reproducible
+  control and exceeds HGTMFC, but is not the current overall P1 SOTA. Proceed
+  to validation-only adaptive visual-evidence development (R2V-v2).
+- Detailed comparison: `docs/MOCHEG_SOTA_COMPARISON.md`
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
