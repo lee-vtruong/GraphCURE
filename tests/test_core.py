@@ -1,6 +1,7 @@
 import torch
 import json
 import numpy as np
+from pathlib import Path
 
 from graphcure.acquisition import choose_evi_action
 from graphcure.losses import counterfactual_loss, directional_intervention_loss
@@ -25,7 +26,12 @@ from scripts.run_mocheg_cached_validation import (
     summarize_validation,
 )
 from scripts.evaluate_mocheg_frozen_r2v import validate_freeze
-from scripts.run_mocheg_visual_retrieval import retrieval_summary
+from scripts.run_mocheg_visual_retrieval import (
+    encode_images,
+    is_torchvision_supported_image,
+    normalize_image_paths,
+    retrieval_summary,
+)
 
 
 def test_model_shapes():
@@ -258,6 +264,58 @@ def test_visual_retrieval_reports_raw_and_annotation_conditional_recall():
     assert result["conditional_recall@1"] == 1 / 3
     assert result["recall@10"] == 0.5
     assert result["conditional_recall@10"] == 2 / 3
+
+
+def test_visual_retrieval_normalizes_unsupported_image_magic(tmp_path):
+    from PIL import Image
+
+    jpeg = tmp_path / "valid.jpg"
+    disguised_bmp = tmp_path / "actually-bmp.jpg"
+    Image.new("RGB", (4, 4), "red").save(jpeg, format="JPEG")
+    Image.new("RGB", (4, 4), "blue").save(disguised_bmp, format="BMP")
+
+    assert is_torchvision_supported_image(jpeg)
+    assert not is_torchvision_supported_image(disguised_bmp)
+    paths, converted = normalize_image_paths(
+        [str(jpeg), str(disguised_bmp)], tmp_path / "cache"
+    )
+    assert converted == 1
+    assert paths[0] == str(jpeg)
+    assert Path(paths[1]).suffix == ".png"
+    assert is_torchvision_supported_image(Path(paths[1]))
+
+
+def test_visual_retrieval_image_embedding_cache_is_resumable(tmp_path):
+    from PIL import Image
+
+    paths = []
+    for index in range(5):
+        path = tmp_path / f"{index}.png"
+        Image.new("RGB", (2, 2), (index, 0, 0)).save(path)
+        paths.append(str(path))
+
+    class FakeModel:
+        def __init__(self):
+            self.calls = 0
+
+        def encode(self, inputs, **kwargs):
+            self.calls += 1
+            return np.full((len(inputs), 3), self.calls, dtype=np.float32)
+
+    model = FakeModel()
+    names = [Path(path).name for path in paths]
+    first = encode_images(
+        model, names, paths, tmp_path / "cache", "val", "fake", 2, 2
+    )
+    assert first.shape == (5, 3)
+    assert model.calls == 3
+
+    cached_model = FakeModel()
+    second = encode_images(
+        cached_model, names, paths, tmp_path / "cache", "val", "fake", 2, 2
+    )
+    assert np.array_equal(first, second)
+    assert cached_model.calls == 0
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():

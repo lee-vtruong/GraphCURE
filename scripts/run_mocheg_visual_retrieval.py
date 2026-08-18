@@ -53,9 +53,61 @@ def corpus_fingerprint(names: list[str], paths: list[str]) -> str:
     return digest.hexdigest()
 
 
+def is_torchvision_supported_image(path: Path) -> bool:
+    """Return whether torchvision's generic decoder accepts the file magic."""
+    with path.open("rb") as handle:
+        header = handle.read(12)
+    return (
+        header.startswith(b"\xff\xd8\xff")
+        or header.startswith(b"\x89PNG\r\n\x1a\n")
+        or header.startswith((b"GIF87a", b"GIF89a"))
+        or (header.startswith(b"RIFF") and header[8:12] == b"WEBP")
+    )
+
+
+def normalize_image_paths(paths: list[str], cache_root: Path) -> tuple[list[str], int]:
+    """Convert decoder-incompatible images to cached RGB PNG files.
+
+    MOCHEG contains a small number of BMP, TIFF, and PSD payloads, including
+    files with misleading extensions. Qwen's current torchvision-backed image
+    loader rejects these formats, so format detection must use file magic.
+    """
+    from PIL import Image, ImageOps
+
+    normalized: list[str] = []
+    converted = 0
+    target_root = cache_root / "normalized_images"
+    for raw_path in paths:
+        source = Path(raw_path)
+        if is_torchvision_supported_image(source):
+            normalized.append(str(source))
+            continue
+
+        stat = source.stat()
+        identity = hashlib.sha256(
+            f"{source.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode()
+        ).hexdigest()[:24]
+        target = target_root / f"{identity}.png"
+        if not target.exists():
+            target_root.mkdir(parents=True, exist_ok=True)
+            try:
+                with Image.open(source) as image:
+                    image = ImageOps.exif_transpose(image).convert("RGB")
+                    temporary = target.with_suffix(".tmp")
+                    image.save(temporary, format="PNG")
+                    temporary.replace(target)
+            except Exception as error:
+                raise RuntimeError(
+                    f"cannot normalize unsupported image {source}: {error}"
+                ) from error
+        normalized.append(str(target.resolve()))
+        converted += 1
+    return normalized, converted
+
+
 def encode_images(model: Any, names: list[str], paths: list[str],
                   cache_root: Path, split: str, model_name: str,
-                  batch_size: int) -> np.ndarray:
+                  batch_size: int, shard_size: int = 256) -> np.ndarray:
     fingerprint = corpus_fingerprint(names, paths)
     key = hashlib.sha256(f"{model_name}:{fingerprint}".encode()).hexdigest()[:16]
     target = cache_root / f"mocheg-{split}-images-{key}.npy"
@@ -66,22 +118,62 @@ def encode_images(model: Any, names: list[str], paths: list[str],
             print(f"loading cached image embeddings: {target}")
             return np.load(target, mmap_mode="r")
 
-    inputs = [{"image": path} for path in paths]
-    embeddings = model.encode(
-        inputs,
-        batch_size=batch_size,
-        show_progress_bar=True,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-    ).astype(np.float32)
     cache_root.mkdir(parents=True, exist_ok=True)
-    np.save(target, embeddings)
+    normalized_paths, converted = normalize_image_paths(paths, cache_root)
+    if converted:
+        print(
+            f"{split}: normalized {converted} decoder-incompatible image(s) "
+            f"to {cache_root / 'normalized_images'}"
+        )
+
+    # Persist each shard immediately. A corrupt late image, interruption, or
+    # transient CUDA failure can then resume without re-encoding prior shards.
+    part_root = cache_root / "image_embedding_parts" / target.stem
+    part_root.mkdir(parents=True, exist_ok=True)
+    parts: list[np.ndarray] = []
+    for start in tqdm(
+        range(0, len(normalized_paths), shard_size),
+        desc=f"{split} image embedding shards",
+    ):
+        end = min(start + shard_size, len(normalized_paths))
+        part_path = part_root / f"{start:08d}-{end:08d}.npy"
+        if part_path.exists():
+            part = np.load(part_path, mmap_mode="r")
+            if part.ndim != 2 or part.shape[0] != end - start:
+                raise ValueError(
+                    f"invalid cached image shard {part_path}; remove only this "
+                    "file and rerun"
+                )
+        else:
+            inputs = [
+                {"image": path} for path in normalized_paths[start:end]
+            ]
+            part = model.encode(
+                inputs,
+                batch_size=batch_size,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            ).astype(np.float32)
+            temporary = part_path.with_suffix(".tmp")
+            with temporary.open("wb") as handle:
+                np.save(handle, part)
+            temporary.replace(part_path)
+        parts.append(part)
+
+    embeddings = np.concatenate(parts, axis=0).astype(np.float32, copy=False)
+    temporary = target.with_suffix(".tmp")
+    with temporary.open("wb") as handle:
+        np.save(handle, embeddings)
+    temporary.replace(target)
     metadata_path.write_text(json.dumps({
         "model": model_name,
         "split": split,
         "fingerprint": fingerprint,
         "images": len(names),
         "names": names,
+        "shard_size": shard_size,
+        "normalized_images": converted,
     }, ensure_ascii=False) + "\n", encoding="utf-8")
     return embeddings
 
@@ -130,6 +222,7 @@ def main() -> None:
     parser.add_argument("--instruction", default=VISUAL_RETRIEVAL_INSTRUCTION)
     parser.add_argument("--top-k", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--image-shard-size", type=int, default=256)
     parser.add_argument("--query-batch-size", type=int, default=16)
     parser.add_argument("--score-batch-size", type=int, default=64)
     parser.add_argument("--device", default="cuda")
@@ -137,6 +230,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.top_k <= 0:
         parser.error("--top-k must be positive")
+    if args.image_shard_size <= 0:
+        parser.error("--image-shard-size must be positive")
     if "test" in args.splits:
         print("WARNING: test visual retrieval requested; only do this after v2 freeze")
 
@@ -159,7 +254,7 @@ def main() -> None:
             parser.error(f"--top-k exceeds the {split} image corpus size")
         image_embeddings = encode_images(
             model, image_names, image_paths, args.cache_root, split,
-            args.model, args.batch_size,
+            args.model, args.batch_size, args.image_shard_size,
         )
         query_inputs = [
             {"text": row.get("claim", ""), "instruction": args.instruction}
