@@ -261,6 +261,20 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   ranking nor test. Measure the top-400 fused ceiling, then apply a
   claim-conditioned Qwen3-VL cross-reranker over pixels plus descriptors.
 
+### R2V-VIS-CAP-VAL-03 — top-400 reranker candidate pool
+
+- Split: MOCHEG strict validation (`n=1456`); **test split not used**
+- Fused raw Recall@1/5/10/50/100/200/300/400:
+  `0.1916 / 0.2747 / 0.3029 / 0.3777 / 0.4100 / 0.4444 / 0.4567 / 0.4698`
+- Fused conditional Recall@1/5/10/50/100/200/300/400:
+  `0.3083 / 0.4420 / 0.4873 / 0.6077 / 0.6597 / 0.7149 / 0.7348 / 0.7558`
+- Candidate union conditional ceiling: `0.779006`; top-400 retains
+  approximately `97.02%` of the reachable union hits.
+- Decision: top-300 fails the preregistered `0.75` ceiling gate; top-400
+  **passes** by `0.0058` and is the smallest measured admissible pool. Run a
+  two-claim Qwen3-VL reranker smoke benchmark before authorizing the full
+  `1456 x 400 = 582400` validation pair pass.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

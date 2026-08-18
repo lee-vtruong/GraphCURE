@@ -168,6 +168,12 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_caption_fusion \
   --batch-size 8 --score-batch-size 32 --device cuda --splits val
 ```
 
+Observed top-400 depth curve: conditional Recall@200/300/400 was
+`0.7149 / 0.7348 / 0.7558`. Thus top-400 is the smallest measured pool that
+passes the `0.75` candidate-ceiling gate. Its conditional recall retains about
+`97.02%` of the `0.779006` full candidate-union ceiling. The next gate is a
+two-claim runtime smoke benchmark, not a full validation launch.
+
 Do not run the full 2B reranker before a two-claim smoke test. It scores both
 the original pixels and their claim-independent descriptor, displays progress
 in claim-image pairs, flushes every completed claim, and supports `--resume`:
