@@ -186,6 +186,19 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   the frozen system. Next screen: claim-independent, pixel-derived caption/OCR
   descriptors fused with direct visual retrieval. Test remains locked.
 
+### R2V-VIS-CAP-SMOKE-01 — invalidated pixel-descriptor generation
+
+- Split: first 32 strict-validation corpus images; model
+  `Qwen/Qwen3-VL-2B-Instruct`
+- Signature: `273232bf1caed5413420645b8d9498f24812bb9393624a097017ddf8f13fbcd9`
+- Positive observation: image content and OCR were generally relevant.
+- Failure: four of the first five inspected outputs contained severe repeated
+  phrases/sentences and several ended mid-phrase at the token limit.
+- Decision: **invalidated before full materialization**. Preserve the 32-row
+  v1 output as a negative smoke run. Rerun in a distinct v2 output root with a
+  one-line structured descriptor, repetition penalty `1.15`, and no-repeat
+  4-gram decoding. Test remains locked.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

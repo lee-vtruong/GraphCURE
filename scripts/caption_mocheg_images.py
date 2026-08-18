@@ -20,18 +20,21 @@ from scripts.run_mocheg_visual_retrieval import (
 )
 
 
-DESCRIPTOR_PROMPT = """Describe only what is visibly supported by this image for evidence retrieval.
-Include, when visible: people or entities; objects and actions; event and setting; landmarks or location clues; dates, quantities, logos, and symbols; exact readable text; and whether it is a screenshot, meme, document, chart, or map. Mention visual clues that could help identify a reused source image. Do not guess identities, dates, or locations that are not visually supported. Return one concise factual paragraph, with no preamble."""
+DESCRIPTOR_PROMPT = """Create one compact evidence-retrieval descriptor using only visibly supported information. Output exactly one line of at most 70 words in this format: Visual: <people/entities, objects, actions, event, scene, landmarks>; Text: <exact readable text, dates, quantities, logos, or none>; Type: <photo, screenshot, meme, document, chart, map, or other>; Clues: <location, time, source-image reuse clues, or none>. Never repeat a phrase. Do not guess an identity, date, or location."""
 
 
 def descriptor_signature(model: str, prompt: str, fingerprint: str,
-                         max_pixels: int, max_new_tokens: int) -> str:
+                         max_pixels: int, max_new_tokens: int,
+                         repetition_penalty: float = 1.0,
+                         no_repeat_ngram_size: int = 0) -> str:
     payload = {
         "model": model,
         "prompt": prompt,
         "corpus_fingerprint": fingerprint,
         "max_pixels": max_pixels,
         "max_new_tokens": max_new_tokens,
+        "repetition_penalty": repetition_penalty,
+        "no_repeat_ngram_size": no_repeat_ngram_size,
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True).encode()
@@ -72,7 +75,8 @@ def conversations(paths: list[str], prompt: str) -> list[list[dict]]:
 
 def generate_descriptors(model: Any, processor: Any, paths: list[str],
                          prompt: str, device: str,
-                         max_new_tokens: int) -> list[str]:
+                         max_new_tokens: int, repetition_penalty: float,
+                         no_repeat_ngram_size: int) -> list[str]:
     import torch
 
     chats = conversations(paths, prompt)
@@ -91,6 +95,8 @@ def generate_descriptors(model: Any, processor: Any, paths: list[str],
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
                 use_cache=True,
+                repetition_penalty=repetition_penalty,
+                no_repeat_ngram_size=no_repeat_ngram_size,
             )
         trimmed = [
             output[len(input_ids):]
@@ -110,10 +116,12 @@ def generate_descriptors(model: Any, processor: Any, paths: list[str],
         middle = len(paths) // 2
         return (
             generate_descriptors(
-                model, processor, paths[:middle], prompt, device, max_new_tokens
+                model, processor, paths[:middle], prompt, device,
+                max_new_tokens, repetition_penalty, no_repeat_ngram_size,
             )
             + generate_descriptors(
-                model, processor, paths[middle:], prompt, device, max_new_tokens
+                model, processor, paths[middle:], prompt, device,
+                max_new_tokens, repetition_penalty, no_repeat_ngram_size,
             )
         )
 
@@ -130,6 +138,8 @@ def main() -> None:
     parser.add_argument("--prompt", default=DESCRIPTOR_PROMPT)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--max-new-tokens", type=int, default=96)
+    parser.add_argument("--repetition-penalty", type=float, default=1.15)
+    parser.add_argument("--no-repeat-ngram-size", type=int, default=4)
     parser.add_argument("--max-pixels", type=int, default=1003520)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--splits", nargs="+", default=["val"])
@@ -137,6 +147,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.batch_size <= 0 or args.max_new_tokens <= 0 or args.max_pixels <= 0:
         parser.error("batch size, max tokens, and max pixels must be positive")
+    if args.repetition_penalty < 1.0:
+        parser.error("--repetition-penalty must be at least 1.0")
+    if args.no_repeat_ngram_size < 0:
+        parser.error("--no-repeat-ngram-size cannot be negative")
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be positive")
     if "test" in args.splits:
@@ -170,6 +184,7 @@ def main() -> None:
         signature = descriptor_signature(
             args.model, args.prompt, fingerprint,
             args.max_pixels, args.max_new_tokens,
+            args.repetition_penalty, args.no_repeat_ngram_size,
         )
         output_path = args.output_root / f"{split}.jsonl"
         metadata_path = args.output_root / f"{split}.metadata.json"
@@ -187,6 +202,8 @@ def main() -> None:
                 "prompt": args.prompt,
                 "max_pixels": args.max_pixels,
                 "max_new_tokens": args.max_new_tokens,
+                "repetition_penalty": args.repetition_penalty,
+                "no_repeat_ngram_size": args.no_repeat_ngram_size,
                 "images": len(names),
                 "corpus_fingerprint": fingerprint,
                 "descriptor_signature": signature,
@@ -222,6 +239,7 @@ def main() -> None:
                 descriptions = generate_descriptors(
                     model, processor, batch_paths, args.prompt,
                     args.device, args.max_new_tokens,
+                    args.repetition_penalty, args.no_repeat_ngram_size,
                 )
                 for image_id, descriptor in zip(
                     batch_names, descriptions, strict=True

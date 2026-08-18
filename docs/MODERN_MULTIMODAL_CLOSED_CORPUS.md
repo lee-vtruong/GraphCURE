@@ -109,18 +109,20 @@ Smoke-test 32 validation images, then resume the same output to completion:
 ```bash
 CUDA_VISIBLE_DEVICES=0 python -m scripts.caption_mocheg_images \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
-  --output-root data/processed/mocheg_visual_descriptors \
+  --output-root data/processed/mocheg_visual_descriptors_v2 \
   --cache-root data/processed/retrieval_cache \
   --model Qwen/Qwen3-VL-2B-Instruct \
   --batch-size 4 --max-new-tokens 96 --max-pixels 1003520 \
+  --repetition-penalty 1.15 --no-repeat-ngram-size 4 \
   --device cuda --splits val --limit 32
 
 CUDA_VISIBLE_DEVICES=0 python -m scripts.caption_mocheg_images \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
-  --output-root data/processed/mocheg_visual_descriptors \
+  --output-root data/processed/mocheg_visual_descriptors_v2 \
   --cache-root data/processed/retrieval_cache \
   --model Qwen/Qwen3-VL-2B-Instruct \
   --batch-size 4 --max-new-tokens 96 --max-pixels 1003520 \
+  --repetition-penalty 1.15 --no-repeat-ngram-size 4 \
   --device cuda --splits val
 ```
 
@@ -131,7 +133,7 @@ fuse it with the direct visual top-200 candidates:
 CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_caption_fusion \
   --manifest-root data/processed/mocheg_manifest_strict \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
-  --descriptor-root data/processed/mocheg_visual_descriptors \
+  --descriptor-root data/processed/mocheg_visual_descriptors_v2 \
   --direct-root outputs/retrieval_mocheg_qwen3vl_images_top200 \
   --output-root outputs/retrieval_mocheg_caption_fusion \
   --cache-root data/processed/retrieval_cache \
