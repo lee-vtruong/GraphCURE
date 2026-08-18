@@ -117,6 +117,19 @@ def main() -> None:
 
     if args.output_k > args.candidate_k:
         parser.error("--output-k cannot exceed --candidate-k")
+    signature_payload = {
+        "model": args.dense_model,
+        "instruction": args.instruction,
+        "candidate_k": args.candidate_k,
+        "output_k": args.output_k,
+        "max_length": args.max_length,
+        "dense_weight": args.dense_weight,
+        "lexical_weight": args.lexical_weight,
+        "rrf_k": args.rrf_k,
+    }
+    retrieval_signature = hashlib.sha256(
+        json.dumps(signature_payload, sort_keys=True).encode()
+    ).hexdigest()
     args.output_root.mkdir(parents=True, exist_ok=True)
     model = load_model(args.dense_model, args.device, args.max_length)
     summary_path = args.output_root / "summary.json"
@@ -193,6 +206,7 @@ def main() -> None:
                     "dense_scores": [float(dense_scores[index]) for index in indices],
                     "lexical_scores": [float(lexical_scores[index]) for index in indices],
                     "retrieval_confidence": retrieval_confidence(fused_scores),
+                    "retrieval_signature": retrieval_signature,
                     "gold_evidence_ids": sorted(gold),
                     "first_gold_rank": rank,
                 })
@@ -206,6 +220,7 @@ def main() -> None:
             "claims": len(claims),
             "corpus_documents": len(documents),
             "model": args.dense_model,
+            "retrieval_signature": retrieval_signature,
         }
         for cutoff in (1, 5, 10, args.output_k):
             cutoff = min(cutoff, args.output_k)

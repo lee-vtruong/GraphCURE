@@ -8,13 +8,18 @@
     "model": "Qwen/Qwen3-Embedding-4B",
     "candidate_k": 200,
     "output_k": 50,
-    "instruction": "Retrieve fact-checking evidence that can verify or refute the claim."
+    "max_length": 512,
+    "dense_weight": 0.75,
+    "lexical_weight": 0.25,
+    "rrf_k": 60.0,
+    "instruction": "Given a fact-checking claim, retrieve documents that provide direct, independent evidence to support, refute, or resolve the claim. Preserve entities, dates, locations, quantities, and negation."
   },
   "reranking": {
     "model": "Qwen/Qwen3-Reranker-4B",
     "candidate_k": 50,
     "output_k": 10,
-    "max_length": 1536
+    "max_length": 1536,
+    "instruction": "Rank the document by its utility for verifying the claim. A useful document must provide independent information that can support, refute, or resolve the claim. Match entities, time, location, quantities, and negation; lexical similarity alone is insufficient."
   },
   "cache": {
     "encoder": "Qwen/Qwen3-Embedding-0.6B",
@@ -43,6 +48,7 @@
     "test_split_used": false
   },
   "test_policy": "Generate test retrieval and cache once after this freeze, then evaluate all frozen checkpoints once.",
+  "training_implementation_commit": "9dc7a490d3de56ee81f1baff230271e07c273e2c",
   "comparison_target": {
     "method": "HGTMFC retrieved-evidence protocol",
     "accuracy": 0.4861,

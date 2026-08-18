@@ -59,6 +59,47 @@ def validate_test_cache(cache_path: Path, freeze: dict) -> dict:
                 f"test cache mismatch for {key}: "
                 f"{metadata.get(key)!r} != {expected.get(key)!r}"
             )
+    retrieval_path = Path(metadata.get("retrieval_file", ""))
+    if not retrieval_path.exists():
+        raise ValueError(f"test cache retrieval file does not exist: {retrieval_path}")
+    if file_sha256(retrieval_path) != metadata.get("retrieval_sha256"):
+        raise ValueError("test retrieval file changed after the cache was created")
+
+    retrieval = freeze["retrieval"]
+    retrieval_payload = {
+        "model": retrieval["model"],
+        "instruction": retrieval["instruction"],
+        "candidate_k": retrieval["candidate_k"],
+        "output_k": retrieval["output_k"],
+        "max_length": retrieval["max_length"],
+        "dense_weight": retrieval["dense_weight"],
+        "lexical_weight": retrieval["lexical_weight"],
+        "rrf_k": retrieval["rrf_k"],
+    }
+    reranking = freeze["reranking"]
+    reranker_payload = {
+        "model": reranking["model"],
+        "instruction": reranking["instruction"],
+        "candidate_k": reranking["candidate_k"],
+        "top_k": reranking["output_k"],
+        "max_length": reranking["max_length"],
+    }
+    expected_retrieval = hashlib.sha256(
+        json.dumps(retrieval_payload, sort_keys=True).encode()
+    ).hexdigest()
+    expected_reranker = hashlib.sha256(
+        json.dumps(reranker_payload, sort_keys=True).encode()
+    ).hexdigest()
+    rows = [
+        json.loads(line) for line in retrieval_path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    if len(rows) != int(metadata.get("samples", -1)):
+        raise ValueError("test retrieval rows do not align with the cached samples")
+    if any(row.get("retrieval_signature") != expected_retrieval for row in rows):
+        raise ValueError("test candidate retrieval differs from the frozen settings")
+    if any(row.get("reranker_signature") != expected_reranker for row in rows):
+        raise ValueError("test reranking differs from the frozen settings")
     return metadata
 
 
