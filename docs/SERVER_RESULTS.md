@@ -148,6 +148,23 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   visual-evidence development (R2V-v2).
 - Detailed comparison: `docs/MOCHEG_SOTA_COMPARISON.md`
 
+### R2V-VIS-VAL-01 — Qwen3-VL direct visual retrieval
+
+- Split: MOCHEG strict validation (`n=1456`); **test split not used**
+- Image corpus: `12267`; claims with aligned gold image evidence: `905`
+- Model: `Qwen/Qwen3-VL-Embedding-2B`
+- Output: `outputs/retrieval_mocheg_qwen3vl_images/summary.json`
+- Raw Recall@1/5/10/50: `0.204670 / 0.269231 / 0.296703 / 0.370879`
+- Conditional Recall@1/5/10/50 on the 905 image-annotated claims:
+  `0.329282 / 0.433149 / 0.477348 / 0.596685`
+- Raw MRR: `0.235726`; conditional MRR: `0.379245`
+- Signature: `d9fa11aba6eb63d53e4d99f620dff68dcdaa23c8796a24ab35e336e34b05fcdc`
+- Gate: conditional Recall@10 >= `0.40` **passed**; conditional Recall@50
+  >= `0.65` **failed** by `0.053315`.
+- Decision: **partial pass; do not evaluate test**. Measure validation
+  candidate recall at depths 100 and 200. If sufficient, rerank the deeper
+  pool; otherwise add image-context retrieval before visual reranking.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
