@@ -133,7 +133,7 @@ Cache the frozen encoder once. This prevents the top-k evidence encoder from
 being recomputed with backward passes in every epoch.
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python -m scripts.cache_mocheg_reasoning_features \
+CUDA_VISIBLE_DEVICES=0 python -m scripts.cache_mocheg_reasoning_features \
   --manifest-root data/processed/mocheg_manifest_strict \
   --retrieval-root outputs/retrieval_mocheg_qwen3_reranked \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
@@ -147,13 +147,27 @@ CUDA_VISIBLE_DEVICES=1 python -m scripts.cache_mocheg_reasoning_features \
 Train only the claim-conditioned evidence-set head during model screening:
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python -m scripts.train_mocheg_cached_verifier \
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_cached_verifier \
   --cache-root data/processed/mocheg_reasoning_cache \
   --output outputs/mocheg_cached_verifier_seed42 \
   --batch-size 256 --epochs 60 --patience 10 --seed 42 \
   2>&1 | tee outputs/mocheg-cached-verifier-seed42.log
 
 cat outputs/mocheg_cached_verifier_seed42/val_metrics.json
+```
+
+Once the seed-42 validation gate passes, confirm stability with the fixed seed
+set. Existing completed seeds are reused, and both machine-readable JSON and a
+paper-ready Markdown table are written. This runner is validation-only and has
+no test evaluation option.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_cached_validation \
+  --cache-root data/processed/mocheg_reasoning_cache \
+  --seeds 13 21 42 87 100 --skip-existing \
+  2>&1 | tee outputs/mocheg-cached-verifier-multiseed.log
+
+cat outputs/mocheg_cached_verifier_summary_val.md
 ```
 
 The end-to-end encoder trainer is retained as an experimental LoRA/fine-tuning
@@ -169,14 +183,14 @@ After all architecture and hyperparameter choices are frozen, generate the
 test retrieval/reranking files once and unlock checkpoint-only evaluation:
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python -m scripts.run_mocheg_reasoning_retrieval \
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_reasoning_retrieval \
   --manifest-root data/processed/mocheg_manifest_strict \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
   --dense-model Qwen/Qwen3-Embedding-4B \
   --output-root outputs/retrieval_mocheg_qwen3_hybrid \
   --candidate-k 200 --output-k 50 --batch-size 8 --splits test
 
-CUDA_VISIBLE_DEVICES=1 python -m scripts.rerank_mocheg_qwen3 \
+CUDA_VISIBLE_DEVICES=0 python -m scripts.rerank_mocheg_qwen3 \
   --retrieval-root outputs/retrieval_mocheg_qwen3_hybrid \
   --manifest-root data/processed/mocheg_manifest_strict \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
@@ -185,7 +199,7 @@ CUDA_VISIBLE_DEVICES=1 python -m scripts.rerank_mocheg_qwen3 \
   --candidate-k 50 --top-k 10 --batch-size 4 --max-length 1536 \
   --splits test
 
-CUDA_VISIBLE_DEVICES=1 python -m scripts.cache_mocheg_reasoning_features \
+CUDA_VISIBLE_DEVICES=0 python -m scripts.cache_mocheg_reasoning_features \
   --manifest-root data/processed/mocheg_manifest_strict \
   --retrieval-root outputs/retrieval_mocheg_qwen3_reranked \
   --raw-root data/raw/mocheg_dataset/extracted/mocheg \
@@ -193,7 +207,7 @@ CUDA_VISIBLE_DEVICES=1 python -m scripts.cache_mocheg_reasoning_features \
   --output-root data/processed/mocheg_reasoning_cache \
   --top-k 8 --batch-size 32 --max-length 256 --splits test
 
-CUDA_VISIBLE_DEVICES=1 python -m scripts.train_mocheg_cached_verifier \
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_cached_verifier \
   --cache-root data/processed/mocheg_reasoning_cache \
   --output outputs/mocheg_cached_verifier_seed42 \
   --checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \

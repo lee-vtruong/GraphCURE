@@ -20,6 +20,10 @@ from scripts.train_mocheg_cached_verifier import (
     CachedEvidenceDataset,
     validate_cache_pair,
 )
+from scripts.run_mocheg_cached_validation import (
+    markdown_summary,
+    summarize_validation,
+)
 
 
 def test_model_shapes():
@@ -183,6 +187,34 @@ def test_mocheg_close_protocol_removes_qrel_evidence():
     assert closed["image_evidence_ids"] == []
     assert "ruling_outline" not in closed
     assert closed["evidence_provenance"] == "none"
+
+
+def test_cached_validation_summary_is_validation_only(tmp_path):
+    paths = {}
+    for seed, f1 in ((13, 0.52), (42, 0.54)):
+        run = tmp_path / str(seed)
+        run.mkdir()
+        path = run / "val_metrics.json"
+        path.write_text(json.dumps({
+            "accuracy": f1 + 0.01,
+            "macro_f1": f1,
+            "evidence_selection_hit_at_1": 0.8,
+            "ece_10": 0.05,
+            "best_val_macro_f1": f1,
+            "retrieval_gold_coverage": 0.94,
+            "provenance": {"cache_metadata": {
+                "manifest_sha256": "manifest",
+                "retrieval_sha256": "retrieval",
+                "encoder": "encoder",
+                "top_k": 8,
+            }},
+        }), encoding="utf-8")
+        paths[seed] = path
+    summary = summarize_validation(paths)
+    assert summary["test_split_used"] is False
+    assert summary["stability_gate"]["passed"]
+    assert summary["aggregate"]["macro_f1"]["mean"] == 0.53
+    assert "Test split used: **no**" in markdown_summary(summary)
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():
