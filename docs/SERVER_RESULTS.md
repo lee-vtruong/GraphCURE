@@ -305,6 +305,20 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Decision: functional gate **passed**. Measure steady-state throughput on 500
   pairs before choosing a full reranking or cascaded reranking design.
 
+### R2V-VIS-RERANK-BENCH-01 — batch-4 throughput
+
+- Scope: first ten strict-validation claims, 50 candidates per claim;
+  `500/500` pairs completed
+- Batch size: `4`; elapsed time: `78.073` seconds
+- Throughput: `6.4043` claim-image pairs/second
+- Projected top-400 validation runtime (`582400` pairs): `25.26` hours
+- Benchmark-only Recall@1/5/10/50: `0.4 / 0.6 / 0.8 / 0.8`; excluded
+  from comparative results because this is a non-random ten-claim timing slice.
+- Output integrity: `10/10` claims, `complete=true`,
+  `gold_used_for_scoring=false`.
+- Decision: a resumable full run is operationally feasible, but benchmark
+  batch size 8 before spending approximately 25 GPU-hours.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

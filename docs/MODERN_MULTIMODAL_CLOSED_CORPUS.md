@@ -219,3 +219,8 @@ including cached model initialization. Interface, checkpointing, metrics, and
 the post-scoring-only qrel audit passed. The two-claim retrieval values are not
 used for comparison. A 500-pair runtime benchmark is required before the
 582,400-pair top-400 validation pass can be authorized.
+
+The 500-pair batch-4 benchmark completed in `78.073` seconds (`6.4043`
+pairs/second), projecting `25.26` hours for full top-400 validation. The timing
+slice's retrieval values are excluded from comparison. Batch 8 is screened
+once before freezing the production throughput setting.
