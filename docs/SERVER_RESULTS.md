@@ -286,6 +286,25 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Resolution: use the Qwen official multimodal reranker cap `max_length=10240`
   with dynamic padding, then repeat the same smoke gate.
 
+### R2V-VIS-RERANK-SMOKE-02 — corrected multimodal interface smoke
+
+- Scope: first two strict-validation claims, ten fused image candidates each
+- Completed claims/pairs: `2/2` and `20/20`; status: **pass**
+- Runtime including cached model initialization: `27.917` seconds
+- Smoke-only Recall@1/5/10 and MRR: `0.5 / 0.5 / 0.5 / 0.5`; these values
+  are not comparative metrics because the two-claim sample is intentionally
+  tiny.
+- Model: `Qwen/Qwen3-VL-Reranker-2B`; `max_length=10240`; pixels and
+  claim-independent descriptors both supplied to each candidate document.
+- Retrieval SHA-256:
+  `8913c081061d3187eb9bd9c5cfba45db95ac6a149bbbfc672d540d16384fc78a`
+- Reranker signature:
+  `b8790584396c2a2cc974fd70877ba4338fced0ad29cedfdb54545ad000f3a03f`
+- Leakage audit: gold identifiers were used only after scoring; reported
+  `gold_used_for_scoring=false`.
+- Decision: functional gate **passed**. Measure steady-state throughput on 500
+  pairs before choosing a full reranking or cascaded reranking design.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

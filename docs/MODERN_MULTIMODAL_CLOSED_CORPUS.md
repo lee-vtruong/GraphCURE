@@ -213,3 +213,9 @@ tokens (`processed_claims=0`). This is an engineering configuration failure,
 not an experimental result. The reranker now follows Qwen's official default
 cap of `10240`; dynamic padding avoids allocating that full length for every
 pair.
+
+The corrected smoke completed two claims and 20 pairs in `27.917` seconds,
+including cached model initialization. Interface, checkpointing, metrics, and
+the post-scoring-only qrel audit passed. The two-claim retrieval values are not
+used for comparison. A 500-pair runtime benchmark is required before the
+582,400-pair top-400 validation pass can be authorized.
