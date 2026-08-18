@@ -170,6 +170,11 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_cached_validation \
 cat outputs/mocheg_cached_verifier_summary_val.md
 ```
 
+The accepted Phase-B configuration is frozen in
+`configs/mocheg_r2v_frozen.json`. Do not change its retrieval, cache, verifier,
+or seed settings after generating test artifacts. The one-shot evaluator checks
+the validation gate, frozen seeds, and test-cache architecture before running.
+
 The end-to-end encoder trainer is retained as an experimental LoRA/fine-tuning
 path, but must not be used for the initial screen: it repeatedly encodes nine
 sequences per sample and is prohibitively slow on the current shared GPU.
@@ -214,4 +219,18 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_cached_verifier \
   --evaluate-test
 
 cat outputs/mocheg_cached_verifier_seed42/test_metrics.json
+```
+
+For the frozen five-seed report, use the guarded evaluator instead of selecting
+a single checkpoint:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.evaluate_mocheg_frozen_r2v \
+  --freeze configs/mocheg_r2v_frozen.json \
+  --validation-summary outputs/mocheg_cached_verifier_summary_val.json \
+  --cache-root data/processed/mocheg_reasoning_cache \
+  --skip-existing \
+  2>&1 | tee outputs/mocheg-r2v-frozen-test.log
+
+cat outputs/mocheg_cached_verifier_summary_test.md
 ```

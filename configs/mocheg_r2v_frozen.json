@@ -1,0 +1,51 @@
+{
+  "experiment": "GraphCURE-R2V",
+  "protocol": "P1_closed_corpus_retrieved_evidence",
+  "status": "frozen_after_validation",
+  "frozen_seeds": [13, 21, 42, 87, 100],
+  "selection_rule": "Report the matched five-seed mean and standard deviation; do not select a seed using test performance.",
+  "retrieval": {
+    "model": "Qwen/Qwen3-Embedding-4B",
+    "candidate_k": 200,
+    "output_k": 50,
+    "instruction": "Retrieve fact-checking evidence that can verify or refute the claim."
+  },
+  "reranking": {
+    "model": "Qwen/Qwen3-Reranker-4B",
+    "candidate_k": 50,
+    "output_k": 10,
+    "max_length": 1536
+  },
+  "cache": {
+    "encoder": "Qwen/Qwen3-Embedding-0.6B",
+    "top_k": 8,
+    "max_length": 256,
+    "embedding_dim": 1024
+  },
+  "verifier": {
+    "hidden_dim": 384,
+    "dropout": 0.15,
+    "batch_size": 256,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.01,
+    "epochs": 60,
+    "patience": 10,
+    "relevance_weight": 0.25,
+    "stance_weight": 0.15,
+    "sufficiency_weight": 0.15
+  },
+  "validation_gate": {
+    "summary": "outputs/mocheg_cached_verifier_summary_val.json",
+    "minimum_mean_macro_f1": 0.5,
+    "maximum_macro_f1_std": 0.02,
+    "observed_mean_macro_f1": 0.5435565921206251,
+    "observed_macro_f1_std": 0.010373627807230352,
+    "test_split_used": false
+  },
+  "test_policy": "Generate test retrieval and cache once after this freeze, then evaluate all frozen checkpoints once.",
+  "comparison_target": {
+    "method": "HGTMFC retrieved-evidence protocol",
+    "accuracy": 0.4861,
+    "macro_f1": 0.4678
+  }
+}

@@ -24,6 +24,7 @@ from scripts.run_mocheg_cached_validation import (
     markdown_summary,
     summarize_validation,
 )
+from scripts.evaluate_mocheg_frozen_r2v import validate_freeze
 
 
 def test_model_shapes():
@@ -215,6 +216,33 @@ def test_cached_validation_summary_is_validation_only(tmp_path):
     assert summary["stability_gate"]["passed"]
     assert summary["aggregate"]["macro_f1"]["mean"] == 0.53
     assert "Test split used: **no**" in markdown_summary(summary)
+
+
+def test_frozen_evaluator_requires_matching_passed_validation_seeds():
+    freeze = {
+        "status": "frozen_after_validation",
+        "frozen_seeds": [13, 42],
+        "validation_gate": {
+            "minimum_mean_macro_f1": 0.5,
+            "maximum_macro_f1_std": 0.02,
+        },
+    }
+    validation = {
+        "split": "val",
+        "test_split_used": False,
+        "seeds": [13, 42],
+        "stability_gate": {"passed": True},
+        "aggregate": {"macro_f1": {"mean": 0.53, "std": 0.01}},
+    }
+    assert validate_freeze(freeze, validation) == [13, 42]
+
+    validation["test_split_used"] = True
+    try:
+        validate_freeze(freeze, validation)
+    except ValueError as error:
+        assert "validation-only" in str(error)
+    else:
+        raise AssertionError("test-contaminated validation summary was accepted")
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():

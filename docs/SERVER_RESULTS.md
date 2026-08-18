@@ -94,6 +94,26 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   (`1.25` for negation/quantity traps and `1.10` for lexical traps), while the
   claim-level verdict remains the primary objective.
 
+### R2V-VER-VAL-01 — frozen cached evidence-set verifier
+
+- Split: MOCHEG strict validation (`n=1456`); **test split not used**
+- Seeds: `13, 21, 42, 87, 100`
+- Frozen cache: Qwen3-Embedding-0.6B, top-8 reranked evidence, 1024 dimensions
+- Accuracy: **0.5611 +/- 0.0103**
+- Macro-F1: **0.5436 +/- 0.0104**
+- Evidence selection hit@1 (conditional on a gold candidate):
+  **0.8399 +/- 0.0173**
+- ECE-10: `0.1768 +/- 0.1262`
+- Retrieval gold coverage@8: `0.943681`
+- Stability gate: **passed** (mean Macro-F1 >= `0.50`, standard deviation
+  <= `0.02`)
+- Interpretation: verdict quality is stable enough to freeze Phase B. ECE is
+  seed-sensitive and is reserved for post-hoc calibration in the routing phase;
+  it is not used to select a seed or revise the frozen Phase-B verifier.
+- Frozen specification: `configs/mocheg_r2v_frozen.json`
+- Test policy: materialize retrieval/cache once, then report the matched
+  five-seed mean and standard deviation without selecting a test seed.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
