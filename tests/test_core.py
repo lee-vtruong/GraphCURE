@@ -33,6 +33,10 @@ from scripts.run_mocheg_visual_retrieval import (
     normalize_image_paths,
     retrieval_summary,
 )
+from scripts.run_mocheg_visual_ensemble import (
+    aligned_gold_images,
+    fuse_visual_orders,
+)
 
 
 def test_model_shapes():
@@ -341,6 +345,25 @@ def test_visual_retrieval_query_instruction_uses_prompt_api(tmp_path):
     assert result.shape == (2, 4)
     assert model.inputs == ["first claim", "second claim"]
     assert model.kwargs["prompt"] == "Retrieve evidence."
+
+
+def test_constraint_visual_fusion_rewards_cross_view_agreement():
+    fused = fuse_visual_orders(
+        [np.array([3, 1, 2]), np.array([1, 3, 4])],
+        [1.0, 1.0],
+        rank_constant=1.0,
+        limit=4,
+    )
+    assert fused[0][0] in {1, 3}
+    assert {index for index, _ in fused} == {1, 2, 3, 4}
+
+
+def test_aligned_gold_images_ignores_non_corpus_ids():
+    gold = aligned_gold_images({
+        "image_candidate_names": ["candidate.jpg", "missing.jpg"],
+        "image_evidence_ids": ["proof.jpg"],
+    }, {"candidate.jpg", "proof.jpg"})
+    assert gold == {"candidate.jpg", "proof.jpg"}
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():

@@ -67,6 +67,27 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_visual_retrieval \
   2>&1 | tee outputs/mocheg-qwen3vl-image-retrieval-top200-val.log
 ```
 
-Proceed to visual reranking only if conditional Recall@200 is at least `0.75`.
-Otherwise first add a complementary image-context text retriever and fuse its
-candidates with direct text-to-image retrieval.
+The observed conditional Recall@100/200 was `0.637569 / 0.697238`, so the
+`0.75` candidate-ceiling gate failed. Do not rerank or evaluate test yet.
+
+The next validation-only screen uses four leakage-safe query views aligned to
+GraphCURE constraints (semantic, entity, temporal/provenance, contextual/OCR)
+and reciprocal-rank fusion. It deliberately does not parse claim/topic IDs
+from image filenames.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_visual_ensemble \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --output-root outputs/retrieval_mocheg_qwen3vl_constraint_ensemble \
+  --cache-root data/processed/retrieval_cache \
+  --model Qwen/Qwen3-VL-Embedding-2B \
+  --candidate-k 300 --output-k 200 --rrf-k 60 \
+  --batch-size 8 --image-shard-size 256 --query-batch-size 16 \
+  --score-batch-size 32 --device cuda --splits val \
+  2>&1 | tee outputs/mocheg-qwen3vl-constraint-ensemble-val.log
+```
+
+The ensemble passes if conditional Recall@200 is at least `0.75`. If it does
+not, generate pixel-derived captions/OCR and add them as a complementary
+retrieval view; do not use filename-derived topic identifiers.

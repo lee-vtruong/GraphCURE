@@ -159,11 +159,16 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   `0.329282 / 0.433149 / 0.477348 / 0.596685`
 - Raw MRR: `0.235726`; conditional MRR: `0.379245`
 - Signature: `d9fa11aba6eb63d53e4d99f620dff68dcdaa23c8796a24ab35e336e34b05fcdc`
+- At deeper candidate depths, raw Recall@100/200 was `0.396291 / 0.433379`
+  and conditional Recall@100/200 was `0.637569 / 0.697238`; conditional MRR
+  was `0.380187`. Top-200 signature:
+  `88ae2f4bcf11a60a647ebb6b1fd388e8770fcfd5f9b063891cb28c86256950c2`.
 - Gate: conditional Recall@10 >= `0.40` **passed**; conditional Recall@50
   >= `0.65` **failed** by `0.053315`.
-- Decision: **partial pass; do not evaluate test**. Measure validation
-  candidate recall at depths 100 and 200. If sufficient, rerank the deeper
-  pool; otherwise add image-context retrieval before visual reranking.
+- Candidate-ceiling gate: conditional Recall@200 >= `0.75` **failed** by
+  `0.052762`.
+- Decision: **partial pass; do not evaluate test**. Add a leakage-safe,
+  constraint-aligned multi-intent candidate ensemble before visual reranking.
 
 Discovered test metric files: 50
 
