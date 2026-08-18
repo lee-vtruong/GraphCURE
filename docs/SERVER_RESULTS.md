@@ -319,6 +319,19 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Decision: a resumable full run is operationally feasible, but benchmark
   batch size 8 before spending approximately 25 GPU-hours.
 
+### R2V-VIS-RERANK-BENCH-02 — frozen batch-8 throughput
+
+- Scope: the same ten claims and 500 candidate pairs as BENCH-01
+- Batch size: `8`; elapsed time: `76.829` seconds
+- Throughput: `6.5080` pairs/second; projected full runtime: `24.86` hours
+- Speedup over batch 4: approximately `1.62%`; output ranking remained
+  consistent apart from negligible floating-point score differences.
+- Output integrity: `10/10` claims, `complete=true`,
+  `gold_used_for_scoring=false`.
+- Decision: freeze batch 8 for the full validation run. Because batch size is
+  excluded from the semantic reranker signature, an interrupted or OOM run can
+  safely resume at batch 4 without mixing model configurations.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

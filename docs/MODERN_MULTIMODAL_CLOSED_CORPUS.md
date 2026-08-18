@@ -224,3 +224,8 @@ The 500-pair batch-4 benchmark completed in `78.073` seconds (`6.4043`
 pairs/second), projecting `25.26` hours for full top-400 validation. The timing
 slice's retrieval values are excluded from comparison. Batch 8 is screened
 once before freezing the production throughput setting.
+
+Batch 8 completed the same 500 pairs in `76.829` seconds (`6.5080`
+pairs/second), projecting `24.86` hours. It is the frozen throughput setting;
+batch 4 remains the OOM-safe resume fallback because batch size does not alter
+the semantic experiment signature.
