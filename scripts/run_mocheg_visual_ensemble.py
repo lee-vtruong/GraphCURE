@@ -69,6 +69,7 @@ def fuse_visual_orders(orders: list[np.ndarray], weights: list[float],
 
 def main() -> None:
     from sentence_transformers import SentenceTransformer
+    import torch
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest-root", type=Path,
@@ -142,6 +143,25 @@ def main() -> None:
             )
             for instruction in instructions
         ]
+        score_device = torch.device(
+            args.device if args.device.startswith("cuda") and torch.cuda.is_available()
+            else "cpu"
+        )
+        # Copy the read-only NumPy caches once, then perform the expensive
+        # multi-view matrix products on the selected accelerator.
+        image_score_embeddings = torch.tensor(
+            np.asarray(image_embeddings), dtype=torch.float32, device=score_device
+        )
+        query_score_views = [
+            torch.tensor(
+                np.asarray(queries), dtype=torch.float32, device=score_device
+            )
+            for queries in query_views
+        ]
+        print(
+            f"{split}: similarity scoring on {score_device} with "
+            f"{len(query_score_views)} constraint views"
+        )
 
         corpus_names = set(image_names)
         output: list[dict] = []
@@ -157,8 +177,8 @@ def main() -> None:
         ):
             end = min(start + args.score_batch_size, len(claims))
             score_blocks = [
-                queries[start:end] @ image_embeddings.T
-                for queries in query_views
+                (queries[start:end] @ image_score_embeddings.T).cpu().numpy()
+                for queries in query_score_views
             ]
             for offset, claim in enumerate(claims[start:end]):
                 gold = aligned_gold_images(claim, corpus_names)
