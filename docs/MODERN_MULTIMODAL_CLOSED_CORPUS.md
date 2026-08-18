@@ -142,3 +142,59 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_caption_fusion \
   --fusion-weights 1.0 1.0 0.5 \
   --batch-size 8 --score-batch-size 32 --device cuda --splits val
 ```
+
+### Observed result: R2V-VIS-CAP-VAL-02
+
+Direct and caption candidates are complementary: conditional candidate recall
+is `0.697238` for direct, `0.706077` for caption, and `0.779006` for their
+union. The caption branch recovers 74 annotated gold images missed by direct
+retrieval. Fixed RRF reaches only `0.7149` conditional Recall@200, so candidate
+generation passes the `0.75` gate while candidate ordering remains the current
+bottleneck.
+
+Materialize a larger fused pool using the already cached embeddings:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_caption_fusion \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --descriptor-root data/processed/mocheg_visual_descriptors_v3 \
+  --direct-root outputs/retrieval_mocheg_qwen3vl_images_top200 \
+  --output-root outputs/retrieval_mocheg_caption_fusion_top400 \
+  --cache-root data/processed/retrieval_cache \
+  --text-model Qwen/Qwen3-Embedding-4B \
+  --candidate-k 300 --output-k 400 --rrf-k 60 \
+  --fusion-weights 1.0 1.0 0.5 \
+  --batch-size 8 --score-batch-size 32 --device cuda --splits val
+```
+
+Do not run the full 2B reranker before a two-claim smoke test. It scores both
+the original pixels and their claim-independent descriptor, displays progress
+in claim-image pairs, flushes every completed claim, and supports `--resume`:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.rerank_mocheg_visual_qwen3 \
+  --retrieval-root outputs/retrieval_mocheg_caption_fusion_top400 \
+  --descriptor-root data/processed/mocheg_visual_descriptors_v3 \
+  --output-root outputs/retrieval_mocheg_visual_reranker_smoke \
+  --model Qwen/Qwen3-VL-Reranker-2B \
+  --candidate-k 10 --output-k 10 --batch-size 2 \
+  --score-chunk-size 4 --limit-claims 2 --device cuda --splits val
+```
+
+If the smoke test completes, run validation with a resumable top-400 to top-100
+reranking pass:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.rerank_mocheg_visual_qwen3 \
+  --retrieval-root outputs/retrieval_mocheg_caption_fusion_top400 \
+  --descriptor-root data/processed/mocheg_visual_descriptors_v3 \
+  --output-root outputs/retrieval_mocheg_visual_reranked \
+  --model Qwen/Qwen3-VL-Reranker-2B \
+  --candidate-k 400 --output-k 100 --batch-size 2 \
+  --score-chunk-size 16 --device cuda --splits val --resume
+```
+
+Use a new output root when changing any reranker setting. The run is accepted
+only if conditional Recall@10 improves over `0.4873` and conditional Recall@50
+improves over `0.6077`, without using test results.

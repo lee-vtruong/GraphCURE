@@ -295,8 +295,13 @@ def main() -> None:
                     "per_view_first_gold_rank": per_view_rank,
                 })
 
+        # Preserve the standard depth curve when materializing a larger pool
+        # for reranking. Previously an ``--output-k 400`` run omitted the
+        # intermediate Recall@200/300 values needed to select the smallest
+        # candidate pool that satisfies the validation-only ceiling gate.
         cutoffs = sorted(
-            cutoff for cutoff in {1, 5, 10, 50, 100, args.output_k}
+            cutoff
+            for cutoff in {1, 5, 10, 50, 100, 200, 300, 400, args.output_k}
             if cutoff <= args.output_k
         )
         signature_payload = {

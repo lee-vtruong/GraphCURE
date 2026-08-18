@@ -47,6 +47,10 @@ from scripts.run_mocheg_caption_fusion import (
     candidate_union_diagnostics,
     read_descriptors,
 )
+from scripts.rerank_mocheg_visual_qwen3 import (
+    read_resumable_jsonl,
+    stable_rerank,
+)
 
 
 def test_model_shapes():
@@ -421,6 +425,22 @@ def test_caption_candidate_union_reports_complementary_recoveries():
     assert result["conditional_caption_candidate_recall"] == 1 / 3
     assert result["conditional_union_candidate_recall"] == 2 / 3
     assert result["caption_only_gold_recoveries"] == 1
+
+
+def test_visual_reranker_is_stable_and_keeps_scores_aligned():
+    ids, scores = stable_rerank(
+        ["a.jpg", "b.jpg", "c.jpg"],
+        np.asarray([0.2, 0.8, 0.8], dtype=np.float32),
+        output_k=2,
+    )
+    assert ids == ["b.jpg", "c.jpg"]
+    assert np.allclose(scores, [0.8, 0.8])
+
+
+def test_visual_reranker_resume_ignores_only_partial_final_line(tmp_path):
+    path = tmp_path / "val.jsonl"
+    path.write_text('{"id":"one"}\n{"id":', encoding="utf-8")
+    assert read_resumable_jsonl(path) == [{"id": "one"}]
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():

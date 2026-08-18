@@ -241,6 +241,26 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Decision: materialization gate **passed**. Run validation-only caption
   dense+lexical retrieval, direct-visual fusion, and candidate-union analysis.
 
+### R2V-VIS-CAP-VAL-02 — complementary caption candidate retrieval
+
+- Split: MOCHEG strict validation (`n=1456`); **test split not used**
+- Claims with aligned gold image evidence: `905`
+- Direct/caption/union raw candidate recall:
+  `0.433379 / 0.438874 / 0.484203`
+- Direct/caption/union conditional candidate recall:
+  `0.697238 / 0.706077 / 0.779006`
+- Caption-only gold recoveries missed by direct retrieval: `74`
+- RRF fused raw Recall@1/5/10/50/100/200:
+  `0.1916 / 0.2747 / 0.3029 / 0.3777 / 0.4100 / 0.4444`
+- RRF fused conditional Recall@1/5/10/50/100/200:
+  `0.3083 / 0.4420 / 0.4873 / 0.6077 / 0.6597 / 0.7149`
+- Per-view conditional Recall@200: direct `0.6972`, caption dense `0.6343`,
+  caption lexical `0.5558`.
+- Decision: the `0.75` candidate-union gate **passed**, proving genuine
+  complementary evidence, but fixed RRF loses part of that gain. Freeze neither
+  ranking nor test. Measure the top-400 fused ceiling, then apply a
+  claim-conditioned Qwen3-VL cross-reranker over pixels plus descriptors.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
