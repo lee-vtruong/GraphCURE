@@ -360,9 +360,11 @@ def main() -> None:
             "\n".join(json.dumps(row, ensure_ascii=False) for row in output) + "\n",
             encoding="utf-8",
         )
-        split_summary = retrieval_summary(
-            ranks, annotated, sorted({1, 5, 10, args.top_k})
+        reporting_cutoffs = sorted(
+            cutoff for cutoff in {1, 5, 10, 50, 100, args.top_k}
+            if cutoff <= args.top_k
         )
+        split_summary = retrieval_summary(ranks, annotated, reporting_cutoffs)
         split_summary.update({
             "image_corpus": len(image_names),
             "model": args.model,
