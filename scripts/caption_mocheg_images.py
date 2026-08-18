@@ -21,6 +21,7 @@ from scripts.run_mocheg_visual_retrieval import (
 
 
 DESCRIPTOR_GENERATION_VERSION = "v3-left-padding-compact"
+DESCRIPTOR_TEXT_NORMALIZATION_VERSION = "unicode-colon-v1"
 DESCRIPTOR_PROMPT = """Using only visible information, output exactly one line of at most 55 words with three fields: Visual: <main people or entities, objects, actions, event, scene>; Text: <exact readable words, dates, numbers, logos, or none>; Type/Clues: <photo, screenshot, meme, document, chart or map, plus visible place, time, or source-reuse clues>. Never repeat. Identify a person or place only when visually unmistakable."""
 
 
@@ -77,7 +78,9 @@ def conversations(paths: list[str], prompt: str) -> list[list[dict]]:
 
 def clean_descriptor(text: str) -> str:
     """Make model output a stable single-line retrieval document."""
-    return " ".join(text.replace("\x00", " ").split()).strip()
+    return " ".join(
+        text.replace("\x00", " ").replace("：", ":").split()
+    ).strip()
 
 
 def generate_descriptors(model: Any, processor: Any, paths: list[str],

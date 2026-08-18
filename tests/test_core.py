@@ -403,8 +403,8 @@ def test_pixel_descriptor_resume_and_alignment(tmp_path):
 
 
 def test_pixel_descriptor_cleanup_is_single_line():
-    assert clean_descriptor(" Visual: car\n\nText: 42\x00 ") == \
-           "Visual: car Text: 42"
+    assert clean_descriptor(" Visual: car\n\nText: 42\x00 Type/Clues：photo ") == \
+           "Visual: car Text: 42 Type/Clues:photo"
 
 
 def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement():

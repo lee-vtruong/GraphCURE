@@ -21,6 +21,10 @@ from scripts.run_mocheg_visual_retrieval import (
     read_jsonl,
     retrieval_summary,
 )
+from scripts.caption_mocheg_images import (
+    DESCRIPTOR_TEXT_NORMALIZATION_VERSION,
+    clean_descriptor,
+)
 
 
 CAPTION_RETRIEVAL_INSTRUCTION = (
@@ -49,7 +53,10 @@ def read_descriptors(path: Path, image_names: list[str]) -> tuple[list[str], str
         )
     if len(signatures) != 1 or "" in signatures:
         raise ValueError("descriptor file must contain one non-empty signature")
-    return [str(by_id[name].get("descriptor", "")) for name in image_names], signatures.pop()
+    return [
+        clean_descriptor(str(by_id[name].get("descriptor", "")))
+        for name in image_names
+    ], signatures.pop()
 
 
 def embedding_cache_path(cache_root: Path, split: str, model: str,
@@ -259,6 +266,9 @@ def main() -> None:
             "output_k": args.output_k,
             "rrf_k": args.rrf_k,
             "fusion_weights": args.fusion_weights,
+            "descriptor_text_normalization": (
+                DESCRIPTOR_TEXT_NORMALIZATION_VERSION
+            ),
         }
         signature = hashlib.sha256(
             json.dumps(signature_payload, sort_keys=True).encode()
@@ -270,6 +280,9 @@ def main() -> None:
             "descriptor_signature": descriptor_sig,
             "fusion_signature": signature,
             "fusion_weights": args.fusion_weights,
+            "descriptor_text_normalization": (
+                DESCRIPTOR_TEXT_NORMALIZATION_VERSION
+            ),
             "candidate_k": args.candidate_k,
             "output_k": args.output_k,
             "per_view": {

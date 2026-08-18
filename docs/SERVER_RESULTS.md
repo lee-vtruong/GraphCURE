@@ -214,6 +214,21 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   processor-scoped padding arguments, a three-field 55-word prompt, one-line
   normalization, repetition penalty `1.05`, and no-repeat 4-grams.
 
+### R2V-VIS-CAP-SMOKE-03 — compact left-padded descriptors
+
+- Split: first 32 strict-validation images; model
+  `Qwen/Qwen3-VL-2B-Instruct`
+- Repeated 4-gram outputs: `0/32`; word count min/mean/max:
+  `14 / 34.16 / 59`
+- Manual inspection: sampled descriptions were concise, visually relevant,
+  and contained useful named entities/OCR without the v1/v2 mid-token failure.
+- The initial automated structured count was incorrectly `0/32` because Qwen
+  emitted the full-width Unicode colon in `Type/Clues：`. This is a parser-level
+  typography variant, not a generation failure.
+- Resolution: canonicalize Unicode colons during descriptor write/read and
+  stamp normalization version `unicode-colon-v1` in caption-fusion provenance.
+  Re-audit the existing 32 descriptors; no pixel regeneration is required.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
