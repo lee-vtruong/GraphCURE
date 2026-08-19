@@ -203,6 +203,43 @@ def build_head(metadata: dict, args: argparse.Namespace) -> MultimodalEvidenceHe
     )
 
 
+def training_objective(
+    head: MultimodalEvidenceHead,
+    batch: dict,
+    device: torch.device,
+    class_weights: torch.Tensor,
+    relevance_weight: float = 0.25,
+    stance_weight: float = 0.15,
+    sufficiency_weight: float = 0.15,
+    conflict_weight: float = 0.05,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Compute one training objective without dropping model masks."""
+    batch = dict(batch)
+    batch.pop("id", None)
+    labels = batch.pop("labels").to(device)
+    supervision = {
+        key: batch.pop(key).to(device)
+        for key in MultimodalEvidenceDataset.SUPERVISION_KEYS
+        if key != "labels"
+    }
+    model_batch = {
+        key: value.to(device) for key, value in batch.items()
+    }
+    output = head(**model_batch)
+    return multimodal_evidence_loss(
+        output,
+        labels,
+        text_mask=model_batch["text_mask"],
+        visual_mask=model_batch["visual_mask"],
+        **supervision,
+        class_weights=class_weights,
+        relevance_weight=relevance_weight,
+        stance_weight=stance_weight,
+        sufficiency_weight=sufficiency_weight,
+        conflict_weight=conflict_weight,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-root", type=Path,
@@ -252,21 +289,11 @@ def main() -> None:
         running = 0.0
         part_sums = {key: 0.0 for key in loss_keys}
         for batch in loader:
-            batch.pop("id")
-            labels = batch.pop("labels").to(device)
-            supervision = {
-                key: batch.pop(key).to(device)
-                for key in MultimodalEvidenceDataset.SUPERVISION_KEYS
-                if key != "labels"
-            }
             optimizer.zero_grad(set_to_none=True)
-            output = head(**{
-                key: value.to(device) for key, value in batch.items()
-            })
-            loss, parts = multimodal_evidence_loss(
-                output,
-                labels,
-                **supervision,
+            loss, parts = training_objective(
+                head,
+                batch,
+                device,
                 class_weights=class_weights,
                 relevance_weight=args.relevance_weight,
                 stance_weight=args.stance_weight,

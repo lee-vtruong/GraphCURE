@@ -61,6 +61,7 @@ from scripts.cache_mocheg_multimodal_features import (
 )
 from scripts.train_mocheg_multimodal_verifier import (
     MultimodalEvidenceDataset,
+    training_objective,
     validate_cache_pair as validate_multimodal_cache_pair,
 )
 
@@ -665,3 +666,32 @@ def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):
     assert train[0]["claim"].shape == (8,)
     assert train[0]["text_evidence"].shape == (3, 8)
     assert train[0]["visual_evidence"].shape == (4, 10)
+
+
+def test_multimodal_training_objective_preserves_both_masks():
+    head = MultimodalEvidenceHead(
+        claim_dim=8, text_dim=8, visual_dim=10, hidden_dim=16
+    )
+    batch = {
+        "id": ["a", "b"],
+        "claim": torch.randn(2, 8),
+        "text_evidence": torch.randn(2, 3, 8),
+        "text_mask": torch.ones(2, 3, dtype=torch.bool),
+        "text_retrieval_features": torch.randn(2, 3, 6),
+        "visual_evidence": torch.randn(2, 4, 10),
+        "visual_mask": torch.ones(2, 4, dtype=torch.bool),
+        "visual_retrieval_features": torch.randn(2, 4, 3),
+        "text_relevance": torch.tensor([[1, 0, 0], [0, 1, 0]]).float(),
+        "text_relevance_weights": torch.ones(2, 3),
+        "visual_relevance": torch.tensor(
+            [[1, 0, 0, 0], [0, 1, 0, 0]]
+        ).float(),
+        "visual_relevance_weights": torch.ones(2, 4),
+        "labels": torch.tensor([0, 1]),
+    }
+    loss, parts = training_objective(
+        head, batch, torch.device("cpu"), torch.ones(3)
+    )
+    loss.backward()
+    assert torch.isfinite(loss)
+    assert all(torch.isfinite(value) for value in parts.values())
