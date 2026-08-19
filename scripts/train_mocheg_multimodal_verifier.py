@@ -330,6 +330,34 @@ def training_objective(
     )
 
 
+def save_checkpoint(
+    path: Path,
+    head: MultimodalEvidenceHead,
+    args: argparse.Namespace,
+    best_f1: float,
+    cache_metadata: dict,
+    teacher: dict | None,
+) -> None:
+    torch.save({
+        "head": head.state_dict(),
+        "hidden_dim": args.hidden_dim,
+        "dropout": args.dropout,
+        "seed": args.seed,
+        "best_val_macro_f1": best_f1,
+        "cache_metadata": cache_metadata,
+        "loss_weights": {
+            "relevance": args.relevance_weight,
+            "stance": args.stance_weight,
+            "sufficiency": args.sufficiency_weight,
+            "conflict": args.conflict_weight,
+            "gate": args.gate_weight,
+            "visual_gate_target": args.visual_gate_target,
+        },
+        "text_teacher": teacher,
+        "text_branch_frozen": args.freeze_text_branch,
+    }, path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-root", type=Path,
@@ -384,7 +412,17 @@ def main() -> None:
         lr=args.learning_rate,
         weight_decay=args.weight_decay,
     )
-    best_f1 = -1.0
+    initial_validation, _ = evaluate(head, val, args.batch_size, device)
+    best_f1 = initial_validation["macro_f1"]
+    save_checkpoint(
+        args.output / "best.pt", head, args, best_f1, train.metadata, teacher
+    )
+    print(json.dumps({
+        "epoch": 0,
+        "initial_text_anchor": True,
+        **{f"val_{key}": value for key, value in initial_validation.items()
+           if key != "confusion_matrix"},
+    }), flush=True)
     stale = 0
     loss_keys = (
         "verdict", "relevance", "stance", "sufficiency", "conflict", "gate"
@@ -428,24 +466,10 @@ def main() -> None:
         if validation["macro_f1"] > best_f1:
             best_f1 = validation["macro_f1"]
             stale = 0
-            torch.save({
-                "head": head.state_dict(),
-                "hidden_dim": args.hidden_dim,
-                "dropout": args.dropout,
-                "seed": args.seed,
-                "best_val_macro_f1": best_f1,
-                "cache_metadata": train.metadata,
-                "loss_weights": {
-                    "relevance": args.relevance_weight,
-                    "stance": args.stance_weight,
-                    "sufficiency": args.sufficiency_weight,
-                    "conflict": args.conflict_weight,
-                    "gate": args.gate_weight,
-                    "visual_gate_target": args.visual_gate_target,
-                },
-                "text_teacher": teacher,
-                "text_branch_frozen": args.freeze_text_branch,
-            }, args.output / "best.pt")
+            save_checkpoint(
+                args.output / "best.pt", head, args, best_f1,
+                train.metadata, teacher,
+            )
         else:
             stale += 1
             if stale >= args.patience:
