@@ -377,3 +377,11 @@ visual expert and oracle-router ceilings as diagnostics, but compare only the
 learned router as the method result. Proceed to five seeds only if learned
 Macro-F1 exceeds the embedded text-only branch, visual help exceeds harm, and
 the oracle ceiling confirms at least two Macro-F1 points of available headroom.
+
+The first staged run preserved only the zero-residual expert because Stage 2
+incorrectly selected by standalone expert Macro-F1. That criterion is now
+replaced by oracle-router Macro-F1 on validation: complementarity, rather than
+global standalone strength, selects `expert_best.pt`. This oracle is used only
+for development checkpoint selection and ceiling analysis; the deployable gate
+still learns exclusively from train losses. Rerun the same command into the new
+output root `outputs/mocheg_staged_utility_seed42_v2`.

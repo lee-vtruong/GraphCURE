@@ -199,6 +199,13 @@ def main() -> None:
                 break
     head.load_state_dict(best_selector_state)
     stage_summary["selector"] = {"best_val_select_at_1": best_selector}
+    torch.save({
+        "stage": "selector",
+        "head": best_selector_state,
+        "metrics": stage_summary["selector"],
+        "seed": args.seed,
+        "test_split_used": False,
+    }, args.output / "selector_best.pt")
 
     # Stage 2: train a full-strength visual expert while the text anchor and
     # evidence selector remain frozen. The router is deliberately absent.
@@ -208,7 +215,11 @@ def main() -> None:
         expert_modules, args.expert_learning_rate, args.weight_decay
     )
     initial, _ = evaluate(head, val, args.batch_size, device)
-    best_expert = initial["visual_expert_macro_f1"]
+    best_expert_score = initial["oracle_router_macro_f1"]
+    best_expert_metrics = {
+        "visual_expert_macro_f1": initial["visual_expert_macro_f1"],
+        "oracle_router_macro_f1": initial["oracle_router_macro_f1"],
+    }
     best_expert_state = clone_state(head)
     stale = 0
     for epoch in range(1, args.expert_epochs + 1):
@@ -240,9 +251,16 @@ def main() -> None:
             "val_visual_expert_macro_f1": metrics["visual_expert_macro_f1"],
             "val_oracle_router_macro_f1": metrics["oracle_router_macro_f1"],
         }), flush=True)
-        score = metrics["visual_expert_macro_f1"]
-        if score > best_expert:
-            best_expert = score
+        # A complementary expert can be weaker in isolation while correcting
+        # precisely the text anchor's errors. Select it by oracle headroom on
+        # validation; the learned router itself still sees train labels only.
+        score = metrics["oracle_router_macro_f1"]
+        if score > best_expert_score:
+            best_expert_score = score
+            best_expert_metrics = {
+                "visual_expert_macro_f1": metrics["visual_expert_macro_f1"],
+                "oracle_router_macro_f1": metrics["oracle_router_macro_f1"],
+            }
             best_expert_state = clone_state(head)
             stale = 0
         else:
@@ -250,7 +268,17 @@ def main() -> None:
             if stale >= args.expert_patience:
                 break
     head.load_state_dict(best_expert_state)
-    stage_summary["expert"] = {"best_val_macro_f1": best_expert}
+    stage_summary["expert"] = {
+        "selection_metric": "oracle_router_macro_f1",
+        **best_expert_metrics,
+    }
+    torch.save({
+        "stage": "expert",
+        "head": best_expert_state,
+        "metrics": stage_summary["expert"],
+        "seed": args.seed,
+        "test_split_used": False,
+    }, args.output / "expert_best.pt")
 
     # Stage 3: train only the utility gate. Its soft target is the detached
     # per-example reduction in cross-entropy supplied by the visual expert,

@@ -438,6 +438,22 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   supervised only on train by detached per-example cross-entropy reduction
   minus an explicit visual-use cost. Test remains locked.
 
+### R2V-MM-VER-VAL-03 — invalid staged expert selection criterion
+
+- Selector checkpoint: validation Select@1 `0.216028` (**passed**).
+- Saved visual expert, oracle router, and learned router Macro-F1 were all
+  `0.549948`, exactly equal to the frozen text anchor.
+- Final visual gate was effectively zero (`2.06e-9`), with zero help and harm.
+- Status: **engineering/model-selection failure; not a negative result for
+  expert complementarity**.
+- Cause: Stage 2 selected checkpoints by standalone visual-expert Macro-F1.
+  This rejects a specialist that is weaker globally but corrects text-specific
+  errors—the precise behavior that Stage 3 is designed to route.
+- Resolution: select Stage-2 checkpoints by validation oracle-router Macro-F1,
+  record standalone expert performance at that checkpoint, and persist
+  `selector_best.pt` and `expert_best.pt` independently. The learned Stage-3
+  router continues to use train-only cross-entropy-reduction targets.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
