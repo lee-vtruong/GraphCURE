@@ -304,6 +304,23 @@ def test_visual_retrieval_normalizes_unsupported_image_magic(tmp_path):
     assert is_torchvision_supported_image(Path(paths[1]))
 
 
+def test_visual_retrieval_letterboxes_extreme_aspect_ratio(tmp_path):
+    from PIL import Image
+
+    for name, size in (("wide.png", (232, 1)), ("tall.png", (1, 232))):
+        source = tmp_path / name
+        Image.new("RGB", size, "red").save(source)
+        normalized, converted = normalize_image_paths(
+            [str(source)], tmp_path / "cache"
+        )
+        assert converted == 1
+        assert Path(normalized[0]) != source
+        with Image.open(normalized[0]) as result:
+            width, height = result.size
+        assert max(width, height) / min(width, height) < 200
+        assert max(width, height) == 232
+
+
 def test_visual_retrieval_image_embedding_cache_is_resumable(tmp_path):
     from PIL import Image
 

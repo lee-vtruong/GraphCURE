@@ -257,3 +257,9 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_visual_retrieval \
   --query-batch-size 16 --score-batch-size 32 \
   --device cuda --splits train
 ```
+
+The initial train materialization stopped at shard `284/305` on an image with
+aspect ratio `232.0`; the libpng iCCP warning was unrelated and harmless.
+Preprocessing now letterboxes only images at or above Qwen's forbidden ratio
+of 200 to a safe ratio of 190. Existing completed shards remain valid and are
+reused when the identical command is resumed.

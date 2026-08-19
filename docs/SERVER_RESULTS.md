@@ -356,6 +356,18 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   train-only qrel positives, and develop the multimodal verifier on
   train/validation.
 
+### R2V-VIS-TRAIN-CACHE-01 — resumable aspect-ratio failure
+
+- Train image embedding reached shard `284/305` (`93%`) before encountering
+  an image with absolute aspect ratio `232.0`; Qwen requires a ratio `<200`.
+- The accompanying libpng iCCP message is a non-fatal metadata warning.
+- No completed work was lost: image embeddings are checkpointed per 256-image
+  shard and the failing shard was not committed.
+- Resolution: preprocessing now detects images with aspect ratio `>=200` and
+  letterboxes them to ratio at most `190` without stretching or cropping.
+  Decoder-incompatible formats and geometric normalization share a versioned
+  RGB-PNG cache. Resume the identical train retrieval command.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

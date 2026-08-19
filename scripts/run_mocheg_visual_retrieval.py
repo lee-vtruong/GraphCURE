@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -66,26 +67,44 @@ def is_torchvision_supported_image(path: Path) -> bool:
 
 
 def normalize_image_paths(paths: list[str], cache_root: Path) -> tuple[list[str], int]:
-    """Convert decoder-incompatible images to cached RGB PNG files.
+    """Normalize decoder-incompatible or pathologically shaped images.
 
     MOCHEG contains a small number of BMP, TIFF, and PSD payloads, including
     files with misleading extensions. Qwen's current torchvision-backed image
-    loader rejects these formats, so format detection must use file magic.
+    loader rejects these formats, so format detection must use file magic. Its
+    smart-resize path also requires an absolute aspect ratio strictly below
+    200. Extremely thin images are therefore letterboxed, never stretched or
+    cropped, to a conservative maximum ratio of 190.
     """
     from PIL import Image, ImageOps
 
+    maximum_supported_ratio = 200.0
+    normalized_ratio = 190.0
     normalized: list[str] = []
     converted = 0
     target_root = cache_root / "normalized_images"
     for raw_path in paths:
         source = Path(raw_path)
-        if is_torchvision_supported_image(source):
+        supported_format = is_torchvision_supported_image(source)
+        try:
+            with Image.open(source) as probe:
+                width, height = probe.size
+        except Exception as error:
+            raise RuntimeError(f"cannot inspect image {source}: {error}") from error
+        if width <= 0 or height <= 0:
+            raise RuntimeError(f"invalid image dimensions for {source}: {width}x{height}")
+        aspect_ratio = max(width, height) / min(width, height)
+        extreme_aspect = aspect_ratio >= maximum_supported_ratio
+        if supported_format and not extreme_aspect:
             normalized.append(str(source))
             continue
 
         stat = source.stat()
         identity = hashlib.sha256(
-            f"{source.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode()
+            (
+                "image-normalization-v2:"
+                f"{source.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+            ).encode()
         ).hexdigest()[:24]
         target = target_root / f"{identity}.png"
         if not target.exists():
@@ -93,12 +112,35 @@ def normalize_image_paths(paths: list[str], cache_root: Path) -> tuple[list[str]
             try:
                 with Image.open(source) as image:
                     image = ImageOps.exif_transpose(image).convert("RGB")
+                    width, height = image.size
+                    if max(width, height) / min(width, height) >= maximum_supported_ratio:
+                        if width >= height:
+                            target_width = width
+                            target_height = max(
+                                height, math.ceil(width / normalized_ratio)
+                            )
+                        else:
+                            target_width = max(
+                                width, math.ceil(height / normalized_ratio)
+                            )
+                            target_height = height
+                        canvas = Image.new(
+                            "RGB", (target_width, target_height), "white"
+                        )
+                        canvas.paste(
+                            image,
+                            (
+                                (target_width - width) // 2,
+                                (target_height - height) // 2,
+                            ),
+                        )
+                        image = canvas
                     temporary = target.with_suffix(".tmp")
                     image.save(temporary, format="PNG")
                     temporary.replace(target)
             except Exception as error:
                 raise RuntimeError(
-                    f"cannot normalize unsupported image {source}: {error}"
+                    f"cannot normalize image {source}: {error}"
                 ) from error
         normalized.append(str(target.resolve()))
         converted += 1
@@ -122,7 +164,8 @@ def encode_images(model: Any, names: list[str], paths: list[str],
     normalized_paths, converted = normalize_image_paths(paths, cache_root)
     if converted:
         print(
-            f"{split}: normalized {converted} decoder-incompatible image(s) "
+            f"{split}: normalized {converted} decoder-incompatible or "
+            "pathologically shaped image(s) "
             f"to {cache_root / 'normalized_images'}"
         )
 
