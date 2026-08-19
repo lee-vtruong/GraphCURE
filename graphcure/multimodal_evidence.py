@@ -37,10 +37,24 @@ class MultimodalEvidenceHead(nn.Module):
         self.visual_utility, self.visual_stance = self._pair_heads(
             hidden_dim, visual_retrieval_dim, num_labels, dropout
         )
+        self.text_sufficiency = nn.Sequential(
+            nn.LayerNorm(hidden_dim * 2 + num_labels),
+            nn.Linear(hidden_dim * 2 + num_labels, hidden_dim // 2),
+            nn.GELU(),
+            nn.Linear(hidden_dim // 2, 1),
+        )
+        self.text_verdict = nn.Sequential(
+            nn.LayerNorm(hidden_dim * 4 + num_labels + 1),
+            nn.Linear(hidden_dim * 4 + num_labels + 1, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_labels),
+        )
         # q, text summary, visual summary, |text-visual|, q*text, q*visual,
         # aggregate stance, cross-modal stance conflict, modality mass,
         # and the learned sufficiency scalar.
         verdict_dim = hidden_dim * 6 + num_labels * 2 + 3
+        gate_dim = hidden_dim * 4 + num_labels * 2 + 6
         sufficiency_dim = hidden_dim * 3 + num_labels * 2 + 2
         self.sufficiency = nn.Sequential(
             nn.LayerNorm(sufficiency_dim),
@@ -49,13 +63,26 @@ class MultimodalEvidenceHead(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, 1),
         )
-        self.verdict = nn.Sequential(
+        self.visual_residual = nn.Sequential(
             nn.LayerNorm(verdict_dim),
             nn.Linear(verdict_dim, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, num_labels),
         )
+        self.visual_gate = nn.Sequential(
+            nn.LayerNorm(gate_dim),
+            nn.Linear(gate_dim, hidden_dim // 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim // 2, 1),
+        )
+        # Begin as a conservative text-first adapter. The residual starts at
+        # zero and the gate prior is 0.1, so loading a frozen text verifier
+        # exactly preserves its predictions before multimodal training.
+        nn.init.zeros_(self.visual_residual[-1].weight)
+        nn.init.zeros_(self.visual_residual[-1].bias)
+        nn.init.constant_(self.visual_gate[-1].bias, -2.1972246)
 
     @staticmethod
     def _pair_heads(hidden_dim: int, retrieval_dim: int, num_labels: int,
@@ -90,14 +117,31 @@ class MultimodalEvidenceHead(nn.Module):
         return torch.sum(weights.unsqueeze(-1) * values, dim=1)
 
     @staticmethod
+    def _masked_softmax(logits: torch.Tensor,
+                        mask: torch.Tensor) -> torch.Tensor:
+        mask = mask.bool()
+        probabilities = torch.softmax(logits.masked_fill(~mask, -1e4), dim=1)
+        probabilities = probabilities * mask.float()
+        return probabilities / probabilities.sum(1, keepdim=True).clamp_min(1e-6)
+
+    @staticmethod
+    def _normalized_entropy(attention: torch.Tensor,
+                            mask: torch.Tensor) -> torch.Tensor:
+        entropy = -torch.sum(
+            attention * torch.log(attention.clamp_min(1e-8)), dim=1
+        )
+        denominator = torch.log(mask.float().sum(1).clamp_min(2.0))
+        return entropy / denominator
+
+    @staticmethod
     def _modality_stance(stance: torch.Tensor, attention: torch.Tensor,
-                         mask: torch.Tensor, mass: torch.Tensor) -> torch.Tensor:
+                         mask: torch.Tensor) -> torch.Tensor:
         probability = torch.softmax(stance, dim=-1)
         weighted = torch.sum(
             attention.unsqueeze(-1) * probability * mask.unsqueeze(-1).float(),
             dim=1,
         )
-        return weighted / mass.unsqueeze(-1).clamp_min(1e-6)
+        return weighted
 
     def forward(
         self,
@@ -118,16 +162,11 @@ class MultimodalEvidenceHead(nn.Module):
         visual_utility = self.visual_utility(visual_pair).squeeze(-1)
         text_utility = text_utility.masked_fill(~text_mask.bool(), -1e4)
         visual_utility = visual_utility.masked_fill(~visual_mask.bool(), -1e4)
-        joint_mask = torch.cat((text_mask.bool(), visual_mask.bool()), dim=1)
-        joint_utility = torch.cat((text_utility, visual_utility), dim=1)
-        joint_utility = joint_utility.masked_fill(~joint_mask, -1e4)
-        joint_attention = torch.softmax(joint_utility, dim=1)
-        text_count = text.shape[1]
-        text_attention = joint_attention[:, :text_count]
-        visual_attention = joint_attention[:, text_count:]
-        text_mass = torch.sum(text_attention * text_mask.float(), dim=1)
-        visual_mass = torch.sum(visual_attention * visual_mask.float(), dim=1)
-        modality_mass = torch.stack((text_mass, visual_mass), dim=-1)
+        # Normalize candidates inside each modality. A single joint softmax
+        # gives the modality with more candidates a spurious prior (32 visual
+        # candidates versus 8 text candidates yielded ~0.8 visual mass).
+        text_attention = self._masked_softmax(text_utility, text_mask)
+        visual_attention = self._masked_softmax(visual_utility, visual_mask)
         text_summary = self._masked_summary(
             text, text_attention, text_mask.bool()
         )
@@ -137,18 +176,65 @@ class MultimodalEvidenceHead(nn.Module):
         text_stance_logits = self.text_stance(text_pair)
         visual_stance_logits = self.visual_stance(visual_pair)
         text_stance = self._modality_stance(
-            text_stance_logits, text_attention, text_mask.bool(), text_mass
+            text_stance_logits, text_attention, text_mask.bool()
         )
         visual_stance = self._modality_stance(
-            visual_stance_logits, visual_attention, visual_mask.bool(), visual_mass
-        )
-        aggregate_stance = (
-            text_stance * text_mass.unsqueeze(-1)
-            + visual_stance * visual_mass.unsqueeze(-1)
+            visual_stance_logits, visual_attention, visual_mask.bool()
         )
         conflict = torch.abs(text_stance - visual_stance)
         both_modalities = (text_mask.any(1) & visual_mask.any(1)).unsqueeze(-1)
         conflict = conflict * both_modalities.float()
+        text_sufficiency_input = torch.cat((q, text_summary, text_stance), dim=-1)
+        text_sufficiency_logit = self.text_sufficiency(
+            text_sufficiency_input
+        ).squeeze(-1)
+        text_verdict_input = torch.cat(
+            (
+                q,
+                text_summary,
+                torch.abs(q - text_summary),
+                q * text_summary,
+                text_stance,
+                torch.sigmoid(text_sufficiency_logit).unsqueeze(-1),
+            ),
+            dim=-1,
+        )
+        text_verdict_logits = self.text_verdict(text_verdict_input)
+        text_entropy = self._normalized_entropy(text_attention, text_mask)
+        visual_entropy = self._normalized_entropy(visual_attention, visual_mask)
+        visual_quality = torch.sum(
+            visual_attention * visual_retrieval_features[..., 1].float(), dim=1
+        )
+        gate_statistics = torch.stack(
+            (
+                text_entropy,
+                visual_entropy,
+                text_mask.any(1).float(),
+                visual_mask.any(1).float(),
+                visual_quality,
+                visual_attention.max(1).values,
+            ),
+            dim=-1,
+        )
+        gate_input = torch.cat(
+            (
+                q,
+                text_summary,
+                visual_summary,
+                torch.abs(text_summary - visual_summary),
+                text_stance,
+                visual_stance,
+                gate_statistics,
+            ),
+            dim=-1,
+        )
+        visual_gate = torch.sigmoid(self.visual_gate(gate_input).squeeze(-1))
+        visual_gate = visual_gate * visual_mask.any(1).float()
+        modality_mass = torch.stack((1.0 - visual_gate, visual_gate), dim=-1)
+        aggregate_stance = (
+            text_stance * (1.0 - visual_gate).unsqueeze(-1)
+            + visual_stance * visual_gate.unsqueeze(-1)
+        )
         sufficiency_input = torch.cat(
             (
                 q, text_summary, visual_summary, aggregate_stance, conflict,
@@ -172,8 +258,15 @@ class MultimodalEvidenceHead(nn.Module):
             ),
             dim=-1,
         )
+        visual_residual = self.visual_residual(verdict_input)
+        verdict_logits = (
+            text_verdict_logits + visual_gate.unsqueeze(-1) * visual_residual
+        )
         return {
-            "verdict_logits": self.verdict(verdict_input),
+            "verdict_logits": verdict_logits,
+            "text_verdict_logits": text_verdict_logits,
+            "visual_residual_logits": visual_residual,
+            "visual_gate": visual_gate,
             "text_utility_logits": text_utility,
             "visual_utility_logits": visual_utility,
             "text_attention": text_attention,
@@ -188,14 +281,21 @@ class MultimodalEvidenceHead(nn.Module):
 
 def _masked_relevance_loss(logits: torch.Tensor, relevance: torch.Tensor,
                            mask: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
-    selected = mask.bool()
-    if not selected.any():
+    del weights  # Qrels are incomplete; listwise positives are safer than BCE negatives.
+    mask = mask.bool()
+    positive = relevance.bool() & mask
+    rows = positive.any(1)
+    if not rows.any():
         return logits.new_zeros(())
-    terms = F.binary_cross_entropy_with_logits(
-        logits[selected].float(), relevance[selected].float(), reduction="none"
+    masked_logits = logits.float().masked_fill(~mask, -1e4)
+    positive_logits = masked_logits.masked_fill(~positive, -1e4)
+    # Maximize the probability mass assigned to any annotated positive. This
+    # avoids the 31:1 negative imbalance that collapsed visual Select@1.
+    losses = -(
+        torch.logsumexp(positive_logits, dim=1)
+        - torch.logsumexp(masked_logits, dim=1)
     )
-    chosen_weights = weights[selected].float()
-    return torch.sum(terms * chosen_weights) / chosen_weights.sum().clamp_min(1.0)
+    return losses[rows].mean()
 
 
 def _stance_loss(logits: torch.Tensor, labels: torch.Tensor,
@@ -221,6 +321,8 @@ def multimodal_evidence_loss(
     stance_weight: float = 0.15,
     sufficiency_weight: float = 0.15,
     conflict_weight: float = 0.05,
+    gate_weight: float = 0.10,
+    visual_gate_target: float = 0.25,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     verdict = F.cross_entropy(
         outputs["verdict_logits"].float(), labels, weight=class_weights
@@ -254,6 +356,11 @@ def multimodal_evidence_loss(
         outputs["conflict"][both_relevant].mean()
         if both_relevant.any() else verdict.new_zeros(())
     )
+    visual_available = (visual_relevance.bool() & visual_mask.bool()).any(1).float()
+    gate_target = visual_available * visual_gate_target
+    gate = F.binary_cross_entropy(
+        outputs["visual_gate"].float().clamp(1e-6, 1.0 - 1e-6), gate_target
+    )
     relevance = 0.5 * (text_relevance_loss + visual_relevance_loss)
     stance = 0.5 * (text_stance + visual_stance)
     total = (
@@ -262,6 +369,7 @@ def multimodal_evidence_loss(
         + stance_weight * stance
         + sufficiency_weight * sufficiency
         + conflict_weight * conflict
+        + gate_weight * gate
     )
     return total, {
         "verdict": verdict.detach(),
@@ -269,4 +377,5 @@ def multimodal_evidence_loss(
         "stance": stance.detach(),
         "sufficiency": sufficiency.detach(),
         "conflict": conflict.detach(),
+        "gate": gate.detach(),
     }

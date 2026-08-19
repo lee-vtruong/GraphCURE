@@ -388,6 +388,24 @@ test retrieval remains locked until architecture and hyperparameters freeze.
 - Decision: **train visual cache gate passed**; assemble the leakage-audited
   text/visual feature cache and screen one validation-only verifier seed.
 
+### R2V-MM-VER-VAL-01 — invalid candidate-count-biased fusion
+
+- Split: MOCHEG strict validation (`n=1456`); **test split not used**
+- Accuracy/Macro-F1: `0.567308 / 0.547740`
+- Text/visual gold coverage: `0.943681 / 0.394231`
+- Text/visual Select@1: `0.878457 / 0.048780`
+- Mean visual modality mass: `0.691079`; ECE-10: `0.028160`
+- Status: **architecture gate failed; exclude as the final multimodal model**.
+- Diagnosis: a joint softmax normalized 8 text and 32 visual candidates
+  together. Candidate count alone gives visual evidence an approximately
+  `32/(32+8)=0.8` prior, explaining high visual mass despite nearly random
+  visual selection (`1/32=0.03125`). Verdict Macro-F1 was also `0.00221` below
+  the frozen seed-42 text verifier (`0.549948`).
+- Resolution: normalize evidence attention separately within each modality;
+  replace imbalanced candidate-wise BCE with positive-mass listwise selection;
+  initialize from the frozen text verifier; and learn only a conservative,
+  reliability-gated visual residual during the next screen.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

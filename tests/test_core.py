@@ -61,6 +61,7 @@ from scripts.cache_mocheg_multimodal_features import (
 )
 from scripts.train_mocheg_multimodal_verifier import (
     MultimodalEvidenceDataset,
+    load_text_teacher,
     training_objective,
     validate_cache_pair as validate_multimodal_cache_pair,
 )
@@ -605,6 +606,9 @@ def test_multimodal_evidence_head_and_loss_are_finite():
     assert output["text_attention"].shape == (2, 3)
     assert output["visual_attention"].shape == (2, 4)
     assert torch.allclose(
+        output["verdict_logits"], output["text_verdict_logits"]
+    )
+    assert torch.allclose(
         output["modality_mass"].sum(-1), torch.ones(2), atol=1e-5
     )
     assert torch.isfinite(loss)
@@ -695,3 +699,46 @@ def test_multimodal_training_objective_preserves_both_masks():
     loss.backward()
     assert torch.isfinite(loss)
     assert all(torch.isfinite(value) for value in parts.values())
+
+
+def test_multimodal_text_teacher_transfer_preserves_predictions(tmp_path):
+    teacher = EvidenceSetHead(
+        encoder_dim=8, hidden_dim=16, retrieval_dim=6, dropout=0.0
+    ).eval()
+    checkpoint = tmp_path / "teacher.pt"
+    torch.save({
+        "head": teacher.state_dict(),
+        "seed": 42,
+        "best_val_macro_f1": 0.55,
+    }, checkpoint)
+    student = MultimodalEvidenceHead(
+        claim_dim=8,
+        text_dim=8,
+        visual_dim=10,
+        hidden_dim=16,
+        dropout=0.0,
+    ).eval()
+    provenance = load_text_teacher(student, checkpoint)
+    claim = torch.randn(2, 8)
+    evidence = torch.randn(2, 3, 8)
+    mask = torch.tensor([[1, 1, 0], [1, 1, 1]], dtype=torch.bool)
+    retrieval = torch.randn(2, 3, 6)
+    teacher_output = teacher(claim, evidence, mask, retrieval)
+    student_output = student(
+        claim=claim,
+        text_evidence=evidence,
+        text_mask=mask,
+        text_retrieval_features=retrieval,
+        visual_evidence=torch.zeros(2, 4, 10),
+        visual_mask=torch.zeros(2, 4, dtype=torch.bool),
+        visual_retrieval_features=torch.zeros(2, 4, 3),
+    )
+    assert provenance["transferred_tensors"] == len(teacher.state_dict())
+    assert torch.allclose(
+        student_output["verdict_logits"],
+        teacher_output["verdict_logits"],
+        atol=1e-6,
+    )
+    assert torch.allclose(
+        student_output["text_attention"], teacher_output["attention"], atol=1e-6
+    )

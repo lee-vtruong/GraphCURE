@@ -109,6 +109,7 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
     head.eval()
     labels: list[int] = []
     predictions: list[int] = []
+    text_predictions: list[int] = []
     probabilities: list[list[float]] = []
     text_coverage: list[bool] = []
     visual_coverage: list[bool] = []
@@ -116,6 +117,8 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
     visual_hits: list[bool] = []
     visual_mass: list[float] = []
     conflicts: list[float] = []
+    gates_with_gold: list[float] = []
+    gates_without_gold: list[float] = []
     rows: list[dict] = []
     loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
     for batch in tqdm(loader, desc="evaluate", leave=False):
@@ -132,6 +135,7 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
             output["verdict_logits"].float(), dim=-1
         ).cpu()
         prediction = probability.argmax(-1)
+        text_prediction = output["text_verdict_logits"].float().cpu().argmax(-1)
         text_selected = output["text_attention"].cpu().argmax(-1)
         visual_selected = output["visual_attention"].cpu().argmax(-1)
         modality_mass = output["modality_mass"].float().cpu()
@@ -153,11 +157,16 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
                     visual_relevance[index, visual_selected[index]]
                 ))
             visual_mass.append(float(modality_mass[index, 1]))
+            if has_visual:
+                gates_with_gold.append(float(modality_mass[index, 1]))
+            else:
+                gates_without_gold.append(float(modality_mass[index, 1]))
             conflicts.append(float(conflict[index]))
             rows.append({
                 "id": sample_id,
                 "gold": int(target[index]),
                 "prediction": int(prediction[index]),
+                "text_only_prediction": int(text_prediction[index]),
                 "probabilities": probability[index].tolist(),
                 "text_gold_in_candidates": has_text,
                 "visual_gold_in_candidates": has_visual,
@@ -173,14 +182,18 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
             })
         labels.extend(target.tolist())
         predictions.extend(prediction.tolist())
+        text_predictions.extend(text_prediction.tolist())
         probabilities.extend(probability.tolist())
     y = np.asarray(labels)
     pred = np.asarray(predictions)
+    text_pred = np.asarray(text_predictions)
     prob = np.asarray(probabilities)
     return {
         "samples": len(y),
         "accuracy": float(accuracy_score(y, pred)),
         "macro_f1": float(f1_score(y, pred, average="macro")),
+        "text_only_accuracy": float(accuracy_score(y, text_pred)),
+        "text_only_macro_f1": float(f1_score(y, text_pred, average="macro")),
         "confusion_matrix": confusion_matrix(y, pred).tolist(),
         "text_gold_coverage": float(np.mean(text_coverage)),
         "visual_gold_coverage": float(np.mean(visual_coverage)),
@@ -188,6 +201,12 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         "visual_selection_hit_at_1": float(np.mean(visual_hits))
         if visual_hits else 0.0,
         "visual_modality_mass_mean": float(np.mean(visual_mass)),
+        "visual_gate_gold_mean": float(np.mean(gates_with_gold))
+        if gates_with_gold else 0.0,
+        "visual_gate_non_gold_mean": float(np.mean(gates_without_gold))
+        if gates_without_gold else 0.0,
+        "visual_help_rate": float(np.mean((text_pred != y) & (pred == y))),
+        "visual_harm_rate": float(np.mean((text_pred == y) & (pred != y))),
         "constraint_conflict_mean": float(np.mean(conflicts)),
         "ece_10": expected_calibration_error(prob, y),
     }, rows
@@ -203,6 +222,73 @@ def build_head(metadata: dict, args: argparse.Namespace) -> MultimodalEvidenceHe
     )
 
 
+TEXT_TEACHER_PREFIXES = {
+    "claim_projection.": "claim_projection.",
+    "evidence_projection.": "text_projection.",
+    "utility.": "text_utility.",
+    "stance.": "text_stance.",
+    "sufficiency.": "text_sufficiency.",
+    "verdict.": "text_verdict.",
+}
+
+
+def load_text_teacher(head: MultimodalEvidenceHead,
+                      checkpoint_path: Path) -> dict:
+    checkpoint = torch.load(
+        checkpoint_path, map_location="cpu", weights_only=False
+    )
+    source = checkpoint.get("head")
+    if not isinstance(source, dict):
+        raise ValueError(f"{checkpoint_path} does not contain an evidence head")
+    destination = head.state_dict()
+    transferred = {}
+    for source_key, value in source.items():
+        for old_prefix, new_prefix in TEXT_TEACHER_PREFIXES.items():
+            if source_key.startswith(old_prefix):
+                target_key = new_prefix + source_key[len(old_prefix):]
+                if target_key not in destination:
+                    raise ValueError(f"missing text-teacher target: {target_key}")
+                if destination[target_key].shape != value.shape:
+                    raise ValueError(
+                        f"text-teacher shape mismatch for {target_key}: "
+                        f"{tuple(value.shape)} != {tuple(destination[target_key].shape)}"
+                    )
+                transferred[target_key] = value
+                break
+    expected = {
+        key for key in destination
+        if any(key.startswith(prefix) for prefix in TEXT_TEACHER_PREFIXES.values())
+    }
+    if set(transferred) != expected:
+        missing = sorted(expected - set(transferred))
+        raise ValueError(f"incomplete text-teacher transfer: {missing}")
+    head.load_state_dict(transferred, strict=False)
+    return {
+        "checkpoint": str(checkpoint_path),
+        "seed": checkpoint.get("seed"),
+        "best_val_macro_f1": checkpoint.get("best_val_macro_f1"),
+        "transferred_tensors": len(transferred),
+    }
+
+
+def text_branch_modules(head: MultimodalEvidenceHead) -> tuple[torch.nn.Module, ...]:
+    return (
+        head.claim_projection,
+        head.text_projection,
+        head.text_utility,
+        head.text_stance,
+        head.text_sufficiency,
+        head.text_verdict,
+    )
+
+
+def freeze_text_branch(head: MultimodalEvidenceHead) -> None:
+    for module in text_branch_modules(head):
+        module.eval()
+        for parameter in module.parameters():
+            parameter.requires_grad = False
+
+
 def training_objective(
     head: MultimodalEvidenceHead,
     batch: dict,
@@ -212,6 +298,8 @@ def training_objective(
     stance_weight: float = 0.15,
     sufficiency_weight: float = 0.15,
     conflict_weight: float = 0.05,
+    gate_weight: float = 0.10,
+    visual_gate_target: float = 0.25,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Compute one training objective without dropping model masks."""
     batch = dict(batch)
@@ -237,6 +325,8 @@ def training_objective(
         stance_weight=stance_weight,
         sufficiency_weight=sufficiency_weight,
         conflict_weight=conflict_weight,
+        gate_weight=gate_weight,
+        visual_gate_target=visual_gate_target,
     )
 
 
@@ -257,6 +347,10 @@ def main() -> None:
     parser.add_argument("--stance-weight", type=float, default=0.15)
     parser.add_argument("--sufficiency-weight", type=float, default=0.15)
     parser.add_argument("--conflict-weight", type=float, default=0.05)
+    parser.add_argument("--gate-weight", type=float, default=0.10)
+    parser.add_argument("--visual-gate-target", type=float, default=0.25)
+    parser.add_argument("--text-checkpoint", type=Path)
+    parser.add_argument("--freeze-text-branch", action="store_true")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -269,6 +363,13 @@ def main() -> None:
     val = MultimodalEvidenceDataset(args.cache_root / "val.pt")
     validate_cache_pair(train, val)
     head = build_head(train.metadata, args).to(device)
+    teacher = None
+    if args.text_checkpoint is not None:
+        teacher = load_text_teacher(head, args.text_checkpoint)
+    if args.freeze_text_branch:
+        if args.text_checkpoint is None:
+            parser.error("--freeze-text-branch requires --text-checkpoint")
+        freeze_text_branch(head)
     counts = torch.bincount(train.data["labels"], minlength=3).float()
     class_weights = (counts.sum() / (3 * counts.clamp_min(1))).to(device)
     loader = DataLoader(
@@ -279,13 +380,19 @@ def main() -> None:
         pin_memory=device.type == "cuda",
     )
     optimizer = torch.optim.AdamW(
-        head.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
+        [parameter for parameter in head.parameters() if parameter.requires_grad],
+        lr=args.learning_rate,
+        weight_decay=args.weight_decay,
     )
     best_f1 = -1.0
     stale = 0
-    loss_keys = ("verdict", "relevance", "stance", "sufficiency", "conflict")
+    loss_keys = (
+        "verdict", "relevance", "stance", "sufficiency", "conflict", "gate"
+    )
     for epoch in range(1, args.epochs + 1):
         head.train()
+        if args.freeze_text_branch:
+            freeze_text_branch(head)
         running = 0.0
         part_sums = {key: 0.0 for key in loss_keys}
         for batch in loader:
@@ -299,6 +406,8 @@ def main() -> None:
                 stance_weight=args.stance_weight,
                 sufficiency_weight=args.sufficiency_weight,
                 conflict_weight=args.conflict_weight,
+                gate_weight=args.gate_weight,
+                visual_gate_target=args.visual_gate_target,
             )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(head.parameters(), 1.0)
@@ -331,7 +440,11 @@ def main() -> None:
                     "stance": args.stance_weight,
                     "sufficiency": args.sufficiency_weight,
                     "conflict": args.conflict_weight,
+                    "gate": args.gate_weight,
+                    "visual_gate_target": args.visual_gate_target,
                 },
+                "text_teacher": teacher,
+                "text_branch_frozen": args.freeze_text_branch,
             }, args.output / "best.pt")
         else:
             stale += 1
@@ -351,6 +464,8 @@ def main() -> None:
         "seed": args.seed,
         "checkpoint": str(args.output / "best.pt"),
         "test_split_used": False,
+        "text_teacher": teacher,
+        "text_branch_frozen": args.freeze_text_branch,
     }
     (args.output / "val_metrics.json").write_text(
         json.dumps(metrics, indent=2) + "\n", encoding="utf-8"

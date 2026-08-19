@@ -314,14 +314,31 @@ qrels. Then run one validation-only screen:
 ```bash
 CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_multimodal_verifier \
   --cache-root data/processed/mocheg_multimodal_cache \
-  --output outputs/mocheg_multimodal_verifier_seed42 \
+  --output outputs/mocheg_multimodal_residual_seed42 \
+  --text-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --freeze-text-branch \
   --hidden-dim 384 --batch-size 128 \
+  --relevance-weight 0.50 \
+  --gate-weight 0.10 --visual-gate-target 0.25 \
   --epochs 60 --patience 10 --seed 42 --device cuda \
-  2>&1 | tee outputs/mocheg-multimodal-verifier-seed42.log
+  2>&1 | tee outputs/mocheg-multimodal-residual-seed42.log
 ```
 
-The screen reports verdict Macro-F1, text/visual Select@1, visual modality
-mass, conflict, and ECE. Continue to five seeds only if validation Macro-F1 is
-at least `0.55`, visual Select@1 is at least `0.15` (well above random
-`1/32`), and mean visual mass is non-degenerate (`0.05` to `0.50`). The test
-split remains locked throughout this screen.
+The first joint-softmax screen produced Macro-F1 `0.547740`, visual Select@1
+`0.048780`, and visual mass `0.691079`. This failed the architecture gate:
+candidate count, rather than reliability, dominated modality allocation.
+
+The revised screen normalizes attention within each modality, uses listwise
+positive-mass supervision for evidence selection, transfers the exact frozen
+text verifier, and learns a visual residual behind a reliability gate. The
+screen reports combined and text-only Macro-F1, text/visual Select@1, gate mass,
+visual help/harm rates, conflict, and ECE. Continue to five seeds only if:
+
+- combined validation Macro-F1 is at least `0.55` and no lower than its
+  embedded text-only branch;
+- visual Select@1 is at least `0.15` (well above random `1/32`);
+- visual gate mass is at most `0.35`, and gate mass with a gold visual
+  candidate is greater than without one; and
+- visual help rate is greater than visual harm rate.
+
+The test split remains locked throughout this screen.
