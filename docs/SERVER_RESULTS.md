@@ -368,6 +368,26 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   Decoder-incompatible formats and geometric normalization share a versioned
   RGB-PNG cache. Resume the identical train retrieval command.
 
+### R2V-VIS-RET-TRAIN-01 — direct visual hard-negative materialization
+
+- Split: MOCHEG strict train (`n=11631`); image corpus: `78031`
+- Claims with aligned gold images: `6867`
+- Model: `Qwen/Qwen3-VL-Embedding-2B`; output top-50
+- Raw Recall@1/5/10/50:
+  `0.137821 / 0.185883 / 0.202734 / 0.250537`
+- Conditional Recall@1/5/10/50 among claims with aligned gold images:
+  `0.233435 / 0.314839 / 0.343381 / 0.424348`
+- Raw/conditional MRR: `0.160478 / 0.271811`
+- Output integrity: `11631/11631` rows; visual retrieval signature
+  `d9fa11aba6eb63d53e4d99f620dff68dcdaa23c8796a24ab35e336e34b05fcdc`.
+- Interpretation: the much larger train image corpus makes direct retrieval
+  harder than validation. Reranking all `11631 x 400` train pairs with the 2B
+  teacher would be unnecessarily expensive. The frozen verifier protocol uses
+  direct train top-50 as hard negatives and injects train qrel positives only.
+  Validation uses the frozen reranked output and never injects qrels.
+- Decision: **train visual cache gate passed**; assemble the leakage-audited
+  text/visual feature cache and screen one validation-only verifier seed.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

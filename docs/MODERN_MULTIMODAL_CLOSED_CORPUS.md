@@ -263,3 +263,67 @@ aspect ratio `232.0`; the libpng iCCP warning was unrelated and harmless.
 Preprocessing now letterboxes only images at or above Qwen's forbidden ratio
 of 200 to a safe ratio of 190. Existing completed shards remain valid and are
 reused when the identical command is resumed.
+
+### Stage B4: multimodal evidence-set verifier
+
+The completed train retrieval has raw Recall@1/5/10/50 of
+`0.137821 / 0.185883 / 0.202734 / 0.250537` and conditional recall of
+`0.233435 / 0.314839 / 0.343381 / 0.424348`. This is used as a source of hard
+visual negatives. Gold visual candidates are injected and deterministically
+shuffled for **training only**. Validation consumes the already frozen
+Qwen3-VL reranker output; its qrels are used only to compute auxiliary metrics,
+never to build the candidate set.
+
+Assemble frozen text and image features on CPU. The command reads the existing
+Qwen image memmaps and normally needs no GPU or model download:
+
+```bash
+python -m scripts.cache_mocheg_multimodal_features \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --text-cache-root data/processed/mocheg_reasoning_cache \
+  --train-visual-retrieval \
+    outputs/retrieval_mocheg_qwen3vl_images_train_top50/train.jsonl \
+  --val-visual-retrieval \
+    outputs/retrieval_mocheg_visual_reranked/val.jsonl \
+  --image-cache-root data/processed/retrieval_cache \
+  --output-root data/processed/mocheg_multimodal_cache \
+  --visual-model Qwen/Qwen3-VL-Embedding-2B \
+  --visual-top-k 32 \
+  2>&1 | tee outputs/mocheg-multimodal-cache.log
+```
+
+Audit the protocol flags before training:
+
+```bash
+python - <<'PY'
+import torch
+for split in ("train", "val"):
+    path = f"data/processed/mocheg_multimodal_cache/{split}.pt"
+    row = torch.load(path, map_location="cpu", weights_only=False)
+    meta = row["metadata"]
+    coverage = row["visual_relevance"].bool().any(1).float().mean().item()
+    print(split, "samples=", len(row["ids"]), "size=", tuple(row["visual_evidence_embeddings"].shape))
+    print("  train_gold_injection=", meta["train_gold_injection"])
+    print("  validation_gold_injection=", meta["validation_gold_injection"])
+    print("  visual_gold_coverage=", round(coverage, 6))
+PY
+```
+
+Required audit: train injection is `True`, validation injection is `False`,
+and validation visual coverage is determined by frozen retrieval rather than
+qrels. Then run one validation-only screen:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_multimodal_verifier \
+  --cache-root data/processed/mocheg_multimodal_cache \
+  --output outputs/mocheg_multimodal_verifier_seed42 \
+  --hidden-dim 384 --batch-size 128 \
+  --epochs 60 --patience 10 --seed 42 --device cuda \
+  2>&1 | tee outputs/mocheg-multimodal-verifier-seed42.log
+```
+
+The screen reports verdict Macro-F1, text/visual Select@1, visual modality
+mass, conflict, and ECE. Continue to five seeds only if validation Macro-F1 is
+at least `0.55`, visual Select@1 is at least `0.15` (well above random
+`1/32`), and mean visual mass is non-degenerate (`0.05` to `0.50`). The test
+split remains locked throughout this screen.

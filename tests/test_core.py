@@ -10,6 +10,10 @@ from graphcure.data import PackedEmbeddingDataset, resolve_newsclippings_source
 from graphcure.optimization import project_auxiliary_gradients
 from scripts.prepare_mocheg_protocols import close_row
 from graphcure.evidence_set import EvidenceSetHead, evidence_set_loss, last_token_pool
+from graphcure.multimodal_evidence import (
+    MultimodalEvidenceHead,
+    multimodal_evidence_loss,
+)
 from graphcure.retrieval import (
     contradiction_features,
     evidence_candidate_features,
@@ -50,6 +54,14 @@ from scripts.run_mocheg_caption_fusion import (
 from scripts.rerank_mocheg_visual_qwen3 import (
     read_resumable_jsonl,
     stable_rerank,
+)
+from scripts.cache_mocheg_multimodal_features import (
+    select_visual_candidates,
+    visual_candidate_features,
+)
+from scripts.train_mocheg_multimodal_verifier import (
+    MultimodalEvidenceDataset,
+    validate_cache_pair as validate_multimodal_cache_pair,
 )
 
 
@@ -552,3 +564,104 @@ def test_cached_evidence_dataset_alignment(tmp_path):
     validate_cache_pair(train, val)
     assert len(train) == 2
     assert train[0]["retrieval_features"].shape == (3, 6)
+
+
+def test_multimodal_evidence_head_and_loss_are_finite():
+    head = MultimodalEvidenceHead(
+        claim_dim=8,
+        text_dim=8,
+        visual_dim=10,
+        hidden_dim=16,
+    )
+    text_mask = torch.tensor([[1, 1, 0], [1, 1, 1]], dtype=torch.bool)
+    visual_mask = torch.tensor([[1, 1, 1, 0], [1, 1, 1, 1]], dtype=torch.bool)
+    text_relevance = torch.tensor(
+        [[1, 0, 0], [0, 1, 0]], dtype=torch.float32
+    )
+    visual_relevance = torch.tensor(
+        [[0, 1, 0, 0], [1, 0, 0, 0]], dtype=torch.float32
+    )
+    output = head(
+        claim=torch.randn(2, 8),
+        text_evidence=torch.randn(2, 3, 8),
+        text_mask=text_mask,
+        text_retrieval_features=torch.randn(2, 3, 6),
+        visual_evidence=torch.randn(2, 4, 10),
+        visual_mask=visual_mask,
+        visual_retrieval_features=torch.randn(2, 4, 3),
+    )
+    loss, parts = multimodal_evidence_loss(
+        output,
+        labels=torch.tensor([0, 1]),
+        text_relevance=text_relevance,
+        text_mask=text_mask,
+        text_relevance_weights=torch.ones(2, 3),
+        visual_relevance=visual_relevance,
+        visual_mask=visual_mask,
+        visual_relevance_weights=torch.ones(2, 4),
+    )
+    assert output["verdict_logits"].shape == (2, 3)
+    assert output["text_attention"].shape == (2, 3)
+    assert output["visual_attention"].shape == (2, 4)
+    assert torch.allclose(
+        output["modality_mass"].sum(-1), torch.ones(2), atol=1e-5
+    )
+    assert torch.isfinite(loss)
+    assert all(torch.isfinite(value) for value in parts.values())
+
+
+def test_visual_train_candidate_injection_is_deterministic():
+    retrieved = ["a.jpg", "b.jpg", "c.jpg"]
+    gold = {"gold-1.jpg", "gold-2.jpg"}
+    first = select_visual_candidates("claim-1", retrieved, gold, 4, True)
+    second = select_visual_candidates("claim-1", retrieved, gold, 4, True)
+    assert first == second
+    assert gold.issubset(first)
+    assert len(first) == len(set(first)) == 4
+    assert select_visual_candidates(
+        "claim-1", retrieved, gold, 2, False
+    ) == retrieved[:2]
+    assert visual_candidate_features("injected.jpg", retrieved, [3, 2, 1]) == \
+        [0.0, 0.0, 0.0]
+    assert visual_candidate_features("a.jpg", retrieved, [3, 2, 1])[0] == 1.0
+
+
+def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):
+    payload = {
+        "ids": ["a", "b"],
+        "claim_embeddings": torch.randn(2, 8).half(),
+        "text_evidence_embeddings": torch.randn(2, 3, 8).half(),
+        "text_mask": torch.ones(2, 3, dtype=torch.bool),
+        "text_retrieval_features": torch.randn(2, 3, 6),
+        "text_relevance": torch.zeros(2, 3),
+        "text_relevance_weights": torch.ones(2, 3),
+        "visual_evidence_embeddings": torch.randn(2, 4, 10).half(),
+        "visual_mask": torch.ones(2, 4, dtype=torch.bool),
+        "visual_retrieval_features": torch.randn(2, 4, 3),
+        "visual_relevance": torch.zeros(2, 4),
+        "visual_relevance_weights": torch.ones(2, 4),
+        "labels": torch.tensor([0, 1]),
+        "metadata": {
+            "claim_dim": 8,
+            "text_dim": 8,
+            "visual_dim": 10,
+            "text_top_k": 3,
+            "visual_top_k": 4,
+            "visual_model": "test-model",
+            "train_gold_injection": True,
+            "validation_gold_injection": False,
+        },
+    }
+    train_path = tmp_path / "train.pt"
+    val_path = tmp_path / "val.pt"
+    torch.save(payload, train_path)
+    val_payload = dict(payload)
+    val_payload["metadata"] = dict(payload["metadata"])
+    val_payload["metadata"]["train_gold_injection"] = False
+    torch.save(val_payload, val_path)
+    train = MultimodalEvidenceDataset(train_path)
+    val = MultimodalEvidenceDataset(val_path)
+    validate_multimodal_cache_pair(train, val)
+    assert train[0]["claim"].shape == (8,)
+    assert train[0]["text_evidence"].shape == (3, 8)
+    assert train[0]["visual_evidence"].shape == (4, 10)
