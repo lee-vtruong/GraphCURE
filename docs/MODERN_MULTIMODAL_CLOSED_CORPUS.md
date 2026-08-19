@@ -296,16 +296,14 @@ Audit the protocol flags before training:
 
 ```bash
 python - <<'PY'
-import torch
+import json
 for split in ("train", "val"):
-    path = f"data/processed/mocheg_multimodal_cache/{split}.pt"
-    row = torch.load(path, map_location="cpu", weights_only=False)
-    meta = row["metadata"]
-    coverage = row["visual_relevance"].bool().any(1).float().mean().item()
-    print(split, "samples=", len(row["ids"]), "size=", tuple(row["visual_evidence_embeddings"].shape))
+    path = f"data/processed/mocheg_multimodal_cache/{split}.metadata.json"
+    meta = json.load(open(path))
+    print(split, "samples=", meta["samples"])
     print("  train_gold_injection=", meta["train_gold_injection"])
     print("  validation_gold_injection=", meta["validation_gold_injection"])
-    print("  visual_gold_coverage=", round(coverage, 6))
+    print("  visual_gold_coverage=", round(meta["visual_gold_coverage"], 6))
 PY
 ```
 

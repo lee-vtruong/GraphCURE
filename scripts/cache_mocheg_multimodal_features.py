@@ -240,15 +240,23 @@ def main() -> None:
             },
         }
         target = args.output_root / f"{split}.pt"
-        torch.save(payload, target)
         coverage = float(
             visual_relevance.bool().any(1).float().mean()
         )
-        print(json.dumps({
+        result = {
             "saved": str(target),
             **payload["metadata"],
             "visual_gold_coverage": coverage,
-        }, indent=2))
+        }
+        # A killed multi-gigabyte save must not leave a path that looks like a
+        # valid cache. Replace the target only after serialization completes.
+        temporary = target.with_suffix(".tmp")
+        torch.save(payload, temporary)
+        temporary.replace(target)
+        target.with_suffix(".metadata.json").write_text(
+            json.dumps(result, indent=2) + "\n", encoding="utf-8"
+        )
+        print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
