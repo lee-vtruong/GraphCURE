@@ -229,3 +229,31 @@ Batch 8 completed the same 500 pairs in `76.829` seconds (`6.5080`
 pairs/second), projecting `24.86` hours. It is the frozen throughput setting;
 batch 4 remains the OOM-safe resume fallback because batch size does not alter
 the semantic experiment signature.
+
+### Observed result: R2V-VIS-RERANK-VAL-01
+
+Full validation reranking completed all `1456` claims. Conditional
+Recall@1/5/10/50/100 was
+`0.342541 / 0.498343 / 0.550276 / 0.664088 / 0.704972`; conditional MRR was
+`0.415227`. Relative to fixed RRF, Recall@10 and Recall@50 improved by about
+`0.0630` and `0.0564`, respectively, so both preregistered gates passed. The
+reranker is frozen on validation; test remains locked until a multimodal
+verifier is frozen.
+
+The scalable training protocol does not rerank all 4.65 million train pairs
+with the 2B teacher. Instead, retrieve direct top-50 train hard negatives and
+inject qrel positives using training annotations only. This supplies positive
+and difficult negative visual evidence for verifier training without using
+validation or test labels.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_visual_retrieval \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --model Qwen/Qwen3-VL-Embedding-2B \
+  --output-root outputs/retrieval_mocheg_qwen3vl_images_train_top50 \
+  --cache-root data/processed/retrieval_cache \
+  --top-k 50 --batch-size 8 --image-shard-size 256 \
+  --query-batch-size 16 --score-batch-size 32 \
+  --device cuda --splits train
+```

@@ -332,6 +332,30 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   excluded from the semantic reranker signature, an interrupted or OOM run can
   safely resume at batch 4 without mixing model configurations.
 
+### R2V-VIS-RERANK-VAL-01 — full Qwen3-VL visual reranking
+
+- Split: MOCHEG strict validation (`n=1456`); **test split not used**
+- Completed claims: `1456/1456`; claims with aligned gold images: `905`
+- Model: `Qwen/Qwen3-VL-Reranker-2B`; candidate pool `400`; output `100`
+- Raw Recall@1/5/10/50/100:
+  `0.212912 / 0.309753 / 0.342033 / 0.412775 / 0.438187`
+- Conditional Recall@1/5/10/50/100:
+  `0.342541 / 0.498343 / 0.550276 / 0.664088 / 0.704972`
+- Raw/conditional MRR: `0.258091 / 0.415227`
+- Conditional improvements over fixed RRF at 1/5/10/50/100:
+  approximately `+0.0342 / +0.0563 / +0.0630 / +0.0564 / +0.0453`.
+- Acceptance gates: conditional Recall@10 greater than `0.4873` **passed**;
+  conditional Recall@50 greater than `0.6077` **passed**.
+- Retrieval SHA-256:
+  `8913c081061d3187eb9bd9c5cfba45db95ac6a149bbbfc672d540d16384fc78a`
+- Visual reranker signature:
+  `ff96b33ef5c4403a8d0cdbfb627f1ecfe71695a9d3de2df14cd43f367ca95687`
+- Leakage audit: `gold_used_for_scoring=false`.
+- Decision: **freeze the validation visual retrieval/reranking stack**. Do not
+  open test yet. Materialize train-split direct visual hard negatives, inject
+  train-only qrel positives, and develop the multimodal verifier on
+  train/validation.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
