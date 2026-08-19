@@ -406,6 +406,22 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   initialize from the frozen text verifier; and learn only a conservative,
   reliability-gated visual residual during the next screen.
 
+### R2V-MM-VER-VAL-02 — frozen text-anchor residual screen
+
+- Split: MOCHEG strict validation (`n=1456`); **test split not used**
+- Combined and embedded text-only Accuracy: both `0.564560`
+- Combined and embedded text-only Macro-F1: both `0.549948`
+- Text/visual Select@1: `0.807860 / 0.073171`
+- Mean visual gate: `0.100750`
+- Gate with/without a gold visual candidate: `0.101389 / 0.100334`
+- Visual help/harm rates: `0.0 / 0.0`; ECE-10: `0.048946`
+- Decision: **non-inferiority safeguard passed, multimodal utility gate failed**.
+  Epoch-zero anchoring exactly preserved the frozen text verifier, but the
+  selected checkpoint used no effective visual correction. Visual Select@1
+  remained below the preregistered `0.15` threshold and gate separation was
+  negligible (`+0.001055`). Do not open test. Audit the epoch trajectory before
+  deciding whether to stage selector pretraining or revise visual supervision.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
