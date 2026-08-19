@@ -65,6 +65,7 @@ from scripts.train_mocheg_multimodal_verifier import (
     training_objective,
     validate_cache_pair as validate_multimodal_cache_pair,
 )
+from scripts.train_mocheg_staged_multimodal import visual_selection_objective
 
 
 def test_model_shapes():
@@ -605,6 +606,7 @@ def test_multimodal_evidence_head_and_loss_are_finite():
     assert output["verdict_logits"].shape == (2, 3)
     assert output["text_attention"].shape == (2, 3)
     assert output["visual_attention"].shape == (2, 4)
+    assert output["visual_expert_logits"].shape == (2, 3)
     assert torch.allclose(
         output["verdict_logits"], output["text_verdict_logits"]
     )
@@ -613,6 +615,14 @@ def test_multimodal_evidence_head_and_loss_are_finite():
     )
     assert torch.isfinite(loss)
     assert all(torch.isfinite(value) for value in parts.values())
+    selector_loss, selector_parts = visual_selection_objective(
+        output,
+        {"visual_relevance": visual_relevance, "labels": torch.tensor([0, 1])},
+        visual_mask,
+        stance_weight=0.15,
+    )
+    assert torch.isfinite(selector_loss)
+    assert all(np.isfinite(value) for value in selector_parts.values())
 
 
 def test_visual_train_candidate_injection_is_deterministic():

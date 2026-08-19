@@ -259,6 +259,7 @@ class MultimodalEvidenceHead(nn.Module):
             dim=-1,
         )
         visual_residual = self.visual_residual(verdict_input)
+        visual_expert_logits = text_verdict_logits + visual_residual
         verdict_logits = (
             text_verdict_logits + visual_gate.unsqueeze(-1) * visual_residual
         )
@@ -266,6 +267,7 @@ class MultimodalEvidenceHead(nn.Module):
             "verdict_logits": verdict_logits,
             "text_verdict_logits": text_verdict_logits,
             "visual_residual_logits": visual_residual,
+            "visual_expert_logits": visual_expert_logits,
             "visual_gate": visual_gate,
             "text_utility_logits": text_utility,
             "visual_utility_logits": visual_utility,

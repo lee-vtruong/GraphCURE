@@ -110,6 +110,7 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
     labels: list[int] = []
     predictions: list[int] = []
     text_predictions: list[int] = []
+    expert_predictions: list[int] = []
     probabilities: list[list[float]] = []
     text_coverage: list[bool] = []
     visual_coverage: list[bool] = []
@@ -136,6 +137,7 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         ).cpu()
         prediction = probability.argmax(-1)
         text_prediction = output["text_verdict_logits"].float().cpu().argmax(-1)
+        expert_prediction = output["visual_expert_logits"].float().cpu().argmax(-1)
         text_selected = output["text_attention"].cpu().argmax(-1)
         visual_selected = output["visual_attention"].cpu().argmax(-1)
         modality_mass = output["modality_mass"].float().cpu()
@@ -167,6 +169,7 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
                 "gold": int(target[index]),
                 "prediction": int(prediction[index]),
                 "text_only_prediction": int(text_prediction[index]),
+                "visual_expert_prediction": int(expert_prediction[index]),
                 "probabilities": probability[index].tolist(),
                 "text_gold_in_candidates": has_text,
                 "visual_gold_in_candidates": has_visual,
@@ -183,10 +186,16 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         labels.extend(target.tolist())
         predictions.extend(prediction.tolist())
         text_predictions.extend(text_prediction.tolist())
+        expert_predictions.extend(expert_prediction.tolist())
         probabilities.extend(probability.tolist())
     y = np.asarray(labels)
     pred = np.asarray(predictions)
     text_pred = np.asarray(text_predictions)
+    expert_pred = np.asarray(expert_predictions)
+    oracle_pred = text_pred.copy()
+    oracle_pred[(text_pred != y) & (expert_pred == y)] = expert_pred[
+        (text_pred != y) & (expert_pred == y)
+    ]
     prob = np.asarray(probabilities)
     return {
         "samples": len(y),
@@ -194,6 +203,10 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         "macro_f1": float(f1_score(y, pred, average="macro")),
         "text_only_accuracy": float(accuracy_score(y, text_pred)),
         "text_only_macro_f1": float(f1_score(y, text_pred, average="macro")),
+        "visual_expert_accuracy": float(accuracy_score(y, expert_pred)),
+        "visual_expert_macro_f1": float(f1_score(y, expert_pred, average="macro")),
+        "oracle_router_accuracy": float(accuracy_score(y, oracle_pred)),
+        "oracle_router_macro_f1": float(f1_score(y, oracle_pred, average="macro")),
         "confusion_matrix": confusion_matrix(y, pred).tolist(),
         "text_gold_coverage": float(np.mean(text_coverage)),
         "visual_gold_coverage": float(np.mean(visual_coverage)),

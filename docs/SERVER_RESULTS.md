@@ -422,6 +422,22 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   negligible (`+0.001055`). Do not open test. Audit the epoch trajectory before
   deciding whether to stage selector pretraining or revise visual supervision.
 
+### R2V-MM-VER-VAL-02A — epoch-trajectory diagnosis
+
+- Visual Select@1 rose monotonically enough to pass the selector gate, from
+  `0.073171` at epoch 0 to a maximum of `0.216028` at epoch 8.
+- At epoch 8, combined Macro-F1 fell to `0.484189`, while the frozen text
+  branch remained `0.549948`.
+- At that epoch the visual branch corrected `9.13%` of examples but harmed
+  `13.12%`; mean gate mass was `0.3813`.
+- Interpretation: visual evidence selection is learnable. The remaining
+  bottleneck is utility routing, not candidate retrieval or selector capacity.
+  A perfect validation-only oracle over the observed corrections has material
+  headroom, but gold labels must never be used by the inference router.
+- Next experiment: staged selector, full-strength visual expert, then a gate
+  supervised only on train by detached per-example cross-entropy reduction
+  minus an explicit visual-use cost. Test remains locked.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

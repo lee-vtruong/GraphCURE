@@ -342,3 +342,38 @@ visual help/harm rates, conflict, and ECE. Continue to five seeds only if:
 - visual help rate is greater than visual harm rate.
 
 The test split remains locked throughout this screen.
+
+### Stage B5: counterfactual visual-utility routing
+
+The residual trajectory showed that the selector itself passes: validation
+Visual Select@1 reached `0.216028`. Joint training nevertheless reduced
+Macro-F1 because the gate routed more harmful than helpful corrections. The
+next preregistered run therefore separates optimization into three stages:
+
+1. train visual evidence selection with listwise qrel supervision;
+2. freeze selection and train a full-strength visual expert; and
+3. freeze both experts and train only the router. Its train-only soft target is
+   the detached reduction in per-example cross-entropy delivered by the visual
+   expert, minus a visual-use cost margin.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
+  --cache-root data/processed/mocheg_multimodal_cache \
+  --text-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --output outputs/mocheg_staged_multimodal_seed42 \
+  --hidden-dim 384 --batch-size 128 \
+  --selector-epochs 12 --selector-patience 4 \
+  --expert-epochs 15 --expert-patience 5 \
+  --router-epochs 20 --router-patience 6 \
+  --router-cost-margin 0.05 --router-temperature 0.25 \
+  --router-target-weight 0.50 \
+  --seed 42 --device cuda \
+  2>&1 | tee outputs/mocheg-staged-multimodal-seed42.log
+```
+
+Model selection begins from a near-zero-gate copy of the frozen text anchor;
+therefore a harmful router cannot replace the baseline checkpoint. Report the
+visual expert and oracle-router ceilings as diagnostics, but compare only the
+learned router as the method result. Proceed to five seeds only if learned
+Macro-F1 exceeds the embedded text-only branch, visual help exceeds harm, and
+the oracle ceiling confirms at least two Macro-F1 points of available headroom.
