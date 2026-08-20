@@ -426,3 +426,39 @@ The gate-independent expert from the conflict-router run can be reused because
 the expert architecture and weights are unchanged. Pass
 `--expert-checkpoint outputs/mocheg_conflict_router_seed42_v3/expert_best.pt`
 with `--selector-epochs 0 --expert-epochs 0` to train only the matched router.
+
+### Cross-fitted set-level utility router
+
+The matched scalar gate failed its validation ranking audit (helpful-vs-all
+AUROC `0.4962`; decisive help-vs-harm AUROC `0.4678`). Threshold tuning cannot
+repair a score whose ordering is effectively random. The next screen therefore
+freezes the text and visual experts and fits a three-state utility model:
+`harmful`, `neutral`, or `helpful`. Features summarize both verdict
+distributions, their disagreement, constraint conflict, evidence-attention
+concentration, multimodal sufficiency, and per-set retrieval statistics.
+
+The routing threshold is selected using five-fold out-of-fold **training**
+predictions and is frozen before validation. This avoids the optimistic
+same-validation threshold selection used by the scalar-gate diagnostic. Run:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_set_router \
+  --expert-checkpoint \
+    outputs/mocheg_conflict_router_seed42_v3/expert_best.pt \
+  --expert-cache-root data/processed/mocheg_multimodal_cache \
+  --router-cache-root data/processed/mocheg_multimodal_router_cache \
+  --output outputs/mocheg_set_router_seed42_v5 \
+  --device cuda \
+  --batch-size 256 \
+  --folds 5 \
+  --neutral-weight 0.25 \
+  --harm-penalty 1.0 \
+  --bootstrap-iterations 5000 \
+  --seed 42 \
+  2>&1 | tee outputs/mocheg-set-router-seed42-v5.log
+```
+
+This remains a validation-only screen. Proceed to repeated seeds only if its
+frozen validation Macro-F1 improves the text anchor by at least `0.01`, the
+bootstrap interval is directionally convincing, and decisive gate AUROC is at
+least `0.60`. Test remains locked.

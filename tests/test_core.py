@@ -71,6 +71,11 @@ from scripts.train_mocheg_staged_multimodal import (
     visual_selection_objective,
 )
 from scripts.audit_mocheg_router import audit, exact_mcnemar_p
+from scripts.train_mocheg_set_router import (
+    route_metrics,
+    select_threshold,
+    utility_labels,
+)
 
 
 def test_model_shapes():
@@ -838,3 +843,20 @@ def test_router_audit_reports_paired_help_and_harm():
     assert result["hard_router"]["route_count"] == 2
     assert result["gate_ranking"]["decisive_help_vs_harm"]["auroc"] == 1.0
     assert exact_mcnemar_p(1, 1) == 1.0
+
+
+def test_set_router_utility_targets_and_train_only_threshold():
+    gold = np.asarray([0, 1, 2, 0])
+    text = np.asarray([1, 1, 2, 0])
+    expert = np.asarray([0, 0, 1, 0])
+    labels = utility_labels(gold, text, expert)
+    assert labels.tolist() == [2, 0, 0, 1]
+    score = np.asarray([0.9, 0.8, -0.5, -0.2])
+    selected = select_threshold(gold, text, expert, score)
+    assert selected["helpful"] == 1
+    assert selected["harmful"] == 0
+    assert selected["macro_f1"] == 1.0
+    repeated = route_metrics(
+        gold, text, expert, score, selected["threshold"]
+    )
+    assert repeated == selected

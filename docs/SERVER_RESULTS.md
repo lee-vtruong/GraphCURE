@@ -525,6 +525,25 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   calibration on frozen conflict/uncertainty features rather than revisiting
   retrieval, selector, or expert training.
 
+### R2V-MM-VER-VAL-06A — hard-router ranking and significance audit
+
+- Hard router: Accuracy `0.565247`, Macro-F1 `0.551186`; deltas over the text
+  anchor were only `+0.000687 / +0.001238`.
+- It routed `106/1456` validation examples and produced `12` corrections versus
+  `11` regressions. Exact McNemar `p=1.0`.
+- Helpful-vs-all gate AUROC/AUPRC: `0.496248 / 0.097796`.
+- Decisive helpful-vs-harmful AUROC/AUPRC: `0.467828 / 0.425329` over `332`
+  decisive examples.
+- Mean gate scores were `0.433124` for helpful, `0.440939` for harmful, and
+  `0.433190` for neutral cases. The scalar gate therefore did not learn a
+  useful ranking; harmful cases ranked slightly above helpful cases.
+- Paired Macro-F1 bootstrap delta: mean `+0.001269`, 95% percentile interval
+  `[-0.005034, +0.007690]`, probability of a positive delta `0.651`.
+- Decision: **scientific gate failed**. Do not tune this score, run repeated
+  seeds, or unlock test. Replace it with a cross-fitted set-level utility
+  estimator. Select its threshold exclusively on out-of-fold train predictions
+  before one frozen validation evaluation.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
