@@ -586,3 +586,32 @@ In addition to expert/oracle Macro-F1, report visual-stance Macro-F1 on
 gold-containing candidate sets and sufficiency AUROC/AUPRC. If stance itself is
 weak, global frozen image embeddings are inadequate for verdict relation
 modeling and the next expert must use token-level claim-image cross-attention.
+
+### Token-level claim--image cross-attention gate
+
+The v8 screen triggered that gate: gold-candidate stance Macro-F1 was `0.3407`
+and sufficiency AUROC was `0.4581`, despite retrieval Select@1 of `0.5401`.
+Run the SigLIP2 token/patch interaction screen first on a smoke subset, then on
+full validation. Gold is injected only into training; validation is untouched.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_token_visual_expert \
+  --train-retrieval outputs/retrieval_mocheg_qwen3vl_images_train_top50/train.jsonl \
+  --val-retrieval outputs/retrieval_mocheg_visual_reranked/val.jsonl \
+  --output outputs/mocheg_token_visual_smoke_v9 \
+  --top-k 4 --batch-size 2 --epochs 1 --num-workers 2 \
+  --limit-train 64 --limit-val 64 --device cuda
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_token_visual_expert \
+  --train-retrieval outputs/retrieval_mocheg_qwen3vl_images_train_top50/train.jsonl \
+  --val-retrieval outputs/retrieval_mocheg_visual_reranked/val.jsonl \
+  --output outputs/mocheg_token_visual_seed42_v9 \
+  --top-k 4 --batch-size 4 --epochs 6 --patience 2 \
+  --negative-weight 0.25 --claim-weight 1.0 \
+  --num-workers 4 --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-token-visual-v9.log
+```
+
+Do not fuse this expert or unlock test unless validation gold-candidate stance
+Macro-F1 reaches `0.50` and relevance AUROC reaches `0.65`. These are component
+gates, not paper claims.

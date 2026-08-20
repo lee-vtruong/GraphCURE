@@ -14,6 +14,11 @@ from graphcure.multimodal_evidence import (
     MultimodalEvidenceHead,
     multimodal_evidence_loss,
 )
+from graphcure.token_visual import (
+    aggregate_pair_logits,
+    select_candidate_ids as select_token_visual_candidates,
+    token_visual_loss,
+)
 from graphcure.retrieval import (
     contradiction_features,
     evidence_candidate_features,
@@ -651,6 +656,30 @@ def test_visual_train_candidate_injection_is_deterministic():
     assert visual_candidate_features("injected.jpg", retrieved, [3, 2, 1]) == \
         [0.0, 0.0, 0.0]
     assert visual_candidate_features("a.jpg", retrieved, [3, 2, 1])[0] == 1.0
+
+
+def test_token_visual_candidates_and_joint_loss_are_finite():
+    selected = select_token_visual_candidates(
+        "claim-1", ["a.jpg", "b.jpg", "c.jpg"], {"gold.jpg"}, 3, True
+    )
+    assert "gold.jpg" in selected and len(selected) == len(set(selected)) == 3
+    assert select_token_visual_candidates(
+        "claim-1", ["a.jpg", "b.jpg"], {"gold.jpg"}, 2, False
+    ) == ["a.jpg", "b.jpg"]
+    pair = torch.randn(2, 3, 4, requires_grad=True)
+    mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool)
+    relevance = torch.tensor([[1, 0, 0], [0, 1, 0]], dtype=torch.bool)
+    labels = torch.tensor([0, 2])
+    claim, attention = aggregate_pair_logits(
+        pair, mask, torch.log(torch.tensor([[1., .5, .25], [1., .5, 1.]]))
+    )
+    loss, parts = token_visual_loss(
+        pair, claim, labels, relevance, mask, relevance.any(1), .25, 1.0
+    )
+    loss.backward()
+    assert claim.shape == (2, 3)
+    assert torch.allclose(attention.sum(-1), torch.ones(2), atol=1e-6)
+    assert torch.isfinite(loss) and all(np.isfinite(x) for x in parts.values())
 
 
 def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):

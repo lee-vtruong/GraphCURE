@@ -6,6 +6,19 @@ Git commit: `86616c3aa87237666212961e134ea8bf49bab642`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
+## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
+
+- Protocol: strict validation only; frozen text anchor and retrieval-ranked
+  visual candidates; no validation gold injection and no test access.
+- Text anchor: accuracy `0.564560`, Macro-F1 `0.549948`.
+- Global-embedding visual expert: accuracy `0.494505`, Macro-F1 `0.459179`.
+- Gold-candidate visual stance: accuracy `0.355401`, Macro-F1 `0.340672`.
+- Visual sufficiency: AUROC `0.458078`, average precision `0.361864`.
+- Frozen retrieval Select@1: `0.540070`; oracle router Macro-F1: `0.617875`.
+- Decision: reject further scalar/global-embedding fusion and routing. Phase B
+  continues with token-level claim-to-patch cross-attention; the text anchor
+  and test split remain frozen.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official
