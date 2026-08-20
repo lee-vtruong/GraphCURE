@@ -569,6 +569,28 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   router screen must generate each train utility target using a fold expert that
   never observed that example.
 
+### R2V-MM-VER-VAL-08 — fully cross-fitted utility router
+
+- Honest fold outcomes contained `1376` harmful, `9072` neutral, and `1183`
+  helpful examples. Unlike VAL-07, neither fold text nor fold visual expert had
+  observed the example producing its router target.
+- Inner train-OOF threshold `0.238257` routed `815/11631` examples (`7.007%`),
+  with Accuracy `0.584301`, Macro-F1 `0.569682`, `391` corrections, and `278`
+  regressions.
+- Frozen validation route rate remained matched at `8.104%` (`118/1456`), so
+  the previous gross route-rate shift was resolved. Nevertheless, validation
+  fell to Accuracy `0.555632` and Macro-F1 `0.536688`, with `39` corrections
+  versus `52` regressions.
+- Helpful-vs-all AUROC/AUPRC: `0.515060 / 0.193457`; decisive
+  helpful-vs-harmful AUROC/AUPRC: `0.519348 / 0.415944` over `332` examples.
+- Paired Macro-F1 bootstrap delta: mean `-0.013405`, 95% interval
+  `[-0.026876, -0.000347]`, probability positive `0.0234`.
+- Decision: **router hypothesis failed for the current experts**. Cross-fitting
+  fixed the protocol but confirmed that available uncertainty/conflict features
+  do not predict the sign of visual utility. Freeze routing research and return
+  to Stage B expert quality. The next control audits whether learned visual
+  attention degrades the upstream Qwen3-VL reranker order.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

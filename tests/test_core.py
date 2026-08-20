@@ -76,6 +76,7 @@ from scripts.train_mocheg_set_router import (
     select_threshold,
     utility_labels,
 )
+from scripts.audit_mocheg_visual_selector import rank_summary
 
 
 def test_model_shapes():
@@ -860,3 +861,24 @@ def test_set_router_utility_targets_and_train_only_threshold():
         gold, text, expert, score, selected["threshold"]
     )
     assert repeated == selected
+
+
+def test_visual_selector_audit_compares_orders_on_same_candidates():
+    relevance = np.asarray([
+        [0, 1, 0],
+        [1, 0, 0],
+        [0, 0, 0],
+    ])
+    attention = np.asarray([
+        [0.1, 0.2, 0.7],
+        [0.2, 0.7, 0.1],
+        [0.3, 0.3, 0.4],
+    ])
+    mask = np.ones_like(relevance, dtype=bool)
+    result = rank_summary(relevance, attention, mask)
+    assert result["claims_with_gold_in_candidates"] == 2
+    assert result["upstream_order"]["hit_at_1"] == 0.5
+    assert result["learned_attention_order"]["hit_at_1"] == 0.0
+    assert result["pairwise_order_comparison"] == {
+        "upstream_better": 1, "learned_better": 0, "tie": 1,
+    }
