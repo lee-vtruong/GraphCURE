@@ -19,6 +19,19 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   continues with token-level claim-to-patch cross-attention; the text anchor
   and test split remain frozen.
 
+### R2V-VIS-VAL-10 — token/patch cross-attention screen
+
+- Best epoch: `3`; claim accuracy `0.381181`, Macro-F1 `0.345528`.
+- Natural validation Select@1: `0.429561`.
+- Gold-candidate stance: accuracy `0.219038`, Macro-F1 `0.184794`.
+- Relevance: AUROC `0.380450`, average precision `0.130005`.
+- Both preregistered gates failed. Increasing capacity is not justified: the
+  image-qrel annotation identifies useful evidence, but does not guarantee
+  that pixels alone express the claim-level supported/refuted/NEI stance.
+- Decision: stop pixel-only verdict supervision. The next expert uses a VLM as
+  a claim-conditioned constraint analyzer and leaves the final verdict to the
+  evidence-set verifier.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

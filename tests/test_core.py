@@ -19,6 +19,11 @@ from graphcure.token_visual import (
     select_candidate_ids as select_token_visual_candidates,
     token_visual_loss,
 )
+from scripts.analyze_mocheg_claim_images import (
+    PROMPT as CLAIM_IMAGE_PROMPT,
+    conversations as claim_image_conversations,
+    report_signature,
+)
 from graphcure.retrieval import (
     contradiction_features,
     evidence_candidate_features,
@@ -680,6 +685,19 @@ def test_token_visual_candidates_and_joint_loss_are_finite():
     assert claim.shape == (2, 3)
     assert torch.allclose(attention.sum(-1), torch.ones(2), atol=1e-6)
     assert torch.isfinite(loss) and all(np.isfinite(x) for x in parts.values())
+
+
+def test_claim_image_analyzer_prompt_has_no_label_or_qrel_input():
+    chats = claim_image_conversations(
+        ["A dated photograph shows an event."], ["image.jpg"]
+    )
+    prompt = chats[0][0]["content"][1]["text"]
+    assert "A dated photograph" in prompt
+    assert "final supported/refuted/NEI label" in CLAIM_IMAGE_PROMPT
+    assert "qrel" not in prompt.lower()
+    assert report_signature("model", 2, 100, 20) == report_signature(
+        "model", 2, 100, 20
+    )
 
 
 def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):

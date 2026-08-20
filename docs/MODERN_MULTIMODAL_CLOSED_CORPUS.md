@@ -615,3 +615,19 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_token_visual_expert \
 Do not fuse this expert or unlock test unless validation gold-candidate stance
 Macro-F1 reaches `0.50` and relevance AUROC reaches `0.65`. These are component
 gates, not paper claims.
+
+The v9 token/patch screen failed both gates (`0.1848` stance Macro-F1 and
+`0.3804` relevance AUROC). Do not tune or unfreeze it. Generate resumable,
+claim-conditioned visual constraint reports for the next analyzer--verifier
+screen. The prompt receives neither labels nor qrel flags; train may inject one
+annotated image while validation remains natural retrieval.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.analyze_mocheg_claim_images \
+  --train-retrieval outputs/retrieval_mocheg_qwen3vl_images_train_top50/train.jsonl \
+  --val-retrieval outputs/retrieval_mocheg_visual_reranked/val.jsonl \
+  --output-root data/processed/mocheg_claim_visual_reports_v10 \
+  --top-k 2 --batch-size 4 --max-pixels 501760 \
+  --splits train val --device cuda \
+  2>&1 | tee outputs/mocheg-claim-visual-reports-v10.log
+```
