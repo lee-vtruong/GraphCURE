@@ -106,14 +106,24 @@ def main() -> None:
                         default=Path("data/processed/mocheg_manifest_strict"))
     parser.add_argument("--text-cache-root", type=Path,
                         default=Path("data/processed/mocheg_reasoning_cache"))
-    parser.add_argument("--train-visual-retrieval", type=Path, required=True)
-    parser.add_argument("--val-visual-retrieval", type=Path, required=True)
+    parser.add_argument("--train-visual-retrieval", type=Path)
+    parser.add_argument("--val-visual-retrieval", type=Path)
     parser.add_argument("--image-cache-root", type=Path,
                         default=Path("data/processed/retrieval_cache"))
     parser.add_argument("--output-root", type=Path,
                         default=Path("data/processed/mocheg_multimodal_cache"))
     parser.add_argument("--visual-model", default="Qwen/Qwen3-VL-Embedding-2B")
     parser.add_argument("--visual-top-k", type=int, default=32)
+    parser.add_argument(
+        "--train-candidate-policy",
+        choices=("inject", "retrieved"),
+        default="inject",
+        help="inject train qrel positives or preserve natural retrieval",
+    )
+    parser.add_argument(
+        "--splits", nargs="+", choices=("train", "val"),
+        default=("train", "val"),
+    )
     args = parser.parse_args()
     if args.visual_top_k <= 0:
         parser.error("--visual-top-k must be positive")
@@ -122,8 +132,11 @@ def main() -> None:
         "train": args.train_visual_retrieval,
         "val": args.val_visual_retrieval,
     }
+    for split in args.splits:
+        if retrieval_paths[split] is None:
+            parser.error(f"--{split}-visual-retrieval is required for {split}")
 
-    for split in ("train", "val"):
+    for split in args.splits:
         manifest_path = args.manifest_root / f"{split}.jsonl"
         text_cache_path = args.text_cache_root / f"{split}.pt"
         retrieval_path = retrieval_paths[split]
@@ -182,11 +195,14 @@ def main() -> None:
             ]
             raw_ids = [image_id for image_id, _ in valid_pairs]
             raw_scores = [score for _, score in valid_pairs]
+            inject_train_gold = (
+                split == "train" and args.train_candidate_policy == "inject"
+            )
             selected = select_visual_candidates(
                 claim["id"], raw_ids, gold, args.visual_top_k,
-                inject_gold=split == "train",
+                inject_gold=inject_train_gold,
             )
-            if split == "train":
+            if inject_train_gold:
                 injected += len([value for value in selected if value in gold
                                  and value not in raw_ids[:args.visual_top_k]])
             for candidate_index, image_id in enumerate(selected):
@@ -228,7 +244,12 @@ def main() -> None:
                 "text_top_k": int(text["evidence_embeddings"].shape[1]),
                 "visual_top_k": args.visual_top_k,
                 "visual_model": args.visual_model,
-                "train_gold_injection": split == "train",
+                "train_gold_injection": (
+                    split == "train"
+                    and args.train_candidate_policy == "inject"
+                ),
+                "train_candidate_policy": args.train_candidate_policy
+                if split == "train" else "not_applicable",
                 "validation_gold_injection": False,
                 "claims_with_gold_images": claims_with_gold,
                 "injected_gold_candidates": injected,

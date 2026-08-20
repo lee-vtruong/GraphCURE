@@ -396,3 +396,28 @@ and constraint conflict. On train it learns from balanced decisive correction
 versus harm pairs; ambiguous samples retain a low-weight loss-reduction target.
 Use output root `outputs/mocheg_conflict_router_seed42_v3` and add
 `--router-ambiguous-weight 0.10` to the staged command.
+
+The router trajectory then exposed train/deployment shift: injected training
+candidates produced `2198` helpful versus only `402` harmful pairs, while
+validation harm exceeded help and the gate rose to `0.78`. Build a router-only
+train cache that preserves natural retrieval; do not replace the injected
+selector/expert cache:
+
+```bash
+python -m scripts.cache_mocheg_multimodal_features \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --text-cache-root data/processed/mocheg_reasoning_cache \
+  --train-visual-retrieval \
+    outputs/retrieval_mocheg_qwen3vl_images_train_top50/train.jsonl \
+  --image-cache-root data/processed/retrieval_cache \
+  --output-root data/processed/mocheg_multimodal_router_cache \
+  --visual-model Qwen/Qwen3-VL-Embedding-2B \
+  --visual-top-k 32 --train-candidate-policy retrieved --splits train \
+  2>&1 | tee outputs/mocheg-multimodal-router-cache.log
+```
+
+Its metadata must report `train_gold_injection=false`. Run the staged trainer
+with the original injected `--cache-root` and the new natural
+`--router-cache-root`. Router model selection now evaluates both soft blending
+and hard expert selection over a preregistered `0.00..1.00` threshold grid;
+the threshold and routed fraction are persisted in the checkpoint.

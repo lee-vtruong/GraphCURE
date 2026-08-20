@@ -488,6 +488,21 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   and inspect all Stage-3 epochs before choosing between a hard calibrated
   selector and a new router representation. Test remains locked.
 
+### R2V-MM-VER-VAL-05A — router distribution-shift diagnosis
+
+- Across router epochs, train decisive pairs were fixed at `2198` helpful
+  versus `402` harmful (help:harm `5.47:1`).
+- Validation showed the opposite behavior: the best learned epoch helped
+  `0.08654` but harmed `0.10508`, with mean visual gate `0.78088` and
+  Macro-F1 `0.52586`.
+- Cause: the expert/selector train cache injects qrel-positive images, while
+  validation uses naturally retrieved candidates. This is appropriate for
+  expert supervision but invalid as the router's deployment distribution.
+- Resolution: retain the injected cache for Stages 1–2, assemble a second
+  train cache from natural direct retrieval for Stage 3, balance decisive
+  correction/harm labels, and calibrate a hard specialist-selection threshold
+  on validation. Soft logit blending remains a reported ablation.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

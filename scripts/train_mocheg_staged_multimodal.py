@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
@@ -93,10 +94,51 @@ def optimizer_for(modules: tuple[torch.nn.Module, ...], learning_rate: float,
     )
 
 
+def hard_router_metrics(rows: list[dict], threshold: float) -> dict:
+    gold = np.asarray([row["gold"] for row in rows])
+    text = np.asarray([row["text_only_prediction"] for row in rows])
+    expert = np.asarray([row["visual_expert_prediction"] for row in rows])
+    gate = np.asarray([row["visual_modality_mass"] for row in rows])
+    route = gate >= threshold
+    prediction = np.where(route, expert, text)
+    return {
+        "threshold": float(threshold),
+        "accuracy": float(accuracy_score(gold, prediction)),
+        "macro_f1": float(f1_score(gold, prediction, average="macro")),
+        "confusion_matrix": confusion_matrix(gold, prediction).tolist(),
+        "visual_route_rate": float(route.mean()),
+        "visual_help_rate": float(np.mean((text != gold) & (prediction == gold))),
+        "visual_harm_rate": float(np.mean((text == gold) & (prediction != gold))),
+    }
+
+
+def calibrate_hard_router(rows: list[dict]) -> dict:
+    candidates = [hard_router_metrics(rows, value) for value in np.linspace(0, 1, 101)]
+    return max(
+        candidates,
+        key=lambda row: (row["macro_f1"], row["accuracy"], -row["visual_route_rate"]),
+    )
+
+
+def validate_router_cache(expert_train: MultimodalEvidenceDataset,
+                          router_train: MultimodalEvidenceDataset) -> None:
+    if expert_train.data["ids"] != router_train.data["ids"]:
+        raise ValueError("expert and router train cache IDs do not align")
+    if not torch.equal(expert_train.data["labels"], router_train.data["labels"]):
+        raise ValueError("expert and router train labels do not align")
+    for key in ("claim_dim", "text_dim", "visual_dim", "text_top_k",
+                "visual_top_k", "visual_model"):
+        if expert_train.metadata.get(key) != router_train.metadata.get(key):
+            raise ValueError(f"router cache mismatch for {key}")
+    if router_train.metadata.get("train_gold_injection"):
+        raise ValueError("router cache must preserve natural train retrieval")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-root", type=Path,
                         default=Path("data/processed/mocheg_multimodal_cache"))
+    parser.add_argument("--router-cache-root", type=Path)
     parser.add_argument("--text-checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path,
                         default=Path("outputs/mocheg_staged_multimodal_seed42"))
@@ -133,6 +175,12 @@ def main() -> None:
     train = MultimodalEvidenceDataset(args.cache_root / "train.pt")
     val = MultimodalEvidenceDataset(args.cache_root / "val.pt")
     validate_cache_pair(train, val)
+    router_train = (
+        MultimodalEvidenceDataset(args.router_cache_root / "train.pt")
+        if args.router_cache_root is not None else train
+    )
+    if args.router_cache_root is not None:
+        validate_router_cache(train, router_train)
     head = MultimodalEvidenceHead(
         claim_dim=int(train.metadata["claim_dim"]),
         text_dim=int(train.metadata["text_dim"]),
@@ -146,6 +194,13 @@ def main() -> None:
     class_weights = (counts.sum() / (3 * counts.clamp_min(1))).to(device)
     loader = DataLoader(
         train,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=collate,
+        pin_memory=device.type == "cuda",
+    )
+    router_loader = DataLoader(
+        router_train,
         batch_size=args.batch_size,
         shuffle=True,
         collate_fn=collate,
@@ -185,7 +240,7 @@ def main() -> None:
         metrics, _ = evaluate(head, val, args.batch_size, device)
         print(json.dumps({
             "stage": "selector", "epoch": epoch,
-            "train_loss": total / len(loader),
+            "train_loss": total / len(router_loader),
             "val_visual_selection_hit_at_1":
                 metrics["visual_selection_hit_at_1"],
         }), flush=True)
@@ -289,6 +344,8 @@ def main() -> None:
     anchor_metrics, _ = evaluate(head, val, args.batch_size, device)
     best_router = anchor_metrics["macro_f1"]
     best_router_state = clone_state(head)
+    best_router_mode = "text_anchor"
+    best_router_threshold = 1.01
     torch.nn.init.zeros_(head.visual_gate[-1].weight)
     torch.nn.init.constant_(head.visual_gate[-1].bias, -2.944439)
     router_modules = (head.visual_gate,)
@@ -302,7 +359,7 @@ def main() -> None:
         total = 0.0
         helpful_total = 0
         harmful_total = 0
-        for batch in loader:
+        for batch in router_loader:
             inputs, supervision = model_batch(batch, device)
             router_optimizer.zero_grad(set_to_none=True)
             output = head(**inputs)
@@ -354,7 +411,8 @@ def main() -> None:
             torch.nn.utils.clip_grad_norm_(head.parameters(), 1.0)
             router_optimizer.step()
             total += float(loss.detach())
-        metrics, _ = evaluate(head, val, args.batch_size, device)
+        metrics, validation_rows = evaluate(head, val, args.batch_size, device)
+        hard_metrics = calibrate_hard_router(validation_rows)
         print(json.dumps({
             "stage": "router", "epoch": epoch,
             "train_loss": total / len(loader),
@@ -362,13 +420,19 @@ def main() -> None:
             "val_visual_help_rate": metrics["visual_help_rate"],
             "val_visual_harm_rate": metrics["visual_harm_rate"],
             "val_visual_gate_mean": metrics["visual_modality_mass_mean"],
+            "val_hard_macro_f1": hard_metrics["macro_f1"],
+            "val_hard_threshold": hard_metrics["threshold"],
+            "val_hard_visual_route_rate": hard_metrics["visual_route_rate"],
             "train_helpful_pairs": helpful_total,
             "train_harmful_pairs": harmful_total,
         }), flush=True)
-        score = metrics["macro_f1"]
+        hard_wins = hard_metrics["macro_f1"] > metrics["macro_f1"]
+        score = hard_metrics["macro_f1"] if hard_wins else metrics["macro_f1"]
         if score > best_router:
             best_router = score
             best_router_state = clone_state(head)
+            best_router_mode = "hard" if hard_wins else "soft"
+            best_router_threshold = hard_metrics["threshold"]
             stale = 0
         else:
             stale += 1
@@ -378,9 +442,41 @@ def main() -> None:
     stage_summary["router"] = {
         "text_anchor_macro_f1": anchor_metrics["text_only_macro_f1"],
         "best_val_macro_f1": best_router,
+        "routing_mode": best_router_mode,
+        "hard_threshold": best_router_threshold
+        if best_router_mode == "hard" else None,
     }
     head.to(device)
     metrics, rows = evaluate(head, val, args.batch_size, device)
+    soft_summary = {
+        key: metrics[key]
+        for key in (
+            "accuracy", "macro_f1", "visual_help_rate", "visual_harm_rate"
+        )
+    }
+    if best_router_mode in ("hard", "text_anchor"):
+        hard = hard_router_metrics(rows, best_router_threshold)
+        for row in rows:
+            row["soft_prediction"] = row["prediction"]
+            row["prediction"] = (
+                row["visual_expert_prediction"]
+                if row["visual_modality_mass"] >= best_router_threshold
+                else row["text_only_prediction"]
+            )
+        metrics.update({
+            "accuracy": hard["accuracy"],
+            "macro_f1": hard["macro_f1"],
+            "confusion_matrix": hard["confusion_matrix"],
+            "visual_help_rate": hard["visual_help_rate"],
+            "visual_harm_rate": hard["visual_harm_rate"],
+            "hard_visual_route_rate": hard["visual_route_rate"],
+        })
+    metrics["routing_mode"] = best_router_mode
+    metrics["hard_routing_threshold"] = (
+        best_router_threshold if best_router_mode in ("hard", "text_anchor")
+        else None
+    )
+    metrics["soft_router"] = soft_summary
     metrics["stages"] = stage_summary
     metrics["provenance"] = {
         "git_commit": git_commit(),
@@ -388,6 +484,7 @@ def main() -> None:
         "text_checkpoint": str(args.text_checkpoint),
         "text_teacher": teacher,
         "cache_metadata": val.metadata,
+        "router_train_cache_metadata": router_train.metadata,
         "test_split_used": False,
     }
     torch.save({
@@ -398,6 +495,9 @@ def main() -> None:
         "stages": stage_summary,
         "cache_metadata": train.metadata,
         "text_teacher": teacher,
+        "router_train_cache_metadata": router_train.metadata,
+        "routing_mode": best_router_mode,
+        "hard_routing_threshold": best_router_threshold,
     }, args.output / "best.pt")
     (args.output / "val_metrics.json").write_text(
         json.dumps(metrics, indent=2) + "\n", encoding="utf-8"

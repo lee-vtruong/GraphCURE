@@ -65,7 +65,11 @@ from scripts.train_mocheg_multimodal_verifier import (
     training_objective,
     validate_cache_pair as validate_multimodal_cache_pair,
 )
-from scripts.train_mocheg_staged_multimodal import visual_selection_objective
+from scripts.train_mocheg_staged_multimodal import (
+    hard_router_metrics,
+    validate_router_cache,
+    visual_selection_objective,
+)
 
 
 def test_model_shapes():
@@ -677,6 +681,7 @@ def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):
     train = MultimodalEvidenceDataset(train_path)
     val = MultimodalEvidenceDataset(val_path)
     validate_multimodal_cache_pair(train, val)
+    validate_router_cache(train, val)
     assert train[0]["claim"].shape == (8,)
     assert train[0]["text_evidence"].shape == (3, 8)
     assert train[0]["visual_evidence"].shape == (4, 10)
@@ -782,3 +787,18 @@ def test_visual_expert_is_independent_of_router_gate():
     assert not torch.allclose(
         low_gate["verdict_logits"], high_gate["verdict_logits"]
     )
+
+
+def test_hard_router_selects_specialist_without_logit_blending():
+    rows = [
+        {"gold": 0, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_modality_mass": 0.9},
+        {"gold": 1, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_modality_mass": 0.2},
+        {"gold": 2, "text_only_prediction": 2,
+         "visual_expert_prediction": 1, "visual_modality_mass": 0.1},
+    ]
+    metrics = hard_router_metrics(rows, threshold=0.5)
+    assert metrics["accuracy"] == 1.0
+    assert metrics["macro_f1"] == 1.0
+    assert metrics["visual_route_rate"] == 1 / 3
