@@ -19,9 +19,23 @@ class MultimodalEvidenceHead(nn.Module):
         visual_retrieval_dim: int = 3,
         num_labels: int = 3,
         dropout: float = 0.15,
+        visual_attention_mode: str = "learned",
+        visual_prior_temperature: float = 0.5,
+        visual_residual_scale: float = 0.25,
     ) -> None:
         super().__init__()
+        if visual_attention_mode not in {
+            "learned", "retrieval", "retrieval_residual"
+        }:
+            raise ValueError(
+                f"unknown visual_attention_mode: {visual_attention_mode}"
+            )
+        if visual_prior_temperature <= 0:
+            raise ValueError("visual_prior_temperature must be positive")
         self.num_labels = num_labels
+        self.visual_attention_mode = visual_attention_mode
+        self.visual_prior_temperature = visual_prior_temperature
+        self.visual_residual_scale = visual_residual_scale
         self.claim_projection = nn.Sequential(
             nn.LayerNorm(claim_dim), nn.Linear(claim_dim, hidden_dim), nn.GELU()
         )
@@ -169,7 +183,30 @@ class MultimodalEvidenceHead(nn.Module):
         # gives the modality with more candidates a spurious prior (32 visual
         # candidates versus 8 text candidates yielded ~0.8 visual mass).
         text_attention = self._masked_softmax(text_utility, text_mask)
-        visual_attention = self._masked_softmax(visual_utility, visual_mask)
+        # The upstream Qwen3-VL reranker is a strong selector. Preserve its
+        # reciprocal-rank order as a prior and, when requested, learn only a
+        # bounded residual instead of relearning visual ranking from scratch.
+        reciprocal_rank = visual_retrieval_features[..., 0].float().clamp_min(
+            1e-8
+        )
+        visual_prior_logits = (
+            torch.log(reciprocal_rank) / self.visual_prior_temperature
+        )
+        visual_prior_attention = self._masked_softmax(
+            visual_prior_logits, visual_mask
+        )
+        if self.visual_attention_mode == "retrieval":
+            visual_attention = visual_prior_attention
+        elif self.visual_attention_mode == "retrieval_residual":
+            visual_attention = self._masked_softmax(
+                visual_prior_logits
+                + self.visual_residual_scale * visual_utility,
+                visual_mask,
+            )
+        else:
+            visual_attention = self._masked_softmax(
+                visual_utility, visual_mask
+            )
         text_summary = self._masked_summary(
             text, text_attention, text_mask.bool()
         )
@@ -312,6 +349,7 @@ class MultimodalEvidenceHead(nn.Module):
             "visual_utility_logits": visual_utility,
             "text_attention": text_attention,
             "visual_attention": visual_attention,
+            "visual_prior_attention": visual_prior_attention,
             "text_stance_logits": text_stance_logits,
             "visual_stance_logits": visual_stance_logits,
             "sufficiency_logit": sufficiency_logit,

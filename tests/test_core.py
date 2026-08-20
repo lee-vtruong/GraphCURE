@@ -796,6 +796,34 @@ def test_visual_expert_is_independent_of_router_gate():
     )
 
 
+def test_retrieval_attention_preserves_upstream_rank_order():
+    head = MultimodalEvidenceHead(
+        claim_dim=8, text_dim=8, visual_dim=10, hidden_dim=16, dropout=0.0,
+        visual_attention_mode="retrieval",
+    ).eval()
+    inputs = {
+        "claim": torch.randn(1, 8),
+        "text_evidence": torch.randn(1, 2, 8),
+        "text_mask": torch.ones(1, 2, dtype=torch.bool),
+        "text_retrieval_features": torch.randn(1, 2, 6),
+        "visual_evidence": torch.randn(1, 3, 10),
+        "visual_mask": torch.ones(1, 3, dtype=torch.bool),
+        "visual_retrieval_features": torch.tensor([[
+            [1.0, 1.0, 1.0],
+            [0.5, 0.7, 0.5],
+            [1 / 3, 0.2, 0.0],
+        ]]),
+    }
+    first = head(**inputs)["visual_attention"]
+    with torch.no_grad():
+        for parameter in head.visual_utility.parameters():
+            parameter.add_(100 * torch.randn_like(parameter))
+    second = head(**inputs)["visual_attention"]
+    assert torch.allclose(first, second)
+    assert first.argmax(-1).item() == 0
+    assert first[0, 0] > first[0, 1] > first[0, 2]
+
+
 def test_hard_router_selects_specialist_without_logit_blending():
     rows = [
         {"gold": 0, "text_only_prediction": 1,

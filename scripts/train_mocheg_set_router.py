@@ -316,6 +316,15 @@ def load_expert(path: Path, metadata: dict, device: torch.device
         visual_dim=int(metadata["visual_dim"]),
         hidden_dim=hidden_dim,
         dropout=0.0,
+        visual_attention_mode=checkpoint.get(
+            "visual_attention_mode", "learned"
+        ),
+        visual_prior_temperature=float(
+            checkpoint.get("visual_prior_temperature", 0.5)
+        ),
+        visual_residual_scale=float(
+            checkpoint.get("visual_residual_scale", 0.25)
+        ),
     )
     head.load_state_dict(state, strict=True)
     head.to(device).eval()

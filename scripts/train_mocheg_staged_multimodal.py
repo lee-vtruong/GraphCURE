@@ -60,13 +60,14 @@ def visual_selection_objective(
     supervision: dict,
     visual_mask: torch.Tensor,
     stance_weight: float,
+    prior_kl_weight: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     relevance = supervision["visual_relevance"].bool()
     positive = relevance & visual_mask.bool()
     rows = positive.any(1)
     if not rows.any():
         zero = output["visual_attention"].new_zeros(())
-        return zero, {"selection": 0.0, "stance": 0.0}
+        return zero, {"selection": 0.0, "stance": 0.0, "prior_kl": 0.0}
     positive_mass = torch.sum(
         output["visual_attention"] * positive.float(), dim=1
     )
@@ -75,10 +76,16 @@ def visual_selection_objective(
     stance = F.cross_entropy(
         output["visual_stance_logits"][positive].float(), targets
     )
-    loss = selection + stance_weight * stance
+    attention = output["visual_attention"][rows].float().clamp_min(1e-8)
+    prior = output["visual_prior_attention"][rows].float().clamp_min(1e-8)
+    prior_kl = torch.sum(
+        prior * (torch.log(prior) - torch.log(attention)), dim=1
+    ).mean()
+    loss = selection + stance_weight * stance + prior_kl_weight * prior_kl
     return loss, {
         "selection": float(selection.detach()),
         "stance": float(stance.detach()),
+        "prior_kl": float(prior_kl.detach()),
     }
 
 
@@ -157,6 +164,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache-root", type=Path,
                         default=Path("data/processed/mocheg_multimodal_cache"))
+    parser.add_argument(
+        "--val-cache-root", type=Path,
+        help="optional validation cache root when train uses a natural "
+             "retrieval-only cache",
+    )
     parser.add_argument("--router-cache-root", type=Path)
     parser.add_argument("--text-checkpoint", type=Path, required=True)
     parser.add_argument(
@@ -180,6 +192,14 @@ def main() -> None:
     parser.add_argument("--router-learning-rate", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--selector-stance-weight", type=float, default=0.15)
+    parser.add_argument("--selector-prior-kl-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--visual-attention-mode",
+        choices=("learned", "retrieval", "retrieval_residual"),
+        default="learned",
+    )
+    parser.add_argument("--visual-prior-temperature", type=float, default=0.5)
+    parser.add_argument("--visual-residual-scale", type=float, default=0.25)
     parser.add_argument("--expert-gold-weight", type=float, default=1.0)
     parser.add_argument("--residual-penalty", type=float, default=0.01)
     parser.add_argument("--router-target-weight", type=float, default=0.5)
@@ -197,8 +217,13 @@ def main() -> None:
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     args.output.mkdir(parents=True, exist_ok=True)
     train = MultimodalEvidenceDataset(args.cache_root / "train.pt")
-    val = MultimodalEvidenceDataset(args.cache_root / "val.pt")
-    validate_cache_pair(train, val)
+    val_root = args.val_cache_root or args.cache_root
+    val = MultimodalEvidenceDataset(val_root / "val.pt")
+    validate_cache_pair(
+        train,
+        val,
+        expected_train_gold_injection=(args.visual_attention_mode == "learned"),
+    )
     router_train = (
         MultimodalEvidenceDataset(args.router_cache_root / "train.pt")
         if args.router_cache_root is not None else train
@@ -211,6 +236,9 @@ def main() -> None:
         visual_dim=int(train.metadata["visual_dim"]),
         hidden_dim=args.hidden_dim,
         dropout=args.dropout,
+        visual_attention_mode=args.visual_attention_mode,
+        visual_prior_temperature=args.visual_prior_temperature,
+        visual_residual_scale=args.visual_residual_scale,
     ).to(device)
     teacher = load_text_teacher(head, args.text_checkpoint)
     resumed_expert = None
@@ -264,6 +292,7 @@ def main() -> None:
             loss, _ = visual_selection_objective(
                 output, supervision, inputs["visual_mask"],
                 args.selector_stance_weight,
+                args.selector_prior_kl_weight,
             )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(head.parameters(), 1.0)
@@ -277,7 +306,10 @@ def main() -> None:
                 metrics["visual_selection_hit_at_1"],
         }), flush=True)
         score = metrics["visual_selection_hit_at_1"]
-        if score > best_selector:
+        # Retrieval-only attention has a constant ranking while its projection
+        # and stance heads still learn. Keep the newest tied checkpoint so the
+        # downstream expert does not receive an untrained stance head.
+        if score >= best_selector:
             best_selector = score
             best_selector_state = clone_state(head)
             stale = 0
@@ -292,6 +324,9 @@ def main() -> None:
         "head": best_selector_state,
         "metrics": stage_summary["selector"],
         "seed": args.seed,
+        "visual_attention_mode": args.visual_attention_mode,
+        "visual_prior_temperature": args.visual_prior_temperature,
+        "visual_residual_scale": args.visual_residual_scale,
         "test_split_used": False,
     }, args.output / "selector_best.pt")
 
@@ -365,6 +400,9 @@ def main() -> None:
         "head": best_expert_state,
         "metrics": stage_summary["expert"],
         "seed": args.seed,
+        "visual_attention_mode": args.visual_attention_mode,
+        "visual_prior_temperature": args.visual_prior_temperature,
+        "visual_residual_scale": args.visual_residual_scale,
         "test_split_used": False,
     }, args.output / "expert_best.pt")
 
@@ -544,6 +582,9 @@ def main() -> None:
         "router_train_cache_metadata": router_train.metadata,
         "routing_mode": best_router_mode,
         "hard_routing_threshold": best_router_threshold,
+        "visual_attention_mode": args.visual_attention_mode,
+        "visual_prior_temperature": args.visual_prior_temperature,
+        "visual_residual_scale": args.visual_residual_scale,
     }, args.output / "best.pt")
     (args.output / "val_metrics.json").write_text(
         json.dumps(metrics, indent=2) + "\n", encoding="utf-8"

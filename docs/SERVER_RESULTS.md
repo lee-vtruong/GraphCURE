@@ -591,6 +591,21 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   to Stage B expert quality. The next control audits whether learned visual
   attention degrades the upstream Qwen3-VL reranker order.
 
+### R2V-MM-SEL-VAL-01 — learned selector versus upstream order
+
+- Gold-containing validation candidate sets: `574`.
+- Upstream reranker order: Hit@1 `0.540070`, Hit@5 `0.785714`, Hit@10
+  `0.867596`, MRR `0.652585`, mean first-gold rank `4.5174`.
+- Learned attention: Hit@1 `0.205575`, Hit@5 `0.452962`, Hit@10 `0.639373`,
+  MRR `0.337707`, mean first-gold rank `9.1289`.
+- Upstream order was better on `381` examples, learned order on `86`, with
+  `107` ties. Learned-minus-upstream deltas were `-0.334495` Hit@1 and
+  `-0.314878` MRR.
+- Decision: **selector is the current Stage-B bottleneck**. Replace unconstrained
+  learned attention with an upstream reciprocal-rank prior plus a bounded
+  learnable residual. Penalize KL divergence from the retrieval prior and
+  compare against a retrieval-only control before revisiting the router.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

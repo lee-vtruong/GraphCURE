@@ -73,6 +73,9 @@ def build_head(
     hidden_dim: int,
     dropout: float,
     device: torch.device,
+    visual_attention_mode: str,
+    visual_prior_temperature: float,
+    visual_residual_scale: float,
 ) -> MultimodalEvidenceHead:
     head = MultimodalEvidenceHead(
         claim_dim=int(metadata["claim_dim"]),
@@ -80,6 +83,9 @@ def build_head(
         visual_dim=int(metadata["visual_dim"]),
         hidden_dim=hidden_dim,
         dropout=dropout,
+        visual_attention_mode=visual_attention_mode,
+        visual_prior_temperature=visual_prior_temperature,
+        visual_residual_scale=visual_residual_scale,
     ).to(device)
     load_text_teacher(head, text_checkpoint)
     freeze_text_branch(head)
@@ -203,6 +209,7 @@ def train_fold_expert(
             loss, _ = visual_selection_objective(
                 output, supervision, inputs["visual_mask"],
                 args.selector_stance_weight,
+                args.selector_prior_kl_weight,
             )
             if loss.requires_grad:
                 loss.backward()
@@ -280,6 +287,14 @@ def main() -> None:
     parser.add_argument("--expert-learning-rate", type=float, default=3e-4)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--selector-stance-weight", type=float, default=0.15)
+    parser.add_argument("--selector-prior-kl-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--visual-attention-mode",
+        choices=("learned", "retrieval", "retrieval_residual"),
+        default="learned",
+    )
+    parser.add_argument("--visual-prior-temperature", type=float, default=0.5)
+    parser.add_argument("--visual-residual-scale", type=float, default=0.25)
     parser.add_argument("--expert-gold-weight", type=float, default=1.0)
     parser.add_argument("--residual-penalty", type=float, default=0.01)
     parser.add_argument("--device", default="cuda")
@@ -327,7 +342,8 @@ def main() -> None:
         )
         head = build_head(
             expert_train.metadata, fold_text_checkpoint, args.hidden_dim,
-            args.dropout, device,
+            args.dropout, device, args.visual_attention_mode,
+            args.visual_prior_temperature, args.visual_residual_scale,
         )
         train_fold_expert(
             head, expert_train, fit_indices, args, device, fold
@@ -343,6 +359,9 @@ def main() -> None:
             "fit_samples": len(fit_indices),
             "held_out_samples": len(held_indices),
             "test_split_used": False,
+            "visual_attention_mode": args.visual_attention_mode,
+            "visual_prior_temperature": args.visual_prior_temperature,
+            "visual_residual_scale": args.visual_residual_scale,
         }, args.output_root / f"fold_{fold}_expert.pt")
         del head
         if device.type == "cuda":
@@ -377,6 +396,9 @@ def main() -> None:
         "train_samples": len(labels),
         "val_samples": len(val),
         "feature_count": len(names),
+        "visual_attention_mode": args.visual_attention_mode,
+        "visual_prior_temperature": args.visual_prior_temperature,
+        "visual_residual_scale": args.visual_residual_scale,
         "text_cache_root": str(args.text_cache_root),
         "full_expert_checkpoint": str(args.full_expert_checkpoint),
         "full_expert_checkpoint_stage": full_checkpoint.get("stage"),

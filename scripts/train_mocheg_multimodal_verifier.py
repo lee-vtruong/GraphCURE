@@ -79,15 +79,20 @@ def collate(rows: list[dict]) -> dict:
 
 
 def validate_cache_pair(train: MultimodalEvidenceDataset,
-                        val: MultimodalEvidenceDataset) -> None:
+                        val: MultimodalEvidenceDataset,
+                        expected_train_gold_injection: bool = True) -> None:
     for key in (
         "claim_dim", "text_dim", "visual_dim", "text_top_k",
         "visual_top_k", "visual_model",
     ):
         if train.metadata.get(key) != val.metadata.get(key):
             raise ValueError(f"train/val multimodal cache mismatch for {key}")
-    if not train.metadata.get("train_gold_injection"):
-        raise ValueError("training cache must inject train-only visual positives")
+    actual_injection = bool(train.metadata.get("train_gold_injection"))
+    if actual_injection != expected_train_gold_injection:
+        expected = "inject" if expected_train_gold_injection else "preserve"
+        raise ValueError(
+            f"training cache must {expected} natural visual candidates"
+        )
     if val.metadata.get("validation_gold_injection"):
         raise ValueError("validation cache must never inject gold visual evidence")
 

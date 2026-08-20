@@ -358,7 +358,8 @@ next preregistered run therefore separates optimization into three stages:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
-  --cache-root data/processed/mocheg_multimodal_cache \
+  --cache-root data/processed/mocheg_multimodal_router_cache \
+  --val-cache-root data/processed/mocheg_multimodal_cache \
   --text-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
   --output outputs/mocheg_staged_multimodal_seed42 \
   --hidden-dim 384 --batch-size 128 \
@@ -508,3 +509,47 @@ python -m scripts.train_mocheg_set_router \
   --seed 42 \
   2>&1 | tee outputs/mocheg-crossfit-set-router-seed42-v6.log
 ```
+
+### Retrieval-anchored visual attention
+
+The selector audit found that learned attention destroyed the upstream visual
+reranker order: conditional Hit@1 fell from `0.5401` to `0.2056` and MRR from
+`0.6526` to `0.3377`. The revised selector treats reciprocal rank as a prior:
+
+`attention = softmax(log(reciprocal_rank) / temperature + scale * residual)`.
+
+A KL trust region prevents the residual from repeating the unconstrained
+ranking collapse. Screen a retrieval-only control and the proposed residual
+variant on validation; keep routing disabled:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
+  --cache-root data/processed/mocheg_multimodal_router_cache \
+  --val-cache-root data/processed/mocheg_multimodal_cache \
+  --text-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --output outputs/mocheg_retrieval_attention_control_seed42_v7 \
+  --visual-attention-mode retrieval \
+  --visual-prior-temperature 0.5 \
+  --selector-epochs 4 --selector-patience 4 \
+  --expert-epochs 12 --expert-patience 5 \
+  --router-epochs 0 \
+  --device cuda --batch-size 128 --seed 42 \
+  2>&1 | tee outputs/mocheg-retrieval-attention-control-v7.log
+
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
+  --cache-root data/processed/mocheg_multimodal_cache \
+  --text-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --output outputs/mocheg_retrieval_residual_seed42_v7 \
+  --visual-attention-mode retrieval_residual \
+  --visual-prior-temperature 0.5 \
+  --visual-residual-scale 0.10 \
+  --selector-prior-kl-weight 1.0 \
+  --selector-epochs 10 --selector-patience 4 \
+  --expert-epochs 12 --expert-patience 5 \
+  --router-epochs 0 \
+  --device cuda --batch-size 128 --seed 42 \
+  2>&1 | tee outputs/mocheg-retrieval-residual-v7.log
+```
+
+Compare `stages.selector.best_val_select_at_1`, visual-expert Macro-F1, and
+oracle-router Macro-F1. Test remains locked.
