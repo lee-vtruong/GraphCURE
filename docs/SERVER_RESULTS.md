@@ -473,6 +473,21 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   primarily on decisive pairs (visual corrects text versus visual harms text),
   with class balancing and a low-weight soft target for ambiguous pairs.
 
+### R2V-MM-VER-VAL-05 — conflict-aware soft-router screen
+
+- Text anchor Macro-F1: `0.549948`
+- Gate-independent visual expert Macro-F1: `0.509576`
+- Oracle-router Macro-F1: `0.647698` (**+0.097750 over text**)
+- Visual Select@1: `0.205575` (**selector gate passed**)
+- The learned best checkpoint remained the epoch-zero text anchor: gate
+  `2.06e-9`, zero help/harm, Macro-F1 `0.549948`.
+- Interpretation: decoupling expert computation did not remove the large
+  complementarity ceiling, but a soft logit-interpolation router still failed
+  the validation improvement gate. Final-best metrics alone cannot distinguish
+  router-score failure from threshold/interpolation failure. Preserve the run
+  and inspect all Stage-3 epochs before choosing between a hard calibrated
+  selector and a new router representation. Test remains locked.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
