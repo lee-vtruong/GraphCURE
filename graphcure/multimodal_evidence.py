@@ -22,6 +22,8 @@ class MultimodalEvidenceHead(nn.Module):
         visual_attention_mode: str = "learned",
         visual_prior_temperature: float = 0.5,
         visual_residual_scale: float = 0.25,
+        visual_expert_mode: str = "residual",
+        visual_stance_scale: float = 1.0,
     ) -> None:
         super().__init__()
         if visual_attention_mode not in {
@@ -32,10 +34,14 @@ class MultimodalEvidenceHead(nn.Module):
             )
         if visual_prior_temperature <= 0:
             raise ValueError("visual_prior_temperature must be positive")
+        if visual_expert_mode not in {"residual", "stance_product"}:
+            raise ValueError(f"unknown visual_expert_mode: {visual_expert_mode}")
         self.num_labels = num_labels
         self.visual_attention_mode = visual_attention_mode
         self.visual_prior_temperature = visual_prior_temperature
         self.visual_residual_scale = visual_residual_scale
+        self.visual_expert_mode = visual_expert_mode
+        self.visual_stance_scale = visual_stance_scale
         self.claim_projection = nn.Sequential(
             nn.LayerNorm(claim_dim), nn.Linear(claim_dim, hidden_dim), nn.GELU()
         )
@@ -289,7 +295,22 @@ class MultimodalEvidenceHead(nn.Module):
             ),
             dim=-1,
         )
-        visual_residual = self.visual_residual(verdict_input)
+        if self.visual_expert_mode == "stance_product":
+            # Evidence-grounded product-of-experts: the visual branch may only
+            # alter the verdict through its explicitly supervised stance state
+            # and a supervised sufficiency gate. Centering preserves logits up
+            # to a class-independent constant.
+            visual_log_probability = torch.log(visual_stance.clamp_min(1e-8))
+            visual_log_probability = visual_log_probability - (
+                visual_log_probability.mean(-1, keepdim=True)
+            )
+            visual_residual = (
+                self.visual_stance_scale
+                * torch.sigmoid(sufficiency_logit).unsqueeze(-1)
+                * visual_log_probability
+            )
+        else:
+            visual_residual = self.visual_residual(verdict_input)
         visual_expert_logits = text_verdict_logits + visual_residual
         text_probability = torch.softmax(text_verdict_logits.float(), dim=-1)
         expert_probability = torch.softmax(visual_expert_logits.float(), dim=-1)
@@ -352,6 +373,7 @@ class MultimodalEvidenceHead(nn.Module):
             "visual_prior_attention": visual_prior_attention,
             "text_stance_logits": text_stance_logits,
             "visual_stance_logits": visual_stance_logits,
+            "visual_stance_probability": visual_stance,
             "sufficiency_logit": sufficiency_logit,
             "modality_mass": modality_mass,
             "conflict": conflict,

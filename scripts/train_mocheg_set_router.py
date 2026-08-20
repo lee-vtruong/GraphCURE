@@ -325,6 +325,8 @@ def load_expert(path: Path, metadata: dict, device: torch.device
         visual_residual_scale=float(
             checkpoint.get("visual_residual_scale", 0.25)
         ),
+        visual_expert_mode=checkpoint.get("visual_expert_mode", "residual"),
+        visual_stance_scale=float(checkpoint.get("visual_stance_scale", 1.0)),
     )
     head.load_state_dict(state, strict=True)
     head.to(device).eval()

@@ -9,7 +9,13 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    roc_auc_score,
+)
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -116,6 +122,7 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
     predictions: list[int] = []
     text_predictions: list[int] = []
     expert_predictions: list[int] = []
+    stance_predictions: list[int] = []
     probabilities: list[list[float]] = []
     text_coverage: list[bool] = []
     visual_coverage: list[bool] = []
@@ -125,6 +132,7 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
     conflicts: list[float] = []
     gates_with_gold: list[float] = []
     gates_without_gold: list[float] = []
+    sufficiencies: list[float] = []
     rows: list[dict] = []
     loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
     for batch in tqdm(loader, desc="evaluate", leave=False):
@@ -149,6 +157,9 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         prediction = probability.argmax(-1)
         text_prediction = text_probability.argmax(-1)
         expert_prediction = expert_probability.argmax(-1)
+        stance_prediction = output[
+            "visual_stance_probability"
+        ].float().cpu().argmax(-1)
         text_selected = output["text_attention"].cpu().argmax(-1)
         visual_selected = output["visual_attention"].cpu().argmax(-1)
         modality_mass = output["modality_mass"].float().cpu()
@@ -175,12 +186,14 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
             else:
                 gates_without_gold.append(float(modality_mass[index, 1]))
             conflicts.append(float(conflict[index]))
+            sufficiencies.append(float(sufficiency[index]))
             rows.append({
                 "id": sample_id,
                 "gold": int(target[index]),
                 "prediction": int(prediction[index]),
                 "text_only_prediction": int(text_prediction[index]),
                 "visual_expert_prediction": int(expert_prediction[index]),
+                "visual_stance_prediction": int(stance_prediction[index]),
                 "probabilities": probability[index].tolist(),
                 "text_only_probabilities": text_probability[index].tolist(),
                 "visual_expert_probabilities":
@@ -201,16 +214,20 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         predictions.extend(prediction.tolist())
         text_predictions.extend(text_prediction.tolist())
         expert_predictions.extend(expert_prediction.tolist())
+        stance_predictions.extend(stance_prediction.tolist())
         probabilities.extend(probability.tolist())
     y = np.asarray(labels)
     pred = np.asarray(predictions)
     text_pred = np.asarray(text_predictions)
     expert_pred = np.asarray(expert_predictions)
+    stance_pred = np.asarray(stance_predictions)
     oracle_pred = text_pred.copy()
     oracle_pred[(text_pred != y) & (expert_pred == y)] = expert_pred[
         (text_pred != y) & (expert_pred == y)
     ]
     prob = np.asarray(probabilities)
+    visual_available = np.asarray(visual_coverage, dtype=bool)
+    sufficiency_array = np.asarray(sufficiencies)
     return {
         "samples": len(y),
         "accuracy": float(accuracy_score(y, pred)),
@@ -219,6 +236,19 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         "text_only_macro_f1": float(f1_score(y, text_pred, average="macro")),
         "visual_expert_accuracy": float(accuracy_score(y, expert_pred)),
         "visual_expert_macro_f1": float(f1_score(y, expert_pred, average="macro")),
+        "visual_stance_accuracy_gold_candidates": float(accuracy_score(
+            y[visual_available], stance_pred[visual_available]
+        )) if visual_available.any() else 0.0,
+        "visual_stance_macro_f1_gold_candidates": float(f1_score(
+            y[visual_available], stance_pred[visual_available],
+            labels=[0, 1, 2], average="macro", zero_division=0,
+        )) if visual_available.any() else 0.0,
+        "visual_sufficiency_auroc": float(roc_auc_score(
+            visual_available.astype(np.int64), sufficiency_array
+        )) if len(np.unique(visual_available)) == 2 else 0.0,
+        "visual_sufficiency_average_precision": float(average_precision_score(
+            visual_available.astype(np.int64), sufficiency_array
+        )) if visual_available.any() else 0.0,
         "oracle_router_accuracy": float(accuracy_score(y, oracle_pred)),
         "oracle_router_macro_f1": float(f1_score(y, oracle_pred, average="macro")),
         "confusion_matrix": confusion_matrix(y, pred).tolist(),

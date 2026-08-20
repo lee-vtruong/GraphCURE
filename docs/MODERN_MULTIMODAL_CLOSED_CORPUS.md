@@ -553,3 +553,36 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
 
 Compare `stages.selector.best_val_select_at_1`, visual-expert Macro-F1, and
 oracle-router Macro-F1. Test remains locked.
+
+The retrieval-only expert utility audit then showed that free-form residual
+fusion remained harmful even when the top-ranked image was annotated gold
+(`-0.0680` Macro-F1; `27` help versus `56` harm). Replace the verdict residual
+with a stance-product expert. Its visual branch is explicitly supervised to
+predict support/refute/NEI on relevant images; a balanced sufficiency head
+controls whether centered visual log-probabilities may modify frozen text
+logits. No-gold cases therefore have an architectural path back to text:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
+  --cache-root data/processed/mocheg_multimodal_router_cache \
+  --val-cache-root data/processed/mocheg_multimodal_cache \
+  --text-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --output outputs/mocheg_stance_product_seed42_v8 \
+  --visual-attention-mode retrieval \
+  --visual-prior-temperature 0.5 \
+  --visual-expert-mode stance_product \
+  --visual-stance-scale 1.0 \
+  --selector-stance-weight 1.0 \
+  --selector-epochs 10 --selector-patience 10 \
+  --expert-sufficiency-weight 1.0 \
+  --expert-epochs 12 --expert-patience 5 \
+  --residual-penalty 0 \
+  --router-epochs 0 \
+  --device cuda --batch-size 128 --seed 42 \
+  2>&1 | tee outputs/mocheg-stance-product-v8.log
+```
+
+In addition to expert/oracle Macro-F1, report visual-stance Macro-F1 on
+gold-containing candidate sets and sufficiency AUROC/AUPRC. If stance itself is
+weak, global frozen image embeddings are inadequate for verdict relation
+modeling and the next expert must use token-level claim-image cross-attention.

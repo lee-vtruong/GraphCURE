@@ -825,6 +825,38 @@ def test_retrieval_attention_preserves_upstream_rank_order():
     assert first[0, 0] > first[0, 1] > first[0, 2]
 
 
+def test_stance_product_falls_back_to_text_when_insufficient():
+    head = MultimodalEvidenceHead(
+        claim_dim=8, text_dim=8, visual_dim=10, hidden_dim=16, dropout=0.0,
+        visual_attention_mode="retrieval", visual_expert_mode="stance_product",
+    ).eval()
+    inputs = {
+        "claim": torch.randn(2, 8),
+        "text_evidence": torch.randn(2, 3, 8),
+        "text_mask": torch.ones(2, 3, dtype=torch.bool),
+        "text_retrieval_features": torch.randn(2, 3, 6),
+        "visual_evidence": torch.randn(2, 4, 10),
+        "visual_mask": torch.ones(2, 4, dtype=torch.bool),
+        "visual_retrieval_features": torch.rand(2, 4, 3).clamp_min(0.1),
+    }
+    with torch.no_grad():
+        head.sufficiency[-1].weight.zero_()
+        head.sufficiency[-1].bias.fill_(-20.0)
+    insufficient = head(**inputs)
+    assert torch.allclose(
+        insufficient["visual_expert_logits"],
+        insufficient["text_verdict_logits"],
+        atol=1e-6,
+    )
+    with torch.no_grad():
+        head.sufficiency[-1].bias.fill_(20.0)
+    sufficient = head(**inputs)
+    assert not torch.allclose(
+        sufficient["visual_expert_logits"],
+        sufficient["text_verdict_logits"],
+    )
+
+
 def test_hard_router_selects_specialist_without_logit_blending():
     rows = [
         {"gold": 0, "text_only_prediction": 1,

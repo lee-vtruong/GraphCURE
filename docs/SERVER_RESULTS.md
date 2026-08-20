@@ -624,6 +624,23 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   diagnose visual-expert help/harm by retrieved-evidence sufficiency before
   changing the residual-verdict objective.
 
+### R2V-MM-EXP-VAL-01 — retrieval-only expert utility strata
+
+- Overall visual expert lost `-0.036791` Macro-F1 versus text, with `134` help
+  and `188` harm (exact McNemar `p=0.00308`).
+- With gold visual evidence in candidates, it lost `-0.063035` Macro-F1 and
+  produced `46` help versus `91` harm (`p=0.000150`).
+- Even when the selector ranked a gold image first, the expert lost
+  `-0.067998` Macro-F1 with `27` help versus `56` harm (`p=0.00193`).
+- Without gold candidates it lost `-0.014099` Macro-F1 (`88` help, `97` harm).
+- A qrel-oracle sufficiency policy reached only `0.520129` Macro-F1, below the
+  `0.549948` text anchor.
+- Decision: **free-form residual verdict fusion is the bottleneck**. Neither
+  better selection nor oracle evidence availability rescues it. Replace it
+  with an evidence-grounded stance product in which visual evidence affects
+  class logits only through supervised support/refute/NEI state and a
+  supervised sufficiency gate.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

@@ -200,7 +200,14 @@ def main() -> None:
     )
     parser.add_argument("--visual-prior-temperature", type=float, default=0.5)
     parser.add_argument("--visual-residual-scale", type=float, default=0.25)
+    parser.add_argument(
+        "--visual-expert-mode",
+        choices=("residual", "stance_product"),
+        default="residual",
+    )
+    parser.add_argument("--visual-stance-scale", type=float, default=1.0)
     parser.add_argument("--expert-gold-weight", type=float, default=1.0)
+    parser.add_argument("--expert-sufficiency-weight", type=float, default=1.0)
     parser.add_argument("--residual-penalty", type=float, default=0.01)
     parser.add_argument("--router-target-weight", type=float, default=0.5)
     parser.add_argument("--router-ambiguous-weight", type=float, default=0.1)
@@ -239,6 +246,8 @@ def main() -> None:
         visual_attention_mode=args.visual_attention_mode,
         visual_prior_temperature=args.visual_prior_temperature,
         visual_residual_scale=args.visual_residual_scale,
+        visual_expert_mode=args.visual_expert_mode,
+        visual_stance_scale=args.visual_stance_scale,
     ).to(device)
     teacher = load_text_teacher(head, args.text_checkpoint)
     resumed_expert = None
@@ -327,12 +336,18 @@ def main() -> None:
         "visual_attention_mode": args.visual_attention_mode,
         "visual_prior_temperature": args.visual_prior_temperature,
         "visual_residual_scale": args.visual_residual_scale,
+        "visual_expert_mode": args.visual_expert_mode,
+        "visual_stance_scale": args.visual_stance_scale,
         "test_split_used": False,
     }, args.output / "selector_best.pt")
 
     # Stage 2: train a full-strength visual expert while the text anchor and
     # evidence selector remain frozen. The router is deliberately absent.
-    expert_modules = (head.sufficiency, head.visual_residual)
+    expert_modules = (
+        (head.sufficiency,)
+        if args.visual_expert_mode == "stance_product"
+        else (head.sufficiency, head.visual_residual)
+    )
     set_trainable(head, expert_modules)
     expert_optimizer = optimizer_for(
         expert_modules, args.expert_learning_rate, args.weight_decay
@@ -359,10 +374,36 @@ def main() -> None:
                 reduction="none",
             )
             has_gold = supervision["visual_relevance"].bool().any(1).float()
-            sample_weight = 1.0 + args.expert_gold_weight * has_gold
-            verdict = torch.sum(terms * sample_weight) / sample_weight.sum()
-            penalty = output["visual_residual_logits"].float().square().mean()
-            loss = verdict + args.residual_penalty * penalty
+            if args.visual_expert_mode == "stance_product":
+                # Qrels are diagnostic supervision only during training. The
+                # learned sufficiency gate must infer availability at runtime.
+                verdict = torch.sum(terms * has_gold) / has_gold.sum().clamp_min(1)
+            else:
+                sample_weight = 1.0 + args.expert_gold_weight * has_gold
+                verdict = torch.sum(terms * sample_weight) / sample_weight.sum()
+            sufficiency_terms = F.binary_cross_entropy_with_logits(
+                output["sufficiency_logit"].float(), has_gold,
+                reduction="none",
+            )
+            positive_fraction = has_gold.mean().clamp(1e-3, 1 - 1e-3)
+            sufficiency_balance = torch.where(
+                has_gold.bool(),
+                0.5 / positive_fraction,
+                0.5 / (1.0 - positive_fraction),
+            )
+            sufficiency = torch.sum(
+                sufficiency_terms * sufficiency_balance
+            ) / sufficiency_balance.sum()
+            penalty = (
+                output["visual_residual_logits"].float().square().mean()
+                if args.visual_expert_mode == "residual"
+                else output["visual_residual_logits"].new_zeros(())
+            )
+            loss = (
+                verdict
+                + args.expert_sufficiency_weight * sufficiency
+                + args.residual_penalty * penalty
+            )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(head.parameters(), 1.0)
             expert_optimizer.step()
@@ -403,6 +444,8 @@ def main() -> None:
         "visual_attention_mode": args.visual_attention_mode,
         "visual_prior_temperature": args.visual_prior_temperature,
         "visual_residual_scale": args.visual_residual_scale,
+        "visual_expert_mode": args.visual_expert_mode,
+        "visual_stance_scale": args.visual_stance_scale,
         "test_split_used": False,
     }, args.output / "expert_best.pt")
 
@@ -585,6 +628,8 @@ def main() -> None:
         "visual_attention_mode": args.visual_attention_mode,
         "visual_prior_temperature": args.visual_prior_temperature,
         "visual_residual_scale": args.visual_residual_scale,
+        "visual_expert_mode": args.visual_expert_mode,
+        "visual_stance_scale": args.visual_stance_scale,
     }, args.output / "best.pt")
     (args.output / "val_metrics.json").write_text(
         json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
