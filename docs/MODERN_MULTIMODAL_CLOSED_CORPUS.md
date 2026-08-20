@@ -462,3 +462,49 @@ This remains a validation-only screen. Proceed to repeated seeds only if its
 frozen validation Macro-F1 improves the text anchor by at least `0.01`, the
 bootstrap interval is directionally convincing, and decisive gate AUROC is at
 least `0.60`. Test remains locked.
+
+The first set-router screen failed because cross-fitting the meta-router did
+not make the underlying expert outcomes honest: both experts had already seen
+all training labels. Its OOF train Macro-F1 reached an implausible `0.8134` and
+the selected policy routed `97.0%` of train versus `96.2%` of validation, where
+Macro-F1 collapsed to `0.5138`. Decisive help-vs-harm AUROC was `0.4961`.
+
+Build fold predictions in which neither the text anchor nor the visual expert
+has observed the held-out example. Fixed epoch counts avoid using fold labels
+for early stopping. The job writes each fold atomically and resumes completed
+folds after interruption:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.build_mocheg_crossfit_router_features \
+  --text-cache-root data/processed/mocheg_reasoning_cache \
+  --full-expert-checkpoint \
+    outputs/mocheg_conflict_router_seed42_v3/expert_best.pt \
+  --expert-cache-root data/processed/mocheg_multimodal_cache \
+  --router-cache-root data/processed/mocheg_multimodal_router_cache \
+  --output-root data/processed/mocheg_crossfit_router_features_v6 \
+  --folds 5 \
+  --text-epochs 2 \
+  --selector-epochs 8 \
+  --expert-epochs 4 \
+  --batch-size 128 \
+  --device cuda \
+  --seed 42 \
+  2>&1 | tee outputs/mocheg-crossfit-router-features-v6.log
+```
+
+Then fit the utility router on the honest fold outcomes. Its inner OOF layer
+selects the threshold using train only; validation remains a single frozen
+evaluation:
+
+```bash
+python -m scripts.train_mocheg_set_router \
+  --feature-cache-root data/processed/mocheg_crossfit_router_features_v6 \
+  --output outputs/mocheg_crossfit_set_router_seed42_v6 \
+  --device cpu \
+  --folds 5 \
+  --neutral-weight 0.25 \
+  --harm-penalty 1.0 \
+  --bootstrap-iterations 5000 \
+  --seed 42 \
+  2>&1 | tee outputs/mocheg-crossfit-set-router-seed42-v6.log
+```

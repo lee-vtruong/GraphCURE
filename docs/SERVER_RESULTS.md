@@ -544,6 +544,31 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   estimator. Select its threshold exclusively on out-of-fold train predictions
   before one frozen validation evaluation.
 
+### R2V-MM-VER-VAL-07 — set-level utility router
+
+- Natural-train utility labels: `786` harmful, `9283` neutral, and `1562`
+  helpful.
+- Train-OOF threshold `-0.523033` routed `11282/11631` examples (`96.999%`),
+  yielding Accuracy `0.819534` and Macro-F1 `0.813366` with `1459` corrections
+  versus `578` regressions.
+- Frozen validation routed `1400/1456` examples (`96.154%`) but fell to
+  Accuracy `0.535714` and Macro-F1 `0.513815`; it made `122` corrections versus
+  `164` regressions.
+- Helpful-vs-all validation AUROC/AUPRC improved to `0.624981 / 0.247338`, but
+  decisive helpful-vs-harmful AUROC/AUPRC remained random at
+  `0.496108 / 0.422203`.
+- Mean utility scores were `0.254788` for helpful, `0.261918` for harmful, and
+  `0.026109` for neutral cases. The model learned decisive-vs-neutral evidence
+  disagreement, not the sign of its utility.
+- Paired Macro-F1 delta bootstrap: mean `-0.036196`, 95% interval
+  `[-0.060030, -0.011899]`, probability positive `0.0016`.
+- Decision: **failed**. Cross-fitting only the meta-router is insufficient
+  because every natural-train outcome still comes from a visual expert fitted
+  on all train labels. The extreme train/validation route-rate mismatch is
+  consistent with expert-outcome leakage/overfit. The next scientifically valid
+  router screen must generate each train utility target using a fold expert that
+  never observed that example.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

@@ -322,11 +322,27 @@ def load_expert(path: Path, metadata: dict, device: torch.device
     return head, checkpoint
 
 
+def load_feature_cache(path: Path) -> tuple[
+    np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str], list[str]
+]:
+    payload = np.load(path, allow_pickle=False)
+    return (
+        payload["features"], payload["gold"], payload["text_prediction"],
+        payload["expert_prediction"], payload["feature_names"].tolist(),
+        payload["ids"].tolist(),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--expert-checkpoint", type=Path, required=True)
-    parser.add_argument("--expert-cache-root", type=Path, required=True)
-    parser.add_argument("--router-cache-root", type=Path, required=True)
+    parser.add_argument("--expert-checkpoint", type=Path)
+    parser.add_argument("--expert-cache-root", type=Path)
+    parser.add_argument("--router-cache-root", type=Path)
+    parser.add_argument(
+        "--feature-cache-root", type=Path,
+        help="use cross-fitted train_oof.npz and val_full.npz instead of "
+             "extracting in-sample train expert outcomes",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--folds", type=int, default=5)
@@ -342,21 +358,44 @@ def main() -> None:
         args.device if args.device == "cpu" or torch.cuda.is_available()
         else "cpu"
     )
-    expert_train = MultimodalEvidenceDataset(
-        args.expert_cache_root / "train.pt"
-    )
-    train = MultimodalEvidenceDataset(args.router_cache_root / "train.pt")
-    val = MultimodalEvidenceDataset(args.expert_cache_root / "val.pt")
-    validate_router_cache(expert_train, train)
-    head, expert_checkpoint = load_expert(
-        args.expert_checkpoint, train.metadata, device
-    )
-    train_x, train_y, train_text, train_expert, names, train_ids = (
-        extract_features(head, train, args.batch_size, device, "train")
-    )
-    val_x, val_y, val_text, val_expert, val_names, val_ids = extract_features(
-        head, val, args.batch_size, device, "val"
-    )
+    expert_checkpoint: dict = {}
+    if args.feature_cache_root is not None:
+        train_path = args.feature_cache_root / "train_oof.npz"
+        val_path = args.feature_cache_root / "val_full.npz"
+        train_x, train_y, train_text, train_expert, names, train_ids = (
+            load_feature_cache(train_path)
+        )
+        val_x, val_y, val_text, val_expert, val_names, val_ids = (
+            load_feature_cache(val_path)
+        )
+    else:
+        required = {
+            "--expert-checkpoint": args.expert_checkpoint,
+            "--expert-cache-root": args.expert_cache_root,
+            "--router-cache-root": args.router_cache_root,
+        }
+        missing = [key for key, value in required.items() if value is None]
+        if missing:
+            parser.error(
+                "without --feature-cache-root, required: " + ", ".join(missing)
+            )
+        expert_train = MultimodalEvidenceDataset(
+            args.expert_cache_root / "train.pt"
+        )
+        train = MultimodalEvidenceDataset(
+            args.router_cache_root / "train.pt"
+        )
+        val = MultimodalEvidenceDataset(args.expert_cache_root / "val.pt")
+        validate_router_cache(expert_train, train)
+        head, expert_checkpoint = load_expert(
+            args.expert_checkpoint, train.metadata, device
+        )
+        train_x, train_y, train_text, train_expert, names, train_ids = (
+            extract_features(head, train, args.batch_size, device, "train")
+        )
+        val_x, val_y, val_text, val_expert, val_names, val_ids = (
+            extract_features(head, val, args.batch_size, device, "val")
+        )
     if names != val_names:
         raise RuntimeError("train/validation router feature schema mismatch")
     train_utility = utility_labels(train_y, train_text, train_expert)
@@ -443,6 +482,8 @@ def main() -> None:
             "expert_checkpoint_stage": expert_checkpoint.get("stage"),
             "expert_cache_root": str(args.expert_cache_root),
             "router_cache_root": str(args.router_cache_root),
+            "feature_cache_root": str(args.feature_cache_root)
+            if args.feature_cache_root is not None else None,
             "test_split_used": False,
         },
     }
