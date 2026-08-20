@@ -503,6 +503,28 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   correction/harm labels, and calibrate a hard specialist-selection threshold
   on validation. Soft logit blending remains a reported ablation.
 
+### R2V-MM-VER-VAL-06 — matched-cache hard-router screen
+
+- Text anchor Macro-F1: `0.549948`; learned hard-router Macro-F1: `0.551186`
+  (delta `+0.001238`).
+- Accuracy: `0.565247`, exactly one additional correct prediction over the
+  `0.564560` text anchor.
+- Calibrated threshold: `0.55`; visual route rate: `0.072802` (`106/1456`).
+- Visual help/harm: `0.008242 / 0.007555`, corresponding to `12` corrections
+  and `11` regressions.
+- Soft-router Macro-F1 remained lower at `0.537612`.
+- Oracle-router Macro-F1 remained `0.647698`; Visual Select@1 was `0.205575`.
+- Decision: **engineering direction passed, scientific improvement gate not
+  passed**. The net gain is one example and is not yet a stable or meaningful
+  result; do not launch five seeds or open test.
+- The reported hard-router ECE `0.138624` is invalidated because the run paired
+  hard expert choices with soft-blend probabilities. Exclude it until routed
+  probabilities are recomputed consistently.
+- Next audit: matched-train helpful/harmful counts and validation decisive-pair
+  AUROC/AUPRC of the gate. If scalar ranking remains weak, use out-of-fold
+  calibration on frozen conflict/uncertainty features rather than revisiting
+  retrieval, selector, or expert training.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

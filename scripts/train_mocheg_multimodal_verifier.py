@@ -135,9 +135,15 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
         probability = torch.softmax(
             output["verdict_logits"].float(), dim=-1
         ).cpu()
+        text_probability = torch.softmax(
+            output["text_verdict_logits"].float(), dim=-1
+        ).cpu()
+        expert_probability = torch.softmax(
+            output["visual_expert_logits"].float(), dim=-1
+        ).cpu()
         prediction = probability.argmax(-1)
-        text_prediction = output["text_verdict_logits"].float().cpu().argmax(-1)
-        expert_prediction = output["visual_expert_logits"].float().cpu().argmax(-1)
+        text_prediction = text_probability.argmax(-1)
+        expert_prediction = expert_probability.argmax(-1)
         text_selected = output["text_attention"].cpu().argmax(-1)
         visual_selected = output["visual_attention"].cpu().argmax(-1)
         modality_mass = output["modality_mass"].float().cpu()
@@ -171,6 +177,9 @@ def evaluate(head: MultimodalEvidenceHead, dataset: MultimodalEvidenceDataset,
                 "text_only_prediction": int(text_prediction[index]),
                 "visual_expert_prediction": int(expert_prediction[index]),
                 "probabilities": probability[index].tolist(),
+                "text_only_probabilities": text_probability[index].tolist(),
+                "visual_expert_probabilities":
+                    expert_probability[index].tolist(),
                 "text_gold_in_candidates": has_text,
                 "visual_gold_in_candidates": has_visual,
                 "text_selected_gold": bool(

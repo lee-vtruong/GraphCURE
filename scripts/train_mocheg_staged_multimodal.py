@@ -23,6 +23,7 @@ from scripts.train_mocheg_multimodal_verifier import (
     load_text_teacher,
     validate_cache_pair,
 )
+from scripts.train_mocheg_cached_verifier import expected_calibration_error
 
 
 def clone_state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
@@ -101,7 +102,7 @@ def hard_router_metrics(rows: list[dict], threshold: float) -> dict:
     gate = np.asarray([row["visual_modality_mass"] for row in rows])
     route = gate >= threshold
     prediction = np.where(route, expert, text)
-    return {
+    result = {
         "threshold": float(threshold),
         "accuracy": float(accuracy_score(gold, prediction)),
         "macro_f1": float(f1_score(gold, prediction, average="macro")),
@@ -110,6 +111,24 @@ def hard_router_metrics(rows: list[dict], threshold: float) -> dict:
         "visual_help_rate": float(np.mean((text != gold) & (prediction == gold))),
         "visual_harm_rate": float(np.mean((text == gold) & (prediction != gold))),
     }
+    if rows and all(
+        "text_only_probabilities" in row
+        and "visual_expert_probabilities" in row
+        for row in rows
+    ):
+        text_probability = np.asarray([
+            row["text_only_probabilities"] for row in rows
+        ])
+        expert_probability = np.asarray([
+            row["visual_expert_probabilities"] for row in rows
+        ])
+        routed_probability = np.where(
+            route[:, None], expert_probability, text_probability
+        )
+        result["ece_10"] = expected_calibration_error(
+            routed_probability, gold
+        )
+    return result
 
 
 def calibrate_hard_router(rows: list[dict]) -> dict:
@@ -471,10 +490,18 @@ def main() -> None:
         hard = hard_router_metrics(rows, best_router_threshold)
         for row in rows:
             row["soft_prediction"] = row["prediction"]
+            row["soft_probabilities"] = row["probabilities"]
+            use_visual = (
+                row["visual_modality_mass"] >= best_router_threshold
+            )
             row["prediction"] = (
                 row["visual_expert_prediction"]
-                if row["visual_modality_mass"] >= best_router_threshold
+                if use_visual
                 else row["text_only_prediction"]
+            )
+            row["probabilities"] = (
+                row["visual_expert_probabilities"]
+                if use_visual else row["text_only_probabilities"]
             )
         metrics.update({
             "accuracy": hard["accuracy"],
@@ -484,6 +511,8 @@ def main() -> None:
             "visual_harm_rate": hard["visual_harm_rate"],
             "hard_visual_route_rate": hard["visual_route_rate"],
         })
+        if "ece_10" in hard:
+            metrics["ece_10"] = hard["ece_10"]
     metrics["routing_mode"] = best_router_mode
     metrics["hard_routing_threshold"] = (
         best_router_threshold if best_router_mode in ("hard", "text_anchor")

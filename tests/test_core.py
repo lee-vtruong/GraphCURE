@@ -70,6 +70,7 @@ from scripts.train_mocheg_staged_multimodal import (
     validate_router_cache,
     visual_selection_objective,
 )
+from scripts.audit_mocheg_router import audit, exact_mcnemar_p
 
 
 def test_model_shapes():
@@ -802,3 +803,38 @@ def test_hard_router_selects_specialist_without_logit_blending():
     assert metrics["accuracy"] == 1.0
     assert metrics["macro_f1"] == 1.0
     assert metrics["visual_route_rate"] == 1 / 3
+
+
+def test_hard_router_uses_selected_expert_probabilities_for_ece():
+    rows = [
+        {"gold": 0, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_modality_mass": 0.9,
+         "text_only_probabilities": [0.1, 0.8, 0.1],
+         "visual_expert_probabilities": [0.9, 0.05, 0.05]},
+        {"gold": 1, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_modality_mass": 0.2,
+         "text_only_probabilities": [0.1, 0.8, 0.1],
+         "visual_expert_probabilities": [0.9, 0.05, 0.05]},
+    ]
+    metrics = hard_router_metrics(rows, threshold=0.5)
+    assert metrics["accuracy"] == 1.0
+    assert abs(metrics["ece_10"] - 0.15) < 1e-6
+
+
+def test_router_audit_reports_paired_help_and_harm():
+    rows = [
+        {"gold": 0, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_modality_mass": 0.9},
+        {"gold": 1, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_modality_mass": 0.8},
+        {"gold": 2, "text_only_prediction": 2,
+         "visual_expert_prediction": 1, "visual_modality_mass": 0.1},
+        {"gold": 0, "text_only_prediction": 0,
+         "visual_expert_prediction": 0, "visual_modality_mass": 0.2},
+    ]
+    result = audit(rows, threshold=0.5, iterations=50, seed=7)
+    assert result["hard_router"]["helpful"] == 1
+    assert result["hard_router"]["harmful"] == 1
+    assert result["hard_router"]["route_count"] == 2
+    assert result["gate_ranking"]["decisive_help_vs_harm"]["auroc"] == 1.0
+    assert exact_mcnemar_p(1, 1) == 1.0
