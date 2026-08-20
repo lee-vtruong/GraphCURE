@@ -117,6 +117,7 @@ def main() -> None:
     parser.add_argument("--expert-gold-weight", type=float, default=1.0)
     parser.add_argument("--residual-penalty", type=float, default=0.01)
     parser.add_argument("--router-target-weight", type=float, default=0.5)
+    parser.add_argument("--router-ambiguous-weight", type=float, default=0.1)
     parser.add_argument("--router-cost-margin", type=float, default=0.05)
     parser.add_argument("--router-temperature", type=float, default=0.25)
     parser.add_argument("--device", default="cuda")
@@ -299,6 +300,8 @@ def main() -> None:
     for epoch in range(1, args.router_epochs + 1):
         set_trainable(head, router_modules)
         total = 0.0
+        helpful_total = 0
+        harmful_total = 0
         for batch in loader:
             inputs, supervision = model_batch(batch, device)
             router_optimizer.zero_grad(set_to_none=True)
@@ -310,17 +313,43 @@ def main() -> None:
             expert_loss = F.cross_entropy(
                 output["visual_expert_logits"].float(), labels, reduction="none"
             )
-            target = torch.sigmoid(
+            text_prediction = output["text_verdict_logits"].argmax(-1)
+            expert_prediction = output["visual_expert_logits"].argmax(-1)
+            helpful = (text_prediction != labels) & (expert_prediction == labels)
+            harmful = (text_prediction == labels) & (expert_prediction != labels)
+            decisive = helpful | harmful
+            helpful_total += int(helpful.sum().item())
+            harmful_total += int(harmful.sum().item())
+            gate = output["visual_gate"].float().clamp(1e-6, 1.0 - 1e-6)
+            if decisive.any():
+                decisive_target = helpful[decisive].float()
+                terms = F.binary_cross_entropy(
+                    gate[decisive], decisive_target, reduction="none"
+                )
+                positive_fraction = decisive_target.mean().clamp(1e-3, 1 - 1e-3)
+                balance = torch.where(
+                    decisive_target.bool(),
+                    0.5 / positive_fraction,
+                    0.5 / (1.0 - positive_fraction),
+                )
+                route = torch.sum(terms * balance) / balance.sum()
+            else:
+                route = gate.new_zeros(())
+            soft_target = torch.sigmoid(
                 (text_loss - expert_loss - args.router_cost_margin)
                 / args.router_temperature
             ).detach()
-            route = F.binary_cross_entropy(
-                output["visual_gate"].float().clamp(1e-6, 1.0 - 1e-6), target
+            ambiguous = ~decisive
+            ambiguous_route = (
+                F.binary_cross_entropy(gate[ambiguous], soft_target[ambiguous])
+                if ambiguous.any() else gate.new_zeros(())
             )
             verdict = F.cross_entropy(
                 output["verdict_logits"].float(), labels, weight=class_weights
             )
-            loss = verdict + args.router_target_weight * route
+            loss = verdict + args.router_target_weight * (
+                route + args.router_ambiguous_weight * ambiguous_route
+            )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(head.parameters(), 1.0)
             router_optimizer.step()
@@ -333,6 +362,8 @@ def main() -> None:
             "val_visual_help_rate": metrics["visual_help_rate"],
             "val_visual_harm_rate": metrics["visual_harm_rate"],
             "val_visual_gate_mean": metrics["visual_modality_mass_mean"],
+            "train_helpful_pairs": helpful_total,
+            "train_harmful_pairs": harmful_total,
         }), flush=True)
         score = metrics["macro_f1"]
         if score > best_router:

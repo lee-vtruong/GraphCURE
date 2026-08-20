@@ -752,3 +752,33 @@ def test_multimodal_text_teacher_transfer_preserves_predictions(tmp_path):
     assert torch.allclose(
         student_output["text_attention"], teacher_output["attention"], atol=1e-6
     )
+
+
+def test_visual_expert_is_independent_of_router_gate():
+    head = MultimodalEvidenceHead(
+        claim_dim=8, text_dim=8, visual_dim=10, hidden_dim=16, dropout=0.0
+    ).eval()
+    with torch.no_grad():
+        head.visual_residual[-1].weight.zero_()
+        head.visual_residual[-1].bias.copy_(torch.tensor([1.0, -1.0, 0.5]))
+        head.visual_gate[-1].weight.zero_()
+        head.visual_gate[-1].bias.fill_(-10.0)
+    inputs = {
+        "claim": torch.randn(2, 8),
+        "text_evidence": torch.randn(2, 3, 8),
+        "text_mask": torch.ones(2, 3, dtype=torch.bool),
+        "text_retrieval_features": torch.randn(2, 3, 6),
+        "visual_evidence": torch.randn(2, 4, 10),
+        "visual_mask": torch.ones(2, 4, dtype=torch.bool),
+        "visual_retrieval_features": torch.randn(2, 4, 3),
+    }
+    low_gate = head(**inputs)
+    with torch.no_grad():
+        head.visual_gate[-1].bias.fill_(10.0)
+    high_gate = head(**inputs)
+    assert torch.allclose(
+        low_gate["visual_expert_logits"], high_gate["visual_expert_logits"]
+    )
+    assert not torch.allclose(
+        low_gate["verdict_logits"], high_gate["verdict_logits"]
+    )

@@ -385,3 +385,14 @@ global standalone strength, selects `expert_best.pt`. This oracle is used only
 for development checkpoint selection and ceiling analysis; the deployable gate
 still learns exclusively from train losses. Rerun the same command into the new
 output root `outputs/mocheg_staged_utility_seed42_v2`.
+
+The corrected expert-selection run exposed a strong complementary ceiling:
+text Macro-F1 was `0.549948`, visual-expert Macro-F1 was `0.527767`, but oracle
+routing reached `0.647325`. The learned gate still collapsed to text. The next
+router is therefore explicitly conflict-aware: the visual expert is computed
+independently of the gate, while the gate observes both experts' probabilities,
+confidence, entropy, margins, disagreement, evidence entropy, retrieval quality,
+and constraint conflict. On train it learns from balanced decisive correction
+versus harm pairs; ambiguous samples retain a low-weight loss-reduction target.
+Use output root `outputs/mocheg_conflict_router_seed42_v3` and add
+`--router-ambiguous-weight 0.10` to the staged command.

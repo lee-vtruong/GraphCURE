@@ -54,7 +54,10 @@ class MultimodalEvidenceHead(nn.Module):
         # aggregate stance, cross-modal stance conflict, modality mass,
         # and the learned sufficiency scalar.
         verdict_dim = hidden_dim * 6 + num_labels * 2 + 3
-        gate_dim = hidden_dim * 4 + num_labels * 2 + 6
+        # Base evidence diagnostics plus probability-level conflict features:
+        # p_text, p_visual, |p_text-p_visual|, two entropies, two confidences,
+        # disagreement, and two top-2 margins.
+        gate_dim = hidden_dim * 4 + num_labels * 2 + 6 + num_labels * 3 + 7
         sufficiency_dim = hidden_dim * 3 + num_labels * 2 + 2
         self.sufficiency = nn.Sequential(
             nn.LayerNorm(sufficiency_dim),
@@ -216,29 +219,20 @@ class MultimodalEvidenceHead(nn.Module):
             ),
             dim=-1,
         )
-        gate_input = torch.cat(
-            (
-                q,
-                text_summary,
-                visual_summary,
-                torch.abs(text_summary - visual_summary),
-                text_stance,
-                visual_stance,
-                gate_statistics,
-            ),
-            dim=-1,
-        )
-        visual_gate = torch.sigmoid(self.visual_gate(gate_input).squeeze(-1))
-        visual_gate = visual_gate * visual_mask.any(1).float()
-        modality_mass = torch.stack((1.0 - visual_gate, visual_gate), dim=-1)
+        has_text = text_mask.any(1).float()
+        has_visual = visual_mask.any(1).float()
+        available_mass = torch.stack((has_text, has_visual), dim=-1)
+        expert_mass = available_mass / available_mass.sum(
+            -1, keepdim=True
+        ).clamp_min(1.0)
         aggregate_stance = (
-            text_stance * (1.0 - visual_gate).unsqueeze(-1)
-            + visual_stance * visual_gate.unsqueeze(-1)
+            text_stance * expert_mass[:, :1]
+            + visual_stance * expert_mass[:, 1:]
         )
         sufficiency_input = torch.cat(
             (
                 q, text_summary, visual_summary, aggregate_stance, conflict,
-                modality_mass,
+                expert_mass,
             ),
             dim=-1,
         )
@@ -253,13 +247,58 @@ class MultimodalEvidenceHead(nn.Module):
                 q * visual_summary,
                 aggregate_stance,
                 conflict,
-                modality_mass,
+                expert_mass,
                 torch.sigmoid(sufficiency_logit).unsqueeze(-1),
             ),
             dim=-1,
         )
         visual_residual = self.visual_residual(verdict_input)
         visual_expert_logits = text_verdict_logits + visual_residual
+        text_probability = torch.softmax(text_verdict_logits.float(), dim=-1)
+        expert_probability = torch.softmax(visual_expert_logits.float(), dim=-1)
+        text_top2 = torch.topk(text_probability, k=2, dim=-1).values
+        expert_top2 = torch.topk(expert_probability, k=2, dim=-1).values
+        decision_statistics = torch.cat(
+            (
+                text_probability,
+                expert_probability,
+                torch.abs(text_probability - expert_probability),
+                -torch.sum(
+                    text_probability * torch.log(text_probability.clamp_min(1e-8)),
+                    dim=-1,
+                    keepdim=True,
+                ),
+                -torch.sum(
+                    expert_probability
+                    * torch.log(expert_probability.clamp_min(1e-8)),
+                    dim=-1,
+                    keepdim=True,
+                ),
+                text_probability.max(-1, keepdim=True).values,
+                expert_probability.max(-1, keepdim=True).values,
+                (text_probability.argmax(-1) != expert_probability.argmax(-1))
+                .float().unsqueeze(-1),
+                text_top2[:, :1] - text_top2[:, 1:2],
+                expert_top2[:, :1] - expert_top2[:, 1:2],
+            ),
+            dim=-1,
+        )
+        gate_input = torch.cat(
+            (
+                q,
+                text_summary,
+                visual_summary,
+                torch.abs(text_summary - visual_summary),
+                text_stance,
+                visual_stance,
+                gate_statistics,
+                decision_statistics,
+            ),
+            dim=-1,
+        )
+        visual_gate = torch.sigmoid(self.visual_gate(gate_input).squeeze(-1))
+        visual_gate = visual_gate * has_visual
+        modality_mass = torch.stack((1.0 - visual_gate, visual_gate), dim=-1)
         verdict_logits = (
             text_verdict_logits + visual_gate.unsqueeze(-1) * visual_residual
         )

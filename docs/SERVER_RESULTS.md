@@ -454,6 +454,25 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   `selector_best.pt` and `expert_best.pt` independently. The learned Stage-3
   router continues to use train-only cross-entropy-reduction targets.
 
+### R2V-MM-VER-VAL-04 — complementary expert ceiling and router failure
+
+- Text anchor Macro-F1: `0.549948`
+- Final visual expert Macro-F1: `0.527767`
+- Oracle-router Macro-F1: `0.647325` (**+0.097377 over text**)
+- Visual Select@1: `0.216028`
+- Learned router selected the text anchor exactly: gate `2.06e-9`, zero help,
+  zero harm, and Macro-F1 `0.549948`.
+- Interpretation: the visual specialist has substantial complementary signal;
+  evidence retrieval, evidence selection, and expert diversity are no longer
+  the limiting factors. The deployable utility estimator is the bottleneck.
+- Two structural defects were identified: the old visual-expert computation
+  depended on the gate it was meant to route, and the gate did not observe
+  text/expert probabilities, margins, entropy, or prediction disagreement.
+- Resolution: make the visual expert gate-independent; expose probability-level
+  conflict/uncertainty features to the gate; and supervise train-time routing
+  primarily on decisive pairs (visual corrects text versus visual harms text),
+  with class balancing and a low-weight soft target for ambiguous pairs.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |
