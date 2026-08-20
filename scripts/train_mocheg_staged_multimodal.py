@@ -140,6 +140,11 @@ def main() -> None:
                         default=Path("data/processed/mocheg_multimodal_cache"))
     parser.add_argument("--router-cache-root", type=Path)
     parser.add_argument("--text-checkpoint", type=Path, required=True)
+    parser.add_argument(
+        "--expert-checkpoint", type=Path,
+        help="resume a frozen selector/expert checkpoint and optionally set "
+             "selector/expert epochs to zero",
+    )
     parser.add_argument("--output", type=Path,
                         default=Path("outputs/mocheg_staged_multimodal_seed42"))
     parser.add_argument("--hidden-dim", type=int, default=384)
@@ -189,6 +194,14 @@ def main() -> None:
         dropout=args.dropout,
     ).to(device)
     teacher = load_text_teacher(head, args.text_checkpoint)
+    resumed_expert = None
+    if args.expert_checkpoint is not None:
+        resumed_expert = torch.load(
+            args.expert_checkpoint, map_location="cpu", weights_only=False
+        )
+        if resumed_expert.get("stage") != "expert":
+            parser.error("--expert-checkpoint must be an expert_best.pt file")
+        head.load_state_dict(resumed_expert["head"], strict=True)
     freeze_text_branch(head)
     counts = torch.bincount(train.data["labels"], minlength=3).float()
     class_weights = (counts.sum() / (3 * counts.clamp_min(1))).to(device)
@@ -483,6 +496,8 @@ def main() -> None:
         "seed": args.seed,
         "text_checkpoint": str(args.text_checkpoint),
         "text_teacher": teacher,
+        "resumed_expert_checkpoint": str(args.expert_checkpoint)
+        if args.expert_checkpoint is not None else None,
         "cache_metadata": val.metadata,
         "router_train_cache_metadata": router_train.metadata,
         "test_split_used": False,
@@ -495,6 +510,8 @@ def main() -> None:
         "stages": stage_summary,
         "cache_metadata": train.metadata,
         "text_teacher": teacher,
+        "resumed_expert_checkpoint": str(args.expert_checkpoint)
+        if args.expert_checkpoint is not None else None,
         "router_train_cache_metadata": router_train.metadata,
         "routing_mode": best_router_mode,
         "hard_routing_threshold": best_router_threshold,

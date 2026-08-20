@@ -421,3 +421,8 @@ with the original injected `--cache-root` and the new natural
 `--router-cache-root`. Router model selection now evaluates both soft blending
 and hard expert selection over a preregistered `0.00..1.00` threshold grid;
 the threshold and routed fraction are persisted in the checkpoint.
+
+The gate-independent expert from the conflict-router run can be reused because
+the expert architecture and weights are unchanged. Pass
+`--expert-checkpoint outputs/mocheg_conflict_router_seed42_v3/expert_best.pt`
+with `--selector-epochs 0 --expert-epochs 0` to train only the matched router.
