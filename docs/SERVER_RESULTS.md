@@ -606,6 +606,24 @@ test retrieval remains locked until architecture and hyperparameters freeze.
   learnable residual. Penalize KL divergence from the retrieval prior and
   compare against a retrieval-only control before revisiting the router.
 
+### R2V-MM-SEL-VAL-02 — retrieval-anchored attention controls
+
+| Selector | Select@1 | Visual-expert Macro-F1 | Oracle-router Macro-F1 | Text Macro-F1 |
+|---|---:|---:|---:|---:|
+| Old unconstrained learned | 0.2056 | 0.5096 | 0.6477 | 0.5499 |
+| Retrieval only | **0.5401** | **0.5132** | **0.6485** | 0.5499 |
+| Retrieval + KL residual | 0.5453 | 0.5032 | 0.6410 | 0.5499 |
+
+- Retrieval-only attention recovered the strong upstream ordering and slightly
+  improved both standalone expert and oracle complementarity over the old
+  learned selector.
+- The KL-constrained residual gained only `+0.0052` Select@1 over retrieval-only
+  while losing `-0.0100` expert Macro-F1 and `-0.0075` oracle Macro-F1.
+- Decision: freeze **retrieval-only** as the selector baseline and reject the
+  learned residual. Selector ranking is no longer the primary bottleneck;
+  diagnose visual-expert help/harm by retrieved-evidence sufficiency before
+  changing the residual-verdict objective.
+
 Discovered test metric files: 50
 
 | Result path | Architecture | Seed | Samples | Accuracy | Macro-F1 |

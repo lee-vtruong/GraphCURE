@@ -77,6 +77,7 @@ from scripts.train_mocheg_set_router import (
     utility_labels,
 )
 from scripts.audit_mocheg_visual_selector import rank_summary
+from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
 
 
 def test_model_shapes():
@@ -910,3 +911,23 @@ def test_visual_selector_audit_compares_orders_on_same_candidates():
     assert result["pairwise_order_comparison"] == {
         "upstream_better": 1, "learned_better": 0, "tie": 1,
     }
+
+
+def test_visual_expert_audit_stratifies_help_and_harm():
+    rows = [
+        {"gold": 0, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_gold_in_candidates": True,
+         "visual_selected_gold": True},
+        {"gold": 1, "text_only_prediction": 1,
+         "visual_expert_prediction": 0, "visual_gold_in_candidates": False,
+         "visual_selected_gold": False},
+        {"gold": 2, "text_only_prediction": 2,
+         "visual_expert_prediction": 2, "visual_gold_in_candidates": True,
+         "visual_selected_gold": False},
+    ]
+    result = audit_visual_expert(rows)
+    assert result["gold_in_candidates"]["helpful"] == 1
+    assert result["gold_in_candidates"]["harmful"] == 0
+    assert result["no_gold_in_candidates"]["helpful"] == 0
+    assert result["no_gold_in_candidates"]["harmful"] == 1
+    assert result["qrel_oracle_sufficiency_policy"]["accuracy"] == 1.0
