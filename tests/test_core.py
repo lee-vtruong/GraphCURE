@@ -24,6 +24,7 @@ from scripts.analyze_mocheg_claim_images import (
     conversations as claim_image_conversations,
     report_signature,
 )
+from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.retrieval import (
     contradiction_features,
     evidence_candidate_features,
@@ -698,6 +699,12 @@ def test_claim_image_analyzer_prompt_has_no_label_or_qrel_input():
     assert report_signature("model", 2, 100, 20) == report_signature(
         "model", 2, 100, 20
     )
+
+
+def test_visual_report_features_preserve_injected_unknown_rank():
+    features = report_features([0, 2], [0.0, 8.0])
+    assert features[0] == [0.0, 0.0, 0.0]
+    assert features[1] == [0.5, 1.0, 0.5]
 
 
 def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):

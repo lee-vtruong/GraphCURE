@@ -32,6 +32,18 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   a claim-conditioned constraint analyzer and leaves the final verdict to the
   evidence-set verifier.
 
+### R2V-VIS-DATA-11 — claim-conditioned visual reports
+
+- Analyzer: `Qwen/Qwen3-VL-2B-Instruct`; top `2` images per claim.
+- Train: `11631/11631` complete; train-only positive injection is recorded in
+  its metadata and never exposed in the analyzer prompt.
+- Validation: `1456/1456` complete; no gold injection.
+- Shared report signature:
+  `0d43d871e6205a3728bab2fa9537a60c5e2c98593524021bdbcae91e931841c1`.
+- Next frozen screen: encode these reports with the text verifier's
+  `Qwen/Qwen3-Embedding-0.6B` encoder, train only the visual report expert, and
+  keep routing and the test split disabled.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

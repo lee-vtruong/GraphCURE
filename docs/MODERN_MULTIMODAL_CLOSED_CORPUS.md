@@ -631,3 +631,36 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.analyze_mocheg_claim_images \
   --splits train val --device cuda \
   2>&1 | tee outputs/mocheg-claim-visual-reports-v10.log
 ```
+
+After both report summaries are complete, encode them with the same frozen
+Qwen3 embedding model used by the text verifier:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.cache_mocheg_visual_report_features \
+  --text-cache-root data/processed/mocheg_reasoning_cache \
+  --report-root data/processed/mocheg_claim_visual_reports_v10 \
+  --output-root data/processed/mocheg_visual_report_cache_v10 \
+  --encoder Qwen/Qwen3-Embedding-0.6B \
+  --batch-size 32 --device cuda --splits train val \
+  2>&1 | tee outputs/mocheg-visual-report-cache-v10.log
+```
+
+Screen the report expert with the frozen text teacher. The first reported
+validation point must reproduce the text anchor; routing remains disabled:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
+  --cache-root data/processed/mocheg_visual_report_cache_v10 \
+  --text-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --output outputs/mocheg_visual_report_expert_seed42_v10 \
+  --visual-attention-mode learned \
+  --visual-expert-mode stance_product \
+  --visual-stance-scale 1.0 \
+  --selector-stance-weight 0.25 \
+  --selector-epochs 8 --selector-patience 3 \
+  --expert-sufficiency-weight 1.0 \
+  --expert-epochs 12 --expert-patience 4 \
+  --residual-penalty 0 --router-epochs 0 \
+  --batch-size 128 --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-visual-report-expert-v10.log
+```
