@@ -101,6 +101,11 @@ from scripts.train_mocheg_qwen3_lora_verifier import (
     as_token_id_list,
     compose_user_prompt,
 )
+from scripts.summarize_mocheg_qwen3_lora import (
+    apply_temperature,
+    fit_temperature,
+    probability_metrics,
+)
 
 
 def test_selective_residual_starts_as_exact_frozen_anchor():
@@ -159,6 +164,16 @@ def test_qwen_tokenizer_output_normalization_supports_encoding_objects():
     assert as_token_id_list([7, Encoding()]) == [7, 11, 12, 13]
     assert as_token_id_list(BatchEncoding()) == [21, 22]
     assert as_token_id_list(np.asarray([31, 32])) == [31, 32]
+
+
+def test_qwen_temperature_scaling_is_positive_and_preserves_predictions():
+    probabilities = np.asarray([[0.98, 0.01, 0.01], [0.05, 0.90, 0.05]])
+    labels = np.asarray([0, 1])
+    temperature = fit_temperature(probabilities, labels)
+    calibrated = apply_temperature(probabilities, temperature)
+    assert temperature > 0
+    assert np.array_equal(calibrated.argmax(1), probabilities.argmax(1))
+    assert probability_metrics(calibrated, labels)["accuracy"] == 1.0
 
 
 def test_model_shapes():

@@ -820,3 +820,8 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_lora_verifier \
 
 Do not run the test split. The validation gate remains `+0.003` Macro-F1 over
 the frozen `0.549948` anchor before any multi-seed or multimodal extension.
+
+Seed 42 passed strongly (`0.670471` Macro-F1, `+0.120523`). Freeze every
+hyperparameter above. Train only the four remaining preregistered seeds and
+then run `scripts.summarize_mocheg_qwen3_lora`; its output contains raw and
+temperature-scaled validation ensembles, stability checks, and no test path.

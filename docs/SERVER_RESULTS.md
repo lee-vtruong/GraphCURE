@@ -127,6 +127,20 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   tuning small heads on frozen embeddings; screen an instruction-tuned causal
   verifier with BF16 LoRA and deterministic one-token verdict scoring.
 
+### R2V-TEXT-VAL-17 — Qwen3-4B LoRA verifier, seed 42
+
+- Model: `Qwen/Qwen3-4B-Instruct-2507`; BF16 LoRA rank `16`; top-5
+  reranked evidence; maximum context `2048`; deterministic `A/B/C` next-token
+  verdict scoring.
+- Best epoch `3`: accuracy `0.679945`, Macro-F1 `0.670471`, confusion matrix
+  `[[318, 71, 102], [14, 434, 39], [98, 142, 238]]`.
+- Delta versus frozen cached verifier: **`+0.120523` Macro-F1**. The model
+  passed the predeclared validation gate without class collapse.
+- ECE-10 is `0.219151`, so raw confidence is not yet suitable for routing.
+- Decision: freeze architecture and hyperparameters; run seeds
+  `13, 21, 87, 100`, then fit per-seed validation temperatures and evaluate a
+  fixed five-seed ensemble. Test remains locked.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official
