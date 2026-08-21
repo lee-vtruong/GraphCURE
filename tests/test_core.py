@@ -96,6 +96,7 @@ from scripts.train_mocheg_set_router import (
 )
 from scripts.audit_mocheg_visual_selector import rank_summary
 from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
+from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
 
 
 def test_selective_residual_starts_as_exact_frozen_anchor():
@@ -118,6 +119,19 @@ def test_selective_residual_starts_as_exact_frozen_anchor():
     assert torch.allclose(actual["verdict_logits"], expected, atol=1e-6)
     assert all(not parameter.requires_grad for parameter in model.anchor.parameters())
     assert actual["set_attention"].shape == (3, 4)
+
+
+def test_train_gold_injection_is_deterministic_and_never_changes_covered_rows():
+    claim = {"id": "claim-7", "text_evidence_ids": ["gold-b", "gold-a"]}
+    documents = {"gold-a": "a", "gold-b": "b", "negative": "n"}
+    first, changed = inject_gold_candidate(claim, ["negative"], documents, 2)
+    second, repeated = inject_gold_candidate(claim, ["negative"], documents, 2)
+    assert changed and repeated and first == second
+    assert set(first) & {"gold-a", "gold-b"}
+    covered, changed = inject_gold_candidate(
+        claim, ["gold-a", "negative"], documents, 2
+    )
+    assert covered == ["gold-a", "negative"] and not changed
 
 
 def test_model_shapes():

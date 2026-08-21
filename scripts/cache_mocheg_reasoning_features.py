@@ -66,6 +66,24 @@ def load_encoder(name: str, device: str, max_length: int) -> SentenceTransformer
     return model
 
 
+def inject_gold_candidate(
+    claim: dict, candidates: list[str], documents: dict[str, str], top_k: int
+) -> tuple[list[str], bool]:
+    """Inject one train-only gold document at a deterministic non-label rank."""
+    result = list(dict.fromkeys(candidates))[:top_k]
+    gold = sorted({
+        str(value) for value in claim.get("text_evidence_ids", [])
+        if documents.get(str(value))
+    })
+    if not gold or any(value in gold for value in result):
+        return result, False
+    digest = int(hashlib.sha256(str(claim["id"]).encode()).hexdigest(), 16)
+    selected = gold[digest % len(gold)]
+    position = (digest // max(1, len(gold))) % top_k
+    result.insert(position, selected)
+    return list(dict.fromkeys(result))[:top_k], True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest-root", type=Path,
@@ -81,6 +99,7 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--splits", nargs="+", default=["train", "val"])
+    parser.add_argument("--inject-train-gold", action="store_true")
     args = parser.parse_args()
     args.output_root.mkdir(parents=True, exist_ok=True)
 
@@ -97,7 +116,7 @@ def main() -> None:
             f"{row.get('claim', '').strip()}"
             for row in ordered_claims
         ]
-        candidate_ids = [
+        natural_candidate_ids = [
             [
                 evidence_id
                 for evidence_id in row.get("retrieved_evidence_ids", [])[:args.top_k]
@@ -105,6 +124,17 @@ def main() -> None:
             ]
             for row in retrieval_rows
         ]
+        injected = 0
+        candidate_ids = []
+        for claim, candidates in zip(
+            ordered_claims, natural_candidate_ids, strict=True
+        ):
+            if args.inject_train_gold and split == "train":
+                candidates, changed = inject_gold_candidate(
+                    claim, candidates, documents, args.top_k
+                )
+                injected += int(changed)
+            candidate_ids.append(candidates)
         unique_ids = list(dict.fromkeys(
             evidence_id for values in candidate_ids for evidence_id in values
         ))
@@ -200,6 +230,10 @@ def main() -> None:
                 "manifest_file": str(manifest_path),
                 "manifest_sha256": sha256(manifest_path),
                 "git_commit": git_commit(),
+                "train_gold_injection": bool(
+                    args.inject_train_gold and split == "train"
+                ),
+                "injected_claims": injected,
             },
         }
         target = args.output_root / f"{split}.pt"

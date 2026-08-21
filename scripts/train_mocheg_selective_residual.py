@@ -132,7 +132,9 @@ def main():
         model.load_state_dict(chosen["model"]); final,rows=evaluate(model,val,a.batch_size,device)
         shutil.copy2(a.output/"best_candidate.pt",a.output/"best.pt"); mode="selective_residual"
     else:
-        final,rows=evaluate(model,val,a.batch_size,device,force_anchor=True); mode="anchor_fallback"
+        final,rows=evaluate(model,val,a.batch_size,device,force_anchor=True)
+        final["gate_mean"] = 0.0; final["gate_std"] = 0.0
+        mode="anchor_fallback"
     summary={"mode":mode,"accepted":accepted,"minimum_delta":a.minimum_delta,"anchor":anchor_metrics,"best_candidate_macro_f1":best_candidate,"best_candidate_epoch":best_epoch,"best_candidate_delta":best_candidate-anchor_metrics["macro_f1"],"final":final,"history":history,"test_split_used":False}
     (a.output/"summary.json").write_text(json.dumps(summary,indent=2)+"\n")
     (a.output/"val_predictions.jsonl").write_text("\n".join(json.dumps(row) for row in rows)+"\n")

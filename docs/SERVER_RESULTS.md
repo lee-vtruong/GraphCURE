@@ -97,6 +97,22 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   the proven cached verifier frozen and learns only a zero-initialized,
   conflict-aware set-interaction residual with an automatic anchor fallback.
 
+### R2V-TEXT-VAL-15 — anchor-preserving conflict residual
+
+- Frozen anchor: accuracy `0.564560`, Macro-F1 `0.549948`.
+- Best residual candidate: epoch `2`, Macro-F1 `0.550082`, delta
+  `+0.000134`.
+- The predeclared `+0.003` acceptance gate failed, so the deployed mode was
+  correctly set to `anchor_fallback`; final accuracy and Macro-F1 remained
+  `0.564560 / 0.549948`, with zero help and zero harm.
+- The originally printed fallback gate mean (`0.587806`) belonged to the
+  rejected candidate, not the deployed logits. Reporting is patched to emit a
+  zero gate for fallback mode.
+- Decision: reject ungrounded residual tuning. The next screen directly
+  addresses the natural-train (`~0.58`) versus validation (`~0.94`) retrieved
+  gold-coverage mismatch with paired natural/grounded train views. Validation
+  remains natural and the test split remains locked.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

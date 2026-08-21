@@ -734,3 +734,41 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_selective_residual \
 Only `mode=selective_residual` with `accepted=true` advances. Otherwise the
 script emits `mode=anchor_fallback`, preserving the frozen result and ending
 this residual family without test access.
+
+The residual screen correctly fell back: its best delta was only `+0.000134`.
+Do not tune its gate. Build one aligned, train-only grounded cache instead.
+Gold insertion uses a stable hash to avoid a fixed rank shortcut; validation
+continues to use the untouched natural cache.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.cache_mocheg_reasoning_features \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --retrieval-root outputs/retrieval_mocheg_qwen3_reranked \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --output-root data/processed/mocheg_reasoning_cache_grounded_v15 \
+  --encoder Qwen/Qwen3-Embedding-0.6B \
+  --top-k 8 --batch-size 32 --max-length 256 \
+  --device cuda --splits train --inject-train-gold \
+  2>&1 | tee outputs/mocheg-reasoning-cache-grounded-v15.log
+```
+
+Fine-tune from the exact frozen anchor on paired natural and grounded views.
+The natural-view KL is applied only where the teacher is correct, while the
+grounded view supplies evidence selection, stance, and sufficiency targets.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_retrieval_curriculum \
+  --natural-cache-root data/processed/mocheg_reasoning_cache \
+  --grounded-cache-root data/processed/mocheg_reasoning_cache_grounded_v15 \
+  --anchor-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --output outputs/mocheg_retrieval_curriculum_seed42_v15 \
+  --epochs 40 --patience 8 --batch-size 256 \
+  --learning-rate 5e-5 --natural-verdict-weight 0.35 \
+  --anchor-correct-kl 0.5 --relevance-weight 0.25 \
+  --stance-weight 0.15 --sufficiency-weight 0.15 \
+  --minimum-delta 0.003 --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-retrieval-curriculum-v15.log
+```
+
+Epoch zero must reproduce the anchor. Advance to multi-seed validation only if
+`accepted=true`; otherwise keep the anchor and close this curriculum branch.
