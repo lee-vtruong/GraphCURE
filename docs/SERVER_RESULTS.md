@@ -44,6 +44,18 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `Qwen/Qwen3-Embedding-0.6B` encoder, train only the visual report expert, and
   keep routing and the test split disabled.
 
+### R2V-VIS-VAL-11 — visual report expert
+
+- Frozen text anchor: accuracy `0.564560`, Macro-F1 `0.549948`.
+- Visual report expert: accuracy `0.509615`, Macro-F1 `0.480531`.
+- Gold-candidate report stance: accuracy `0.444444`, Macro-F1 `0.411050`.
+- Report Select@1: `0.947090`; oracle router Macro-F1: `0.618723`.
+- Sufficiency AUROC `0.406769` and AP `0.211952` fail the sufficiency gate.
+- Decision: preserve the highly discriminative report selector, remove the
+  invalid qrel-coverage sufficiency objective, and screen a small safe residual
+  fusion adapter anchored to the frozen text verifier. This remains phase-B
+  fusion; cost-aware routing remains disabled.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

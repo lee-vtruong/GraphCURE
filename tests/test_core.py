@@ -25,6 +25,7 @@ from scripts.analyze_mocheg_claim_images import (
     report_signature,
 )
 from scripts.cache_mocheg_visual_report_features import report_features
+from graphcure.report_fusion import SafeReportFusion, fusion_features
 from graphcure.retrieval import (
     contradiction_features,
     evidence_candidate_features,
@@ -705,6 +706,23 @@ def test_visual_report_features_preserve_injected_unknown_rank():
     features = report_features([0, 2], [0.0, 8.0])
     assert features[0] == [0.0, 0.0, 0.0]
     assert features[1] == [0.5, 1.0, 0.5]
+
+
+def test_safe_report_fusion_outputs_bounded_gate():
+    output = {
+        "text_verdict_logits": torch.randn(4, 3),
+        "visual_expert_logits": torch.randn(4, 3),
+        "conflict": torch.rand(4, 3),
+        "sufficiency_logit": torch.randn(4),
+        "visual_attention": torch.softmax(torch.randn(4, 2), -1),
+    }
+    features = fusion_features(output)
+    fusion = SafeReportFusion(features.shape[-1], hidden_dim=8)
+    logits, gate = fusion(
+        output["text_verdict_logits"], output["visual_expert_logits"], features
+    )
+    assert logits.shape == (4, 3)
+    assert torch.all((gate > 0) & (gate < 1))
 
 
 def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):

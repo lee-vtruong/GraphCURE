@@ -664,3 +664,19 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_staged_multimodal \
   --batch-size 128 --device cuda --seed 42 \
   2>&1 | tee outputs/mocheg-visual-report-expert-v10.log
 ```
+
+If report selection is strong but qrel-coverage sufficiency fails, do not train
+another sufficiency classifier. Freeze both experts and screen a conservative
+logit adapter. It is initialized near the text anchor, penalizes report use,
+and is accepted only above a predeclared `+0.003` validation Macro-F1 delta:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_report_fusion \
+  --cache-root data/processed/mocheg_visual_report_cache_v10 \
+  --expert-checkpoint outputs/mocheg_visual_report_expert_seed42_v10/best.pt \
+  --output outputs/mocheg_report_fusion_seed42_v11 \
+  --epochs 40 --patience 8 --batch-size 256 \
+  --gate-cost 0.005 --anchor-kl 0.02 --minimum-delta 0.003 \
+  --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-report-fusion-v11.log
+```
