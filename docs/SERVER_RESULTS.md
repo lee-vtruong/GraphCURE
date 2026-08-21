@@ -81,6 +81,22 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   available, preserve natural validation retrieval, and aggregate pair states
   into one claim verdict.
 
+### R2V-TEXT-VAL-14 — FEVER/NLI pair-set verifier
+
+- Backbone: `MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli`;
+  source label order `[entailment, neutral, contradiction]` was remapped to
+  GraphCURE `[supported, refuted, NEI]` with source indices `[0, 2, 1]`.
+- Train gold coverage after train-only injection: `0.630814`; natural
+  validation coverage: `0.936813`.
+- Best epoch `1`: accuracy `0.5103`, claim Macro-F1 `0.478109`, pair Macro-F1
+  `0.4764`, Select@1 `0.6364`, ECE `0.2384`.
+- Delta versus frozen anchor: `-0.071839` Macro-F1. Later epochs did not
+  improve either pair or claim performance.
+- Decision: reject both the transferred pair stance and its smooth-max
+  aggregator. Do not tune temperature or learning rate. The next screen keeps
+  the proven cached verifier frozen and learns only a zero-initialized,
+  conflict-aware set-interaction residual with an automatic anchor fallback.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

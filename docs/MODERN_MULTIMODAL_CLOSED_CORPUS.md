@@ -712,3 +712,25 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_nli_set_verifier \
   --device cuda --seed 42 \
   2>&1 | tee outputs/mocheg-nli-set-v13.log
 ```
+
+The NLI screen failed (`0.4781` Macro-F1; pair Macro-F1 `0.4764`). Its error is
+already present at pair level, so replacing only the aggregator is not a valid
+next step. Screen a bounded set-interaction residual on the established frozen
+anchor instead. Epoch zero must reproduce `0.5499479` exactly; otherwise stop.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_selective_residual \
+  --cache-root data/processed/mocheg_reasoning_cache \
+  --anchor-checkpoint outputs/mocheg_cached_verifier_seed42/best.pt \
+  --output outputs/mocheg_selective_residual_seed42_v14 \
+  --hidden-dim 192 --layers 2 --heads 4 \
+  --epochs 60 --patience 10 --batch-size 128 \
+  --learning-rate 2e-4 --anchor-correct-kl 0.5 \
+  --global-kl 0.05 --gate-cost 0.01 --anchor-error-weight 1.5 \
+  --minimum-delta 0.003 --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-selective-residual-v14.log
+```
+
+Only `mode=selective_residual` with `accepted=true` advances. Otherwise the
+script emits `mode=anchor_fallback`, preserving the frozen result and ending
+this residual family without test access.

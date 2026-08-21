@@ -10,6 +10,7 @@ from graphcure.data import PackedEmbeddingDataset, resolve_newsclippings_source
 from graphcure.optimization import project_auxiliary_gradients
 from scripts.prepare_mocheg_protocols import close_row
 from graphcure.evidence_set import EvidenceSetHead, evidence_set_loss, last_token_pool
+from graphcure.selective_residual import SelectiveResidualSetVerifier
 from graphcure.multimodal_evidence import (
     MultimodalEvidenceHead,
     multimodal_evidence_loss,
@@ -95,6 +96,28 @@ from scripts.train_mocheg_set_router import (
 )
 from scripts.audit_mocheg_visual_selector import rank_summary
 from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
+
+
+def test_selective_residual_starts_as_exact_frozen_anchor():
+    anchor = EvidenceSetHead(
+        encoder_dim=8, hidden_dim=16, retrieval_dim=6, dropout=0.0
+    ).eval()
+    model = SelectiveResidualSetVerifier(
+        anchor, encoder_dim=8, hidden_dim=16, layers=1, heads=4, dropout=0.0
+    ).eval()
+    inputs = {
+        "claim": torch.randn(3, 8),
+        "evidence": torch.randn(3, 4, 8),
+        "evidence_mask": torch.tensor(
+            [[1, 1, 1, 1], [1, 1, 0, 0], [1, 0, 0, 0]], dtype=torch.bool
+        ),
+        "retrieval_features": torch.randn(3, 4, 6),
+    }
+    expected = anchor(**inputs)["verdict_logits"]
+    actual = model(**inputs)
+    assert torch.allclose(actual["verdict_logits"], expected, atol=1e-6)
+    assert all(not parameter.requires_grad for parameter in model.anchor.parameters())
+    assert actual["set_attention"].shape == (3, 4)
 
 
 def test_model_shapes():
