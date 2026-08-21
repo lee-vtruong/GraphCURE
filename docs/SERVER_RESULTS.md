@@ -113,6 +113,20 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   gold-coverage mismatch with paired natural/grounded train views. Validation
   remains natural and the test split remains locked.
 
+### R2V-TEXT-VAL-16 — paired retrieval curriculum
+
+- Natural train gold coverage: `0.578368`; grounded-view coverage: `0.630814`;
+  only `610` previously uncovered claims could receive a valid train-only
+  text-qrel insertion.
+- Best candidate: epoch `5`, Macro-F1 `0.540604`, delta `-0.009344` versus the
+  frozen anchor.
+- The automatic fallback preserved accuracy `0.564560`, Macro-F1 `0.549948`,
+  Select@1 `0.807860`, and ECE `0.048946`.
+- Decision: reject retrieval curriculum. Missing train text qrels are an
+  annotation/modal-evidence limitation, not a candidate-ranking issue. Stop
+  tuning small heads on frozen embeddings; screen an instruction-tuned causal
+  verifier with BF16 LoRA and deterministic one-token verdict scoring.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

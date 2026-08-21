@@ -772,3 +772,46 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_retrieval_curriculum \
 
 Epoch zero must reproduce the anchor. Advance to multi-seed validation only if
 `accepted=true`; otherwise keep the anchor and close this curriculum branch.
+
+The curriculum candidate failed (`0.540604` Macro-F1). The 610 injected rows
+cannot repair the split-level annotation mismatch. Stop training shallow heads
+on frozen sentence embeddings and perform one controlled instruction-model
+screen. Qwen3-4B-Instruct-2507 is run in non-thinking mode; LoRA targets its
+attention and MLP projections. The verifier emits a single constrained token
+(`A/B/C`), so evaluation uses exact next-token probabilities rather than
+sampling or fragile JSON parsing.
+
+Install the one new optional dependency:
+
+```bash
+python -m pip install "peft>=0.17" "accelerate>=1.0"
+```
+
+Run a small integration/OOM smoke test first:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_lora_verifier \
+  --output outputs/mocheg_qwen3_lora_smoke_v16 \
+  --limit-train 128 --limit-val 64 \
+  --top-k 5 --max-length 2048 --max-evidence-chars 1500 \
+  --epochs 1 --batch-size 1 --gradient-accumulation 8 \
+  --num-workers 0 --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-qwen3-lora-smoke-v16.log
+```
+
+If the smoke test completes without OOM and reports three distinct label token
+IDs, run the locked validation screen:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_lora_verifier \
+  --output outputs/mocheg_qwen3_lora_seed42_v16 \
+  --top-k 5 --max-length 3072 --max-evidence-chars 2200 \
+  --lora-r 16 --lora-alpha 32 --lora-dropout 0.05 \
+  --epochs 3 --patience 2 --batch-size 1 \
+  --gradient-accumulation 16 --learning-rate 1e-4 \
+  --num-workers 2 --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-qwen3-lora-v16.log
+```
+
+Do not run the test split. The validation gate remains `+0.003` Macro-F1 over
+the frozen `0.549948` anchor before any multi-seed or multimodal extension.

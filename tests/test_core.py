@@ -97,6 +97,7 @@ from scripts.train_mocheg_set_router import (
 from scripts.audit_mocheg_visual_selector import rank_summary
 from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
 from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
+from scripts.train_mocheg_qwen3_lora_verifier import compose_user_prompt
 
 
 def test_selective_residual_starts_as_exact_frozen_anchor():
@@ -132,6 +133,15 @@ def test_train_gold_injection_is_deterministic_and_never_changes_covered_rows():
         claim, ["gold-a", "negative"], documents, 2
     )
     assert covered == ["gold-a", "negative"] and not changed
+
+
+def test_qwen_verifier_prompt_contains_no_supervision_metadata():
+    prompt = compose_user_prompt(
+        "The claim text", ["first article", "second article"], 100
+    )
+    assert "The claim text" in prompt and "[1] first article" in prompt
+    assert "[2] second article" in prompt and "A, B, or C" in prompt
+    assert "qrel" not in prompt.lower() and "gold" not in prompt.lower()
 
 
 def test_model_shapes():
