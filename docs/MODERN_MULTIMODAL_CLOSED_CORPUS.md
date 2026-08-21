@@ -696,3 +696,19 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_long_context_verifier \
   --epochs 5 --patience 2 --device cuda --seed 42 \
   2>&1 | tee outputs/mocheg-modernbert-text-v12.log
 ```
+
+The ModernBERT screen failed (`0.4421` Macro-F1). Replace its randomly
+initialized classifier with an NLI/FEVER-pretrained pair verifier and correct
+the train/validation evidence-coverage mismatch using train-only injection:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_nli_set_verifier \
+  --retrieval-root outputs/retrieval_mocheg_qwen3_reranked \
+  --output outputs/mocheg_nli_set_seed42_v13 \
+  --top-k 5 --max-length 512 \
+  --batch-size 2 --gradient-accumulation 8 \
+  --epochs 4 --patience 2 --learning-rate 5e-6 \
+  --pair-loss-weight 0.25 --weak-negative-weight 0.25 \
+  --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-nli-set-v13.log
+```

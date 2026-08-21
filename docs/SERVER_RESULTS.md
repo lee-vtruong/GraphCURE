@@ -68,6 +68,19 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   long-context claim/evidence verifier. Visual reports become an ablation input
   to that unified verifier rather than a separately routed verdict expert.
 
+### R2V-TEXT-VAL-13 — ModernBERT long-context verifier
+
+- Best epoch `3`: accuracy `0.4753`, Macro-F1 `0.442092`, ECE `0.0835`.
+- Delta versus the frozen evidence-set anchor: `-0.107856` Macro-F1.
+- Training loss decreased through epoch 5 while validation remained poor,
+  ruling out simple under-training. The natural train retrieval has far lower
+  gold coverage than validation, so a monolithic classifier is frequently
+  trained to infer labels from contexts lacking relevant evidence.
+- Decision: reject the random-head long-context classifier. Use an
+  FEVER/NLI-pretrained pair verifier, inject one train-only gold article when
+  available, preserve natural validation retrieval, and aggregate pair states
+  into one claim verdict.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

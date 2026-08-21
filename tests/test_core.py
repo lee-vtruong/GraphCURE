@@ -27,6 +27,10 @@ from scripts.analyze_mocheg_claim_images import (
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
+from scripts.train_mocheg_nli_set_verifier import (
+    aggregate_nli_logits,
+    select_evidence_candidates,
+)
 from graphcure.retrieval import (
     contradiction_features,
     evidence_candidate_features,
@@ -735,6 +739,18 @@ def test_long_context_input_contains_evidence_without_gold_metadata():
     assert "Retrieved text evidence 2" in text
     assert "Retrieved visual evidence report 1" in text
     assert "qrel" not in text.lower() and "gold" not in text.lower()
+
+
+def test_nli_set_train_injection_and_aggregation():
+    selected = select_evidence_candidates(
+        "claim", ["a", "b", "c"], {"gold"}, 3, True
+    )
+    assert "gold" in selected and len(selected) == len(set(selected)) == 3
+    pair = torch.randn(2, 3, 3, requires_grad=True)
+    mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool)
+    claim = aggregate_nli_logits(pair, mask, temperature=.5)
+    assert claim.shape == (2, 3) and torch.isfinite(claim).all()
+    claim.sum().backward()
 
 
 def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):
