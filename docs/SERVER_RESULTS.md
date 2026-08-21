@@ -56,6 +56,18 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   fusion adapter anchored to the frozen text verifier. This remains phase-B
   fusion; cost-aware routing remains disabled.
 
+### R2V-FUSE-VAL-12 — safe report logit fusion
+
+- Predeclared acceptance delta: `+0.003` Macro-F1 over `0.549948`.
+- Best candidate was epoch `1`: accuracy `0.563187`, Macro-F1 `0.543902`,
+  gate mean `0.060809`, help rate `0.018544`, harm rate `0.019918`.
+- The candidate underperformed the anchor by `-0.006046`; final mode correctly
+  reverted to `text_anchor` with delta `0.0`.
+- Decision: reject separate late fusion and stop visual gate tuning. Retrieval
+  is already strong; replace frozen pooled embeddings with a jointly fine-tuned
+  long-context claim/evidence verifier. Visual reports become an ablation input
+  to that unified verifier rather than a separately routed verdict expert.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

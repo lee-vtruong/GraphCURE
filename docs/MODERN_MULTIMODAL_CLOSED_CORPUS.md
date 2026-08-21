@@ -680,3 +680,19 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_report_fusion \
   --device cuda --seed 42 \
   2>&1 | tee outputs/mocheg-report-fusion-v11.log
 ```
+
+The safe adapter reverted to text (`best delta 0.0`). Stop visual late-fusion
+tuning. Phase B now targets the actual verifier bottleneck with a long-context
+cross-encoder. Screen text-only first so any later report contribution is an
+isolated ablation:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_long_context_verifier \
+  --retrieval-root outputs/retrieval_mocheg_qwen3_reranked \
+  --output outputs/mocheg_modernbert_text_seed42_v12 \
+  --model answerdotai/ModernBERT-large \
+  --top-k 5 --max-length 2048 --max-evidence-chars 3000 \
+  --batch-size 2 --gradient-accumulation 8 \
+  --epochs 5 --patience 2 --device cuda --seed 42 \
+  2>&1 | tee outputs/mocheg-modernbert-text-v12.log
+```

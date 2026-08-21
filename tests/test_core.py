@@ -26,6 +26,7 @@ from scripts.analyze_mocheg_claim_images import (
 )
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
+from scripts.train_mocheg_long_context_verifier import compose_example
 from graphcure.retrieval import (
     contradiction_features,
     evidence_candidate_features,
@@ -723,6 +724,17 @@ def test_safe_report_fusion_outputs_bounded_gate():
     )
     assert logits.shape == (4, 3)
     assert torch.all((gate > 0) & (gate < 1))
+
+
+def test_long_context_input_contains_evidence_without_gold_metadata():
+    text = compose_example(
+        "A claim", ["First document", "Second document"],
+        ["Visible report"], 100
+    )
+    assert "Claim:\nA claim" in text
+    assert "Retrieved text evidence 2" in text
+    assert "Retrieved visual evidence report 1" in text
+    assert "qrel" not in text.lower() and "gold" not in text.lower()
 
 
 def test_multimodal_dataset_maps_cache_names_to_model_arguments(tmp_path):
