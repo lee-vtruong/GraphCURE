@@ -97,7 +97,10 @@ from scripts.train_mocheg_set_router import (
 from scripts.audit_mocheg_visual_selector import rank_summary
 from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
 from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
-from scripts.train_mocheg_qwen3_lora_verifier import compose_user_prompt
+from scripts.train_mocheg_qwen3_lora_verifier import (
+    as_token_id_list,
+    compose_user_prompt,
+)
 
 
 def test_selective_residual_starts_as_exact_frozen_anchor():
@@ -142,6 +145,20 @@ def test_qwen_verifier_prompt_contains_no_supervision_metadata():
     assert "The claim text" in prompt and "[1] first article" in prompt
     assert "[2] second article" in prompt and "A, B, or C" in prompt
     assert "qrel" not in prompt.lower() and "gold" not in prompt.lower()
+
+
+def test_qwen_tokenizer_output_normalization_supports_encoding_objects():
+    class Encoding:
+        ids = [11, 12, 13]
+
+    class BatchEncoding:
+        input_ids = torch.tensor([[21, 22]])
+
+    assert as_token_id_list(Encoding()) == [11, 12, 13]
+    assert as_token_id_list([Encoding()]) == [11, 12, 13]
+    assert as_token_id_list([7, Encoding()]) == [7, 11, 12, 13]
+    assert as_token_id_list(BatchEncoding()) == [21, 22]
+    assert as_token_id_list(np.asarray([31, 32])) == [31, 32]
 
 
 def test_model_shapes():

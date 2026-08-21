@@ -789,6 +789,11 @@ python -m pip install "peft>=0.17" "accelerate>=1.0"
 
 Run a small integration/OOM smoke test first:
 
+Compatibility note: the verifier normalizes recent `tokenizers.Encoding`
+chat-template outputs before collation. Runs that failed
+with `Could not infer dtype of tokenizers.Encoding` performed no training and
+must be rerun; downloaded model weights remain cached.
+
 ```bash
 CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_lora_verifier \
   --output outputs/mocheg_qwen3_lora_smoke_v16 \

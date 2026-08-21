@@ -50,6 +50,38 @@ def compose_user_prompt(claim: str, evidence: list[str],
     return "\n\n".join(sections)
 
 
+def as_token_id_list(value) -> list[int]:
+    """Normalize tokenizer outputs across Transformers/tokenizers versions."""
+    if hasattr(value, "ids"):
+        value = value.ids
+    elif hasattr(value, "input_ids"):
+        value = value.input_ids
+    elif isinstance(value, dict):
+        value = value["input_ids"]
+    if isinstance(value, torch.Tensor):
+        value = value.detach().cpu().tolist()
+    elif isinstance(value, np.ndarray):
+        value = value.tolist()
+    if isinstance(value, (list, tuple)) and value and any(
+        hasattr(item, "ids") or hasattr(item, "input_ids")
+        for item in value
+    ):
+        flattened = []
+        for item in value:
+            if isinstance(item, (int, np.integer)):
+                flattened.append(int(item))
+            else:
+                flattened.extend(as_token_id_list(item))
+        return flattened
+    if isinstance(value, (list, tuple)) and len(value) == 1 and isinstance(
+        value[0], (list, tuple)
+    ):
+        value = value[0]
+    if not isinstance(value, (list, tuple)):
+        raise TypeError(f"unsupported tokenizer output: {type(value)!r}")
+    return [int(token) for token in value]
+
+
 class QwenVerifierDataset(Dataset):
     def __init__(self, manifest: Path, retrieval: Path, corpus: Path,
                  top_k: int, max_evidence_chars: int,
@@ -94,9 +126,9 @@ def prompt_ids(tokenizer, user: str, budget: int) -> list[int]:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user},
     ]
-    ids = tokenizer.apply_chat_template(
+    ids = as_token_id_list(tokenizer.apply_chat_template(
         messages, tokenize=True, add_generation_prompt=True
-    )
+    ))
     if len(ids) <= budget:
         return ids
     prefix = min(512, budget // 3)
@@ -106,7 +138,7 @@ def prompt_ids(tokenizer, user: str, budget: int) -> list[int]:
 def label_token_ids(tokenizer) -> list[int]:
     result = []
     for code in ("A", "B", "C"):
-        ids = tokenizer.encode(code, add_special_tokens=False)
+        ids = as_token_id_list(tokenizer.encode(code, add_special_tokens=False))
         if len(ids) != 1:
             raise ValueError(f"label {code!r} is not one token: {ids}")
         result.append(ids[0])
@@ -123,9 +155,9 @@ def make_collate(tokenizer, max_length: int, training: bool):
         for row in rows:
             prompt = prompt_ids(tokenizer, row["user"], max_length - int(training))
             if training:
-                answer = tokenizer.encode(
+                answer = as_token_id_list(tokenizer.encode(
                     LABEL_CODES[row["label"]], add_special_tokens=False
-                )[0]
+                ))[0]
                 sequences.append(prompt + [answer])
                 targets.append([-100] * len(prompt) + [answer])
             else:
