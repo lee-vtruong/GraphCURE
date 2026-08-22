@@ -53,6 +53,30 @@ def read_predictions(path: Path) -> tuple[list[str],np.ndarray,np.ndarray]:
     )
 
 
+def validate_protocol_inputs(manifest: Path, retrieval: Path,
+                             expected_samples: int) -> int:
+    manifest_rows=[json.loads(line) for line in manifest.read_text().splitlines() if line]
+    retrieval_rows=[json.loads(line) for line in retrieval.read_text().splitlines() if line]
+    manifest_ids=[str(row["id"]) for row in manifest_rows]
+    retrieval_ids=[str(row["id"]) for row in retrieval_rows]
+    if len(set(manifest_ids))!=len(manifest_ids):
+        raise ValueError("manifest contains duplicate sample IDs")
+    if len(set(retrieval_ids))!=len(retrieval_ids):
+        raise ValueError("retrieval contains duplicate sample IDs")
+    if set(manifest_ids)!=set(retrieval_ids):
+        raise ValueError("manifest and retrieval sample IDs do not match exactly")
+    if expected_samples and len(manifest_ids)!=expected_samples:
+        raise ValueError(
+            f"protocol has {len(manifest_ids)} samples, expected {expected_samples}"
+        )
+    retrieval_by_id={str(row["id"]):row for row in retrieval_rows}
+    for row in manifest_rows:
+        retrieved=retrieval_by_id[str(row["id"])]
+        if int(retrieved["label"])!=int(row["label"]):
+            raise ValueError(f"label mismatch for {row['id']}")
+    return len(manifest_ids)
+
+
 def bootstrap_ci(probabilities: np.ndarray, labels: np.ndarray,
                  iterations: int, seed: int) -> dict:
     rng=np.random.default_rng(seed); accuracy=[]; macro_f1=[]; size=len(labels)
@@ -75,15 +99,18 @@ def main() -> None:
     p.add_argument("--run-template",default="outputs/mocheg_qwen3_lora_seed{seed}_v16")
     p.add_argument("--manifest",type=Path,default=Path("data/processed/mocheg_manifest_strict/test.jsonl")); p.add_argument("--retrieval",type=Path,default=Path("outputs/retrieval_mocheg_qwen3_reranked/test.jsonl")); p.add_argument("--corpus",type=Path,default=Path("data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv"))
     p.add_argument("--output-root",type=Path,default=Path("outputs/mocheg_qwen3_lora_frozen_test")); p.add_argument("--batch-size",type=int,default=2); p.add_argument("--num-workers",type=int,default=2); p.add_argument("--bootstrap-iterations",type=int,default=5000); p.add_argument("--device",default="cuda")
+    p.add_argument("--protocol",default="P1_closed_corpus_retrieved_strict_n2434")
+    p.add_argument("--expected-samples",type=int,default=2434)
     a=p.parse_args(); validation=json.loads(a.validation_summary.read_text())
     if validation.get("split")!="val" or validation.get("test_split_used") is not False or not validation.get("stability_gate",{}).get("passed"):
         p.error("validation summary is not an accepted, test-locked freeze artifact")
     configuration=validation["configuration"]; seeds=[int(value) for value in validation["seeds"]]
+    protocol_samples=validate_protocol_inputs(a.manifest,a.retrieval,a.expected_samples)
     a.output_root.mkdir(parents=True,exist_ok=True); freeze_path=a.output_root/"freeze_manifest.json"
     summary_path=a.output_root/"summary.json"
     if summary_path.exists():
         raise FileExistsError(f"final test summary already exists: {summary_path}")
-    freeze={"validation_summary":str(a.validation_summary),"validation_summary_sha256":sha256(a.validation_summary),"configuration":configuration,"seeds":seeds,"temperatures":{str(run["seed"]):run["temperature"] for run in validation["per_seed"]},"manifest":str(a.manifest),"manifest_sha256":sha256(a.manifest),"retrieval":str(a.retrieval),"retrieval_sha256":sha256(a.retrieval),"corpus":str(a.corpus),"corpus_sha256":sha256(a.corpus),"primary_metric":"raw five-seed ensemble Macro-F1","secondary_metric":"validation-temperature-scaled ensemble calibration","git_commit":git_commit()}
+    freeze={"validation_summary":str(a.validation_summary),"validation_summary_sha256":sha256(a.validation_summary),"configuration":configuration,"seeds":seeds,"temperatures":{str(run["seed"]):run["temperature"] for run in validation["per_seed"]},"protocol":a.protocol,"expected_samples":a.expected_samples,"protocol_samples":protocol_samples,"manifest":str(a.manifest),"manifest_sha256":sha256(a.manifest),"retrieval":str(a.retrieval),"retrieval_sha256":sha256(a.retrieval),"corpus":str(a.corpus),"corpus_sha256":sha256(a.corpus),"primary_metric":"raw five-seed ensemble Macro-F1","secondary_metric":"validation-temperature-scaled ensemble calibration","git_commit":git_commit()}
     if freeze_path.exists():
         existing_freeze=json.loads(freeze_path.read_text())
         comparable_freeze={**freeze,"git_commit":existing_freeze.get("git_commit")}
@@ -121,7 +148,7 @@ def main() -> None:
         temperature=float(freeze["temperatures"][str(seed)])
         all_runs.append({"seed":seed,"metrics":metrics,"temperature":temperature,"probabilities":probabilities,"calibrated_probabilities":apply_temperature(probabilities,temperature)})
     raw=np.mean([run["probabilities"] for run in all_runs],axis=0); calibrated=np.mean([run["calibrated_probabilities"] for run in all_runs],axis=0)
-    result={"split":"test","protocol":"frozen Qwen3 LoRA five-seed ensemble","freeze_manifest":freeze,"per_seed":[{"seed":run["seed"],"temperature":run["temperature"],**run["metrics"]} for run in all_runs],"aggregate":{"accuracy":aggregate([run["metrics"]["accuracy"] for run in all_runs]),"macro_f1":aggregate([run["metrics"]["macro_f1"] for run in all_runs])},"raw_ensemble":probability_metrics(raw,reference_labels),"temperature_scaled_ensemble":probability_metrics(calibrated,reference_labels),"raw_ensemble_bootstrap":bootstrap_ci(raw,reference_labels,a.bootstrap_iterations,2026),"test_split_used":True,"test_fitted_parameters":0}
+    result={"split":"test","protocol":a.protocol,"freeze_manifest":freeze,"per_seed":[{"seed":run["seed"],"temperature":run["temperature"],**run["metrics"]} for run in all_runs],"aggregate":{"accuracy":aggregate([run["metrics"]["accuracy"] for run in all_runs]),"macro_f1":aggregate([run["metrics"]["macro_f1"] for run in all_runs])},"raw_ensemble":probability_metrics(raw,reference_labels),"temperature_scaled_ensemble":probability_metrics(calibrated,reference_labels),"raw_ensemble_bootstrap":bootstrap_ci(raw,reference_labels,a.bootstrap_iterations,2026),"test_split_used":True,"test_fitted_parameters":0}
     markdown_path=a.output_root/"summary.md"
     summary_path.write_text(json.dumps(result,indent=2)+"\n")
     lines=["# Frozen Qwen3 LoRA MOCHEG test summary","","Primary: raw five-seed ensemble Macro-F1. No parameter was fitted on test.","","| Seed | Accuracy | Macro-F1 | ECE-10 | ms/sample |","|---:|---:|---:|---:|---:|"]

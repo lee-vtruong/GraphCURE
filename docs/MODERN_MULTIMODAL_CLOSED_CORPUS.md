@@ -838,3 +838,23 @@ narrow point-estimate lead over the strongest AMuFC retrieved Macro-F1
 (`0.5560`), not a significant lead: the 95% bootstrap interval is
 `[0.536531, 0.574976]`. Preserve this result unchanged and evaluate the same
 frozen ensemble on the official `n=2442` protocol for direct comparability.
+
+### Frozen official-split comparability track
+
+Do not retrain or select a seed. Materialize the official `n=2442` test
+retrieval with the same Qwen3 settings. Seed the official reranker output with
+the `2434` already-frozen strict rows, then use `rerank_mocheg_qwen3 --resume`
+to score only the eight official-only claims. Finally invoke
+`evaluate_mocheg_qwen3_frozen_test` with:
+
+```text
+--protocol P1_closed_corpus_retrieved_official_n2442
+--expected-samples 2442
+--manifest data/processed/mocheg_manifest/test.jsonl
+--retrieval outputs/retrieval_mocheg_qwen3_reranked_official/test.jsonl
+--output-root outputs/mocheg_qwen3_lora_official_test
+```
+
+The evaluator requires exact manifest/retrieval ID and label agreement, stores
+all input and adapter hashes, reuses only validation temperatures, and fits
+zero parameters on the official test split.

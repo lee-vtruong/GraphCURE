@@ -1,6 +1,7 @@
 import torch
 import json
 import numpy as np
+import pytest
 from pathlib import Path
 
 from graphcure.acquisition import choose_evi_action
@@ -106,7 +107,10 @@ from scripts.summarize_mocheg_qwen3_lora import (
     fit_temperature,
     probability_metrics,
 )
-from scripts.evaluate_mocheg_qwen3_frozen_test import bootstrap_ci
+from scripts.evaluate_mocheg_qwen3_frozen_test import (
+    bootstrap_ci,
+    validate_protocol_inputs,
+)
 
 
 def test_selective_residual_starts_as_exact_frozen_anchor():
@@ -183,6 +187,15 @@ def test_frozen_test_bootstrap_is_deterministic():
     first = bootstrap_ci(probabilities, labels, iterations=20, seed=7)
     second = bootstrap_ci(probabilities, labels, iterations=20, seed=7)
     assert first == second
+
+
+def test_frozen_test_protocol_rejects_missing_retrieval(tmp_path):
+    manifest=tmp_path / "manifest.jsonl"
+    retrieval=tmp_path / "retrieval.jsonl"
+    manifest.write_text('{"id":"a","label":0}\n{"id":"b","label":1}\n')
+    retrieval.write_text('{"id":"a","label":0}\n')
+    with pytest.raises(ValueError, match="do not match exactly"):
+        validate_protocol_inputs(manifest,retrieval,expected_samples=2)
 
 
 def test_model_shapes():
