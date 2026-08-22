@@ -102,6 +102,12 @@ from scripts.train_mocheg_qwen3_lora_verifier import (
     as_token_id_list,
     compose_user_prompt,
 )
+from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
+from scripts.train_mocheg_sv_lora import (
+    balanced_class_weights,
+    deterministic_fraction,
+    hierarchical_verification_loss,
+)
 from scripts.summarize_mocheg_qwen3_lora import (
     apply_temperature,
     fit_temperature,
@@ -168,6 +174,44 @@ def test_qwen_tokenizer_output_normalization_supports_encoding_objects():
     assert as_token_id_list([Encoding()]) == [11, 12, 13]
     assert as_token_id_list([7, Encoding()]) == [7, 11, 12, 13]
     assert as_token_id_list(BatchEncoding()) == [21, 22]
+
+
+def test_sv_hierarchical_loss_rewards_correct_sufficiency_and_polarity():
+    labels = torch.tensor([0, 1, 2])
+    sample_weights = torch.ones(3)
+    good = torch.tensor([[5.0, 0.0, -2.0], [0.0, 5.0, -2.0], [-2.0, -2.0, 5.0]])
+    bad = good.roll(1, dims=0)
+    good_loss, parts = hierarchical_verification_loss(
+        good, labels, sample_weights, torch.ones(3), 0.5, 0.25
+    )
+    bad_loss, _ = hierarchical_verification_loss(
+        bad, labels, sample_weights, torch.ones(3), 0.5, 0.25
+    )
+    assert good_loss < bad_loss
+    assert set(parts) == {"verdict", "sufficiency", "polarity"}
+    assert all(torch.isfinite(value) for value in parts.values())
+
+
+def test_sv_counterfactual_sampling_and_weights_are_deterministic():
+    assert deterministic_fraction("claim-1", 42) == deterministic_fraction("claim-1", 42)
+    weights = balanced_class_weights([0, 0, 0, 1, 2], "sqrt")
+    assert weights[0] < weights[1] and weights[0] < weights[2]
+    assert torch.isclose(weights.mean(), torch.tensor(1.0))
+
+
+def test_sv_folds_keep_duplicate_claim_families_together():
+    rows = []
+    for index in range(30):
+        rows.append({
+            "id": f"row-{index}", "label": index % 3,
+            "claim": f"Claim family {index // 2}", "snopes_url": "",
+        })
+    folds = build_folds(rows, folds=3, seed=7)
+    by_id = {row["id"]: row for row in rows}
+    for fold in folds:
+        train_families = {claim_family(by_id[value]) for value in fold["train_ids"]}
+        val_families = {claim_family(by_id[value]) for value in fold["val_ids"]}
+        assert not train_families & val_families
     assert as_token_id_list(np.asarray([31, 32])) == [31, 32]
 
 
