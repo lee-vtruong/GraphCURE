@@ -106,6 +106,7 @@ from scripts.summarize_mocheg_qwen3_lora import (
     fit_temperature,
     probability_metrics,
 )
+from scripts.evaluate_mocheg_qwen3_frozen_test import bootstrap_ci
 
 
 def test_selective_residual_starts_as_exact_frozen_anchor():
@@ -174,6 +175,14 @@ def test_qwen_temperature_scaling_is_positive_and_preserves_predictions():
     assert temperature > 0
     assert np.array_equal(calibrated.argmax(1), probabilities.argmax(1))
     assert probability_metrics(calibrated, labels)["accuracy"] == 1.0
+
+
+def test_frozen_test_bootstrap_is_deterministic():
+    probabilities = np.asarray([[0.9,0.05,0.05],[0.1,0.8,0.1],[0.1,0.2,0.7]])
+    labels = np.asarray([0,1,2])
+    first = bootstrap_ci(probabilities, labels, iterations=20, seed=7)
+    second = bootstrap_ci(probabilities, labels, iterations=20, seed=7)
+    assert first == second
 
 
 def test_model_shapes():

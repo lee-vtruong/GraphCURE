@@ -825,3 +825,9 @@ Seed 42 passed strongly (`0.670471` Macro-F1, `+0.120523`). Freeze every
 hyperparameter above. Train only the four remaining preregistered seeds and
 then run `scripts.summarize_mocheg_qwen3_lora`; its output contains raw and
 temperature-scaled validation ensembles, stability checks, and no test path.
+
+The five-seed stability gate passed (`0.674751 +/- 0.008527` Macro-F1; raw
+ensemble `0.692045`). Phase-B architecture selection is closed. The one-shot
+test evaluator validates the frozen summary, reuses validation temperatures,
+persists each seed for crash-safe resume, fits zero test parameters, and emits
+bootstrap confidence intervals.

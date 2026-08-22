@@ -141,6 +141,19 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `13, 21, 87, 100`, then fit per-seed validation temperatures and evaluate a
   fixed five-seed ensemble. Test remains locked.
 
+### R2V-TEXT-VAL-18 — frozen five-seed Qwen3 LoRA validation
+
+- Per-seed accuracy: `0.684753 +/- 0.007855`; per-seed Macro-F1:
+  `0.674751 +/- 0.008527`. All five runs passed independently.
+- Raw ensemble: accuracy `0.700549`, Macro-F1 `0.692045`, ECE-10 `0.151147`.
+- Validation-temperature-scaled ensemble: accuracy `0.699863`, Macro-F1
+  `0.691260`, ECE-10 `0.037251`.
+- Temperatures were stable (`3.0065` to `3.1932`); calibration greatly reduced
+  ECE without a material verdict change.
+- Stability gate passed. Freeze the raw ensemble as the primary test method;
+  use the validation-temperature-scaled ensemble only for calibration and the
+  later cost router. No parameter may be selected on test.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official
