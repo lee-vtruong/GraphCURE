@@ -154,6 +154,32 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   use the validation-temperature-scaled ensemble only for calibration and the
   later cost router. No parameter may be selected on test.
 
+### R2V-TEXT-TEST-19 — one-shot frozen Qwen3 LoRA strict test
+
+- Protocol: strict cross-split-deduplicated MOCHEG test (`n=2434`), system
+  retrieval from the fixed MOCHEG corpus; five frozen seeds; zero parameters
+  fitted on test.
+- Per-seed accuracy: `0.577164 +/- 0.010273`; per-seed Macro-F1:
+  `0.554175 +/- 0.012606`.
+- Primary raw ensemble: accuracy **`0.580115`**, Macro-F1 **`0.557892`**,
+  ECE-10 `0.279371`, NLL `1.768444`; confusion matrix
+  `[[392, 278, 146], [10, 759, 56], [91, 441, 261]]`.
+- Validation-temperature-scaled ensemble: accuracy `0.576007`, Macro-F1
+  `0.552677`, ECE-10 `0.118115`, NLL `0.968086`. Calibration substantially
+  improves confidence quality but not verdict quality, so it remains a
+  secondary routing result rather than the primary test score.
+- Raw-ensemble 95% bootstrap intervals (5000 resamples): accuracy
+  `[0.559702, 0.597521]`; Macro-F1 `[0.536531, 0.574976]`.
+- Inference latency: approximately `40.25 ms/sample/model` on the server RTX
+  5090 (range `39.89` to `40.64` across seeds), before ensemble amortization.
+- Conservative comparison with the strongest reported AMuFC retrieved point
+  (`0.5577` Accuracy, `0.5560` Macro-F1): `+0.022415` Accuracy and only
+  `+0.001892` Macro-F1. The AMuFC Macro-F1 point lies inside GraphCURE's
+  bootstrap interval; this is a narrow point-estimate lead, not evidence of a
+  statistically significant improvement.
+- Status: **strict-split SOTA-level result**. An unchanged official `n=2442`
+  evaluation is still required for direct paper-table comparability.
+
 ## GraphCURE-R2V validation ledger (2026-08-17)
 
 The entries in this section are validation-only development results. Official

@@ -1,6 +1,6 @@
 # MOCHEG protocol-aware comparison
 
-Last checked: 2026-08-18.
+Last checked: 2026-08-22.
 
 Results must be separated by evidence protocol. `P1` uses a fixed MOCHEG
 knowledge corpus and system-retrieved evidence; it is not open-web retrieval.
@@ -16,6 +16,7 @@ Gold-evidence and open-web results are not directly comparable with P1.
 | MetaSumPerceiver | 0.486 | not reported reproducibly | retrieved text + image | published |
 | AMuFC | **0.546** | **0.540** | retrieved text + image; Analyzer + VLM Verifier | current target |
 | GraphCURE-R2V | 0.4961 +/- 0.0108 | 0.4711 +/- 0.0118 | retrieved text only; five seeds | strict deduplicated split |
+| GraphCURE-Qwen3 (raw ensemble) | **0.5801** | **0.5579** | fixed-corpus retrieved text; five frozen LoRA seeds | strict deduplicated split |
 
 Primary comparison source for the common table: AMuFC, Table 3,
 <https://arxiv.org/abs/2604.04692> and
@@ -29,10 +30,15 @@ GraphCURE uses the leakage-controlled, cross-split-deduplicated test set
 (`n=2442`). The final paper must report both an official-split comparability
 track and this strict robustness track.
 
-Even before that caveat is resolved, GraphCURE does **not** exceed AMuFC: the
-remaining numerical gaps are `-0.0499` Accuracy and `-0.0689` Macro-F1.
-Consequently, R2V is a strong text-retrieved control, not a claim of overall
-MOCHEG SOTA.
+The original cached GraphCURE-R2V verifier does **not** exceed AMuFC. The
+subsequent frozen Qwen3 raw ensemble reaches `0.580115` Accuracy and `0.557892`
+Macro-F1 on the strict split. Relative to the arXiv-v2 AMuFC row above, the
+point-estimate gains are `+0.034115` Accuracy and `+0.017892` Macro-F1. A
+stronger AMuFC workshop version reports `0.5577/0.5560`; against that version,
+GraphCURE leads by `+0.022415/+0.001892`. Because AMuFC's Macro-F1 lies within
+GraphCURE's bootstrap interval `[0.536531, 0.574976]`, and because the split
+differs by eight duplicate samples, the defensible status is **SOTA-level on
+the strict protocol**, pending unchanged evaluation on the official split.
 
 ## Diagnostic interpretation
 
