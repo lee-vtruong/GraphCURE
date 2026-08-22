@@ -832,12 +832,14 @@ test evaluator validates the frozen summary, reuses validation temperatures,
 persists each seed for crash-safe resume, fits zero test parameters, and emits
 bootstrap confidence intervals.
 
-The one-shot strict test produced `0.580115` Accuracy and `0.557892` Macro-F1
-for the primary raw ensemble (`n=2434`, zero test-fitted parameters). This is a
-narrow point-estimate lead over the strongest AMuFC retrieved Macro-F1
-(`0.5560`), not a significant lead: the 95% bootstrap interval is
-`[0.536531, 0.574976]`. Preserve this result unchanged and evaluate the same
-frozen ensemble on the official `n=2442` protocol for direct comparability.
+The corrected one-shot strict test produced `0.569022` Accuracy and `0.545806`
+Macro-F1 for the primary raw ensemble (`n=2434`, zero test-fitted parameters),
+with a Macro-F1 bootstrap interval of `[0.525431, 0.564776]`. The unchanged
+official `n=2442` evaluation produced `0.567977` Accuracy and `0.545309`
+Macro-F1, with interval `[0.525794, 0.565170]`. These improve Accuracy over the
+strongest AMuFC retrieved point (`0.5577`) but remain `0.010691` below its
+reported `0.5560` Macro-F1. Preserve both frozen results; Phase B is no longer
+eligible for post-test architecture or hyperparameter selection.
 
 ### Frozen official-split comparability track
 

@@ -159,26 +159,47 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 - Protocol: strict cross-split-deduplicated MOCHEG test (`n=2434`), system
   retrieval from the fixed MOCHEG corpus; five frozen seeds; zero parameters
   fitted on test.
-- Per-seed accuracy: `0.577164 +/- 0.010273`; per-seed Macro-F1:
-  `0.554175 +/- 0.012606`.
-- Primary raw ensemble: accuracy **`0.580115`**, Macro-F1 **`0.557892`**,
-  ECE-10 `0.279371`, NLL `1.768444`; confusion matrix
-  `[[392, 278, 146], [10, 759, 56], [91, 441, 261]]`.
-- Validation-temperature-scaled ensemble: accuracy `0.576007`, Macro-F1
-  `0.552677`, ECE-10 `0.118115`, NLL `0.968086`. Calibration substantially
+- Per-seed accuracy: `0.566804 +/- 0.009794`; per-seed Macro-F1:
+  `0.543815 +/- 0.011777`.
+- Primary raw ensemble: accuracy **`0.569022`**, Macro-F1 **`0.545806`**,
+  ECE-10 `0.290171`, NLL `1.777144`; confusion matrix
+  `[[383, 284, 149], [12, 751, 62], [96, 446, 251]]`.
+- Validation-temperature-scaled ensemble: accuracy `0.566146`, Macro-F1
+  `0.541914`, ECE-10 `0.127515`, NLL `0.977286`. Calibration substantially
   improves confidence quality but not verdict quality, so it remains a
   secondary routing result rather than the primary test score.
 - Raw-ensemble 95% bootstrap intervals (5000 resamples): accuracy
-  `[0.559702, 0.597521]`; Macro-F1 `[0.536531, 0.574976]`.
+  `[0.549302, 0.587921]`; Macro-F1 `[0.525431, 0.564776]`.
 - Inference latency: approximately `40.25 ms/sample/model` on the server RTX
   5090 (range `39.89` to `40.64` across seeds), before ensemble amortization.
 - Conservative comparison with the strongest reported AMuFC retrieved point
-  (`0.5577` Accuracy, `0.5560` Macro-F1): `+0.022415` Accuracy and only
-  `+0.001892` Macro-F1. The AMuFC Macro-F1 point lies inside GraphCURE's
-  bootstrap interval; this is a narrow point-estimate lead, not evidence of a
-  statistically significant improvement.
-- Status: **strict-split SOTA-level result**. An unchanged official `n=2442`
-  evaluation is still required for direct paper-table comparability.
+  (`0.5577` Accuracy, `0.5560` Macro-F1): `+0.011322` Accuracy but
+  `-0.010194` Macro-F1.
+- Status: strong strict-split result, but **not Macro-F1 SOTA**.
+
+### R2V-TEXT-TEST-20 — frozen Qwen3 LoRA official test
+
+- Protocol: `P1_closed_corpus_retrieved_official_n2442`; official MOCHEG test
+  (`n=2442`); the same five adapters, validation temperatures, prompt, top-k,
+  and ensemble were retained; zero parameters fitted on test.
+- Per-seed accuracy: `0.566503 +/- 0.009929`; per-seed Macro-F1:
+  `0.543984 +/- 0.011925`.
+- Primary raw ensemble: accuracy **`0.567977`**, Macro-F1 **`0.545309`**,
+  ECE-10 `0.290937`, NLL `1.774854`; confusion matrix
+  `[[384, 284, 149], [13, 750, 62], [96, 451, 253]]`.
+- Validation-temperature-scaled ensemble: accuracy `0.565111`, Macro-F1
+  `0.541436`, ECE-10 `0.128220`, NLL `0.976907`; confusion matrix
+  `[[379, 287, 151], [13, 752, 60], [98, 453, 249]]`.
+- Raw-ensemble 95% bootstrap intervals (5000 resamples): accuracy
+  `[0.549140, 0.587633]`; Macro-F1 `[0.525794, 0.565170]`.
+- Against the strongest reported AMuFC retrieved result (`0.5577` Accuracy,
+  `0.5560` Macro-F1), GraphCURE is `+0.010277` Accuracy but `-0.010691`
+  Macro-F1. Against the lower arXiv-v2 AMuFC row (`0.546/0.540`), GraphCURE
+  is `+0.021977/+0.005309`; both versions must be disclosed rather than
+  selecting the favorable comparison.
+- Status: official fixed-corpus retrieved **accuracy improvement**, but not the
+  strongest reported Macro-F1 SOTA. Phase B is frozen; no post-test tuning is
+  allowed on this protocol.
 
 ## GraphCURE-R2V validation ledger (2026-08-17)
 

@@ -14,9 +14,11 @@ Gold-evidence and open-web results are not directly comparable with P1.
 | LVLM4FV | 0.451 | 0.450 | retrieved text + image | published |
 | HGTMFC | 0.486 | 0.468 | retrieved text + image | published |
 | MetaSumPerceiver | 0.486 | not reported reproducibly | retrieved text + image | published |
-| AMuFC | **0.546** | **0.540** | retrieved text + image; Analyzer + VLM Verifier | current target |
+| AMuFC (arXiv v2) | 0.546 | 0.540 | retrieved text + image; Analyzer + VLM Verifier | published preprint |
+| AMuFC (stronger workshop report) | 0.5577 | **0.5560** | retrieved text + image; Analyzer + VLM Verifier | conservative target |
 | GraphCURE-R2V | 0.4961 +/- 0.0108 | 0.4711 +/- 0.0118 | retrieved text only; five seeds | strict deduplicated split |
-| GraphCURE-Qwen3 (raw ensemble) | **0.5801** | **0.5579** | fixed-corpus retrieved text; five frozen LoRA seeds | strict deduplicated split |
+| GraphCURE-Qwen3 (raw ensemble) | 0.5690 | 0.5458 | fixed-corpus retrieved text; five frozen LoRA seeds | strict deduplicated split |
+| GraphCURE-Qwen3 (raw ensemble) | **0.5680** | 0.5453 | fixed-corpus retrieved text; five frozen LoRA seeds | official split |
 
 Primary comparison source for the common table: AMuFC, Table 3,
 <https://arxiv.org/abs/2604.04692> and
@@ -31,14 +33,13 @@ GraphCURE uses the leakage-controlled, cross-split-deduplicated test set
 track and this strict robustness track.
 
 The original cached GraphCURE-R2V verifier does **not** exceed AMuFC. The
-subsequent frozen Qwen3 raw ensemble reaches `0.580115` Accuracy and `0.557892`
-Macro-F1 on the strict split. Relative to the arXiv-v2 AMuFC row above, the
-point-estimate gains are `+0.034115` Accuracy and `+0.017892` Macro-F1. A
-stronger AMuFC workshop version reports `0.5577/0.5560`; against that version,
-GraphCURE leads by `+0.022415/+0.001892`. Because AMuFC's Macro-F1 lies within
-GraphCURE's bootstrap interval `[0.536531, 0.574976]`, and because the split
-differs by eight duplicate samples, the defensible status is **SOTA-level on
-the strict protocol**, pending unchanged evaluation on the official split.
+subsequent frozen Qwen3 raw ensemble reaches `0.569022/0.545806` on the strict
+split and `0.567977/0.545309` on the official split. Relative to the arXiv-v2
+AMuFC row above, the official point-estimate gains are `+0.021977` Accuracy and
+`+0.005309` Macro-F1. A stronger AMuFC workshop version reports
+`0.5577/0.5560`; against that version, GraphCURE gains `+0.010277` Accuracy but
+loses `-0.010691` Macro-F1. The defensible conclusion is therefore an official
+accuracy improvement, but **not a new strongest-reported Macro-F1 SOTA**.
 
 ## Diagnostic interpretation
 
