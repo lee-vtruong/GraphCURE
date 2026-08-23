@@ -46,6 +46,24 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   train-only NEI logit offset can recover Supported errors. Counterfactual
   training remains paused until that diagnostic passes.
 
+### R2V-SV-CV-03 — fold-0 complementarity diagnostic
+
+- Flat and hierarchical predictions agreed on `1391` correct and `644` wrong
+  examples. Flat alone was correct on `154`; hierarchical alone on `138`; the
+  models disagreed on `346` of `2327` held-out samples.
+- A fold-0-selected probability interpolation with frozen hierarchical weight
+  `0.63` reached accuracy `0.665664` and Macro-F1 `0.649213`, a `+0.012114`
+  diagnostic delta versus Flat. Its prediction counts (`765 / 901 / 661`)
+  closely matched gold counts (`762 / 909 / 656`).
+- A hierarchical-only NEI logit bias reached only `0.645067` Macro-F1. The
+  gain therefore comes from complementary rankings, not merely a class-prior
+  correction.
+- Decision: complementarity promotion potential passes on the development
+  fold. Freeze interpolation weight `0.63`; train matched Flat and
+  hierarchical models on untouched folds `1–4`; do not retune interpolation,
+  loss weights, epochs, or decision thresholds. The official validation and
+  test splits remain unused.
+
 ## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
 
 - Protocol: strict validation only; frozen text anchor and retrieval-ranked

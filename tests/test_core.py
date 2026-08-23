@@ -109,6 +109,7 @@ from scripts.train_mocheg_sv_lora import (
     hierarchical_verification_loss,
 )
 from scripts.analyze_mocheg_sv_complementarity import add_logit_bias
+from scripts.summarize_mocheg_sv_confirmation import paired_fold
 from scripts.summarize_mocheg_qwen3_lora import (
     apply_temperature,
     fit_temperature,
@@ -224,6 +225,28 @@ def test_sv_nei_logit_bias_changes_only_relative_nei_odds():
         adjusted[:, 0] / adjusted[:, 1],
         probability[:, 0] / probability[:, 1],
     )
+
+
+def test_sv_frozen_confirmation_aligns_ids_before_interpolation(tmp_path):
+    flat = [
+        {"id": "b", "gold": 1, "probabilities": [0.1, 0.8, 0.1]},
+        {"id": "a", "gold": 0, "probabilities": [0.6, 0.2, 0.2]},
+        {"id": "c", "gold": 2, "probabilities": [0.2, 0.2, 0.6]},
+    ]
+    hierarchical = [
+        {"id": "c", "gold": 2, "probabilities": [0.1, 0.2, 0.7]},
+        {"id": "a", "gold": 0, "probabilities": [0.8, 0.1, 0.1]},
+        {"id": "b", "gold": 1, "probabilities": [0.2, 0.7, 0.1]},
+    ]
+    flat_path = tmp_path / "flat.jsonl"
+    hierarchical_path = tmp_path / "hierarchical.jsonl"
+    flat_path.write_text("\n".join(map(json.dumps, flat)) + "\n")
+    hierarchical_path.write_text(
+        "\n".join(map(json.dumps, hierarchical)) + "\n"
+    )
+    result = paired_fold(flat_path, hierarchical_path, alpha=0.63)
+    assert result["samples"] == 3
+    assert result["frozen_ensemble"]["macro_f1"] == 1.0
     assert as_token_id_list(np.asarray([31, 32])) == [31, 32]
 
 
