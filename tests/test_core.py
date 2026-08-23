@@ -108,6 +108,7 @@ from scripts.train_mocheg_sv_lora import (
     deterministic_fraction,
     hierarchical_verification_loss,
 )
+from scripts.analyze_mocheg_sv_complementarity import add_logit_bias
 from scripts.summarize_mocheg_qwen3_lora import (
     apply_temperature,
     fit_temperature,
@@ -212,6 +213,17 @@ def test_sv_folds_keep_duplicate_claim_families_together():
         train_families = {claim_family(by_id[value]) for value in fold["train_ids"]}
         val_families = {claim_family(by_id[value]) for value in fold["val_ids"]}
         assert not train_families & val_families
+
+
+def test_sv_nei_logit_bias_changes_only_relative_nei_odds():
+    probability = np.asarray([[0.4, 0.3, 0.3], [0.1, 0.2, 0.7]])
+    adjusted = add_logit_bias(probability, class_index=2, bias=-1.0)
+    assert np.allclose(adjusted.sum(-1), 1.0)
+    assert np.all(adjusted[:, 2] < probability[:, 2])
+    assert np.allclose(
+        adjusted[:, 0] / adjusted[:, 1],
+        probability[:, 0] / probability[:, 1],
+    )
     assert as_token_id_list(np.asarray([31, 32])) == [31, 32]
 
 
