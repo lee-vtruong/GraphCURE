@@ -27,6 +27,25 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   variant without class balancing. This isolates the source of the NEI gain
   while reducing the Supported penalty.
 
+### R2V-SV-CV-02 — hierarchical-only recovery
+
+- The three training epochs completed, but the final fold evaluation was
+  interrupted by a client power loss. Evaluation-only recovery loaded the
+  atomically saved epoch-3 adapter; no optimizer step or retraining occurred.
+- Configuration: sufficiency weight `0.25`, polarity weight `0.5`, no
+  counterfactual rows, and no class balancing.
+- Accuracy `0.657069`; Macro-F1 `0.641182` (`+0.0041` versus Flat and `+0.0014`
+  versus the original SV screen).
+- Per-class F1: Supported `0.613315`, Refuted `0.811706`, NEI `0.498525`.
+  The prediction histogram contains `725` Supported, `902` Refuted, and `700`
+  NEI predictions for gold counts `762 / 909 / 656`.
+- Decision: hierarchical supervision contains useful NEI ranking signal, but
+  still exceeds the sufficient-to-NEI error budget and fails the `+0.01`
+  fold-0 gate. Before another training run, test whether the saved Flat and
+  hierarchical probability distributions are complementary and whether a
+  train-only NEI logit offset can recover Supported errors. Counterfactual
+  training remains paused until that diagnostic passes.
+
 ## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
 
 - Protocol: strict validation only; frozen text anchor and retrieval-ranked
