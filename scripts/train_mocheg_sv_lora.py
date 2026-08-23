@@ -224,7 +224,7 @@ def load_fold(path: Path | None, index: int) -> tuple[set[str] | None,set[str] |
 
 
 def main() -> None:
-    from peft import LoraConfig, TaskType, get_peft_model
+    from peft import LoraConfig, PeftModel, TaskType, get_peft_model
     from transformers import AutoModelForCausalLM, AutoTokenizer, get_cosine_schedule_with_warmup
     p=argparse.ArgumentParser()
     p.add_argument("--manifest-root",type=Path,default=Path("data/processed/mocheg_manifest_strict")); p.add_argument("--retrieval-root",type=Path,default=Path("outputs/retrieval_mocheg_qwen3_reranked")); p.add_argument("--raw-root",type=Path,default=Path("data/raw/mocheg_dataset/extracted/mocheg"))
@@ -236,6 +236,14 @@ def main() -> None:
     p.add_argument("--learning-rate",type=float,default=1e-4); p.add_argument("--weight-decay",type=float,default=.01); p.add_argument("--warmup-ratio",type=float,default=.05)
     p.add_argument("--sufficiency-weight",type=float,default=.5); p.add_argument("--polarity-weight",type=float,default=.25); p.add_argument("--counterfactual-ratio",type=float,default=.5); p.add_argument("--counterfactual-weight",type=float,default=.35); p.add_argument("--class-balance",choices=("none","sqrt","inverse"),default="sqrt")
     p.add_argument("--no-train-gold-injection",action="store_true"); p.add_argument("--num-workers",type=int,default=2); p.add_argument("--device",default="cuda"); p.add_argument("--seed",type=int,default=42); p.add_argument("--limit-train",type=int,default=0); p.add_argument("--limit-val",type=int,default=0)
+    p.add_argument(
+        "--evaluate-only", action="store_true",
+        help="Recover final metrics from output/best_adapter without training.",
+    )
+    p.add_argument(
+        "--checkpoint-epoch", type=int, default=0,
+        help="Epoch that produced best_adapter, for interrupted-run provenance.",
+    )
     a=p.parse_args(); random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(a.seed)
     device=torch.device(a.device if torch.cuda.is_available() else "cpu"); a.output.mkdir(parents=True,exist_ok=True)
@@ -253,18 +261,30 @@ def main() -> None:
     if tokenizer.pad_token_id is None: tokenizer.pad_token=tokenizer.eos_token
     answer_ids=label_token_ids(tokenizer)
     model=AutoModelForCausalLM.from_pretrained(a.model,torch_dtype=torch.bfloat16 if device.type=="cuda" else torch.float32,attn_implementation="sdpa").to(device); model.config.use_cache=False
-    if hasattr(model,"gradient_checkpointing_enable"): model.gradient_checkpointing_enable()
-    if hasattr(model,"enable_input_require_grads"): model.enable_input_require_grads()
-    model=get_peft_model(model,LoraConfig(task_type=TaskType.CAUSAL_LM,r=a.lora_r,lora_alpha=a.lora_alpha,lora_dropout=a.lora_dropout,target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],bias="none")); model.print_trainable_parameters()
+    target=a.output/"best_adapter"
+    if a.evaluate_only:
+        if not target.is_dir():
+            raise FileNotFoundError(f"saved adapter not found: {target}")
+        model=PeftModel.from_pretrained(model,target).eval()
+    else:
+        if hasattr(model,"gradient_checkpointing_enable"): model.gradient_checkpointing_enable()
+        if hasattr(model,"enable_input_require_grads"): model.enable_input_require_grads()
+        model=get_peft_model(model,LoraConfig(task_type=TaskType.CAUSAL_LM,r=a.lora_r,lora_alpha=a.lora_alpha,lora_dropout=a.lora_dropout,target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],bias="none")); model.print_trainable_parameters()
     train=SufficiencyVerifierDataset(train_manifest,train_retrieval,train_corpus,a.top_k,a.max_evidence_chars,train_ids,not a.no_train_gold_injection,a.counterfactual_ratio,a.counterfactual_weight,a.seed,a.limit_train)
     val=SufficiencyVerifierDataset(val_manifest,val_retrieval,val_corpus,a.top_k,a.max_evidence_chars,val_ids,False,0.,a.counterfactual_weight,a.seed,a.limit_val)
     collate=make_sv_collate(tokenizer,a.max_length); train_loader=DataLoader(train,batch_size=a.batch_size,shuffle=True,num_workers=a.num_workers,collate_fn=collate,pin_memory=device.type=="cuda"); val_loader=DataLoader(val,batch_size=a.batch_size,shuffle=False,num_workers=a.num_workers,collate_fn=collate,pin_memory=device.type=="cuda")
     natural_labels=[row["label"] for row in train.rows if row["kind"]=="natural"]
     class_weights=balanced_class_weights(natural_labels,a.class_balance).to(device)
+    if a.evaluate_only:
+        final,rows=evaluate(model,val_loader,answer_ids,device)
+        summary={"method":"GraphCURE-SV","protocol":"train_only_cv" if cv_mode else "external_validation","fold":a.fold_index if cv_mode else None,"model":a.model,"best_epoch":a.checkpoint_epoch or None,"best_val_macro_f1":final["macro_f1"],"final":final,"injected_train_claims":train.injected_claims,"counterfactual_train_claims":train.counterfactual_claims,"train_rows":len(train),"natural_train_label_counts":dict(Counter(map(str,natural_labels))),"class_weights":class_weights.cpu().tolist(),"history":[],"recovered_from_saved_adapter":True,"test_split_used":False,"official_validation_used_for_selection":not cv_mode,"provenance":{"git_commit":git_commit(),"train_manifest_sha256":sha256(train_manifest),"train_retrieval_sha256":sha256(train_retrieval),"fold_spec_sha256":sha256(a.fold_spec) if a.fold_spec else None},"settings":{key:str(value) if isinstance(value,Path) else value for key,value in vars(a).items()}}
+        (a.output/"summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
+        (a.output/"val_predictions.jsonl").write_text("\n".join(json.dumps(row) for row in rows)+"\n",encoding="utf-8")
+        print(json.dumps(summary,indent=2))
+        return
     parameters=[value for value in model.parameters() if value.requires_grad]; optimizer=torch.optim.AdamW(parameters,lr=a.learning_rate,weight_decay=a.weight_decay)
     updates=max(1,int(np.ceil(len(train_loader)/a.gradient_accumulation)))*a.epochs; scheduler=get_cosine_schedule_with_warmup(optimizer,int(updates*a.warmup_ratio),updates)
     best=-1.; best_epoch=0; stale=0; history=[]; best_state=None; answer_tensor=torch.tensor(answer_ids,device=device); optimizer.zero_grad(set_to_none=True)
-    target=a.output/"best_adapter"
     for epoch in range(1,a.epochs+1):
         model.train(); sums=Counter(); progress=tqdm(train_loader,desc=f"epoch {epoch}/{a.epochs}")
         for step,batch in enumerate(progress,1):
