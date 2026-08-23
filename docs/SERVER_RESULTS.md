@@ -6,6 +6,27 @@ Git commit: `86616c3aa87237666212961e134ea8bf49bab642`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
+## R2V-SV-CV-01 — GraphCURE-SV fold-0 screen (2026-08-23)
+
+- Protocol: duplicate-family-safe fold `0`, constructed exclusively from the
+  strict MOCHEG training split. Neither official validation nor test was used.
+- Flat three-class control: accuracy `0.6639`, Macro-F1 `0.6371`.
+  Per-class F1 was Supported `0.6492`, Refuted `0.8085`, and NEI `0.4536`.
+- GraphCURE-SV (`lambda_s=0.5`, `lambda_p=0.25`, counterfactual ratio `0.5`,
+  counterfactual weight `0.35`, square-root class balancing): accuracy
+  `0.6506`, Macro-F1 `0.6398`. Per-class F1 was Supported `0.6082`, Refuted
+  `0.7984`, and NEI `0.5127`.
+- Delta versus the matched control: accuracy `-0.0133`, Macro-F1 `+0.0027`,
+  Supported F1 `-0.0410`, Refuted F1 `-0.0101`, and NEI F1 `+0.0591`.
+- Diagnosis: the sufficiency/counterfactual objective successfully addresses
+  the NEI bottleneck but over-routes sufficient examples to NEI. Predicted NEI
+  count increased from `486` to `795` for `656` gold NEI examples.
+- Decision: the preregistered one-fold promotion threshold (`+0.01` Macro-F1)
+  failed. Do not run five-fold SV or touch official test. Screen two
+  train-only ablations next: hierarchical-only, then a light counterfactual
+  variant without class balancing. This isolates the source of the NEI gain
+  while reducing the Supported penalty.
+
 ## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
 
 - Protocol: strict validation only; frozen text anchor and retrieval-ranked
