@@ -64,6 +64,27 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   loss weights, epochs, or decision thresholds. The official validation and
   test splits remain unused.
 
+### R2V-SV-CV-04 — frozen folds 1–4 confirmation
+
+- The fold-0-selected interpolation weight `0.63` was frozen and evaluated on
+  untouched train-only folds `1–4`; no coefficient or threshold was retuned.
+- Fold Macro-F1 (`Flat / Hierarchical / Frozen ensemble`, paired delta):
+  fold 1 `0.6560 / 0.6667 / 0.6687` (`+0.0128`); fold 2
+  `0.6617 / 0.6459 / 0.6563` (`-0.0054`); fold 3
+  `0.6802 / 0.6740 / 0.6747` (`-0.0055`); fold 4
+  `0.6670 / 0.6630 / 0.6675` (`+0.0006`).
+- Paired ensemble-minus-Flat Macro-F1 delta: mean `+0.000601`, standard
+  deviation `0.007445`; values `[+0.012776, -0.005433, -0.005489, +0.000551]`.
+- The predeclared `+0.015` mean-delta gate failed; stability passed. Official
+  validation and test remained unused.
+- Decision: reject the hierarchical loss, counterfactual variant, and
+  probability ensemble as primary Phase-B methods. The fold-0 gain was a
+  development-fold selection effect. Retain the Flat verifier baseline and
+  stop tuning class weights, NEI offsets, or interpolation on these folds.
+  The next Phase-B investigation must model the train-to-evaluation domain
+  shift with train-only source/topic/coverage groups before another verifier
+  is trained.
+
 ## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
 
 - Protocol: strict validation only; frozen text anchor and retrieval-ranked
