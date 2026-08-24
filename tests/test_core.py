@@ -104,9 +104,11 @@ from scripts.train_mocheg_qwen3_lora_verifier import (
 )
 from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
 from scripts.train_mocheg_sv_lora import (
+    GroupDROState,
     balanced_class_weights,
     deterministic_fraction,
     hierarchical_verification_loss,
+    robust_group_key,
 )
 from scripts.analyze_mocheg_sv_complementarity import add_logit_bias
 from scripts.summarize_mocheg_sv_confirmation import paired_fold
@@ -247,6 +249,24 @@ def test_sv_frozen_confirmation_aligns_ids_before_interpolation(tmp_path):
     result = paired_fold(flat_path, hierarchical_path, alpha=0.63)
     assert result["samples"] == 3
     assert result["frozen_ensemble"]["macro_f1"] == 1.0
+
+
+def test_evidence_availability_group_dro_upweights_high_loss_group():
+    state = GroupDROState(
+        ["snopes|qrel_absent", "snopes|qrel_available"] * 4,
+        eta=0.5,
+        device=torch.device("cpu"),
+    )
+    loss = state.loss(
+        torch.tensor([3.0, 0.2]),
+        ["snopes|qrel_absent", "snopes|qrel_available"],
+    )
+    assert torch.isfinite(loss)
+    state.update()
+    weights = state.as_dict()
+    assert weights["snopes|qrel_absent"] > weights["snopes|qrel_available"]
+    assert robust_group_key("snopes", False, "source_qrel") == \
+        "snopes|qrel_absent"
     assert as_token_id_list(np.asarray([31, 32])) == [31, 32]
 
 

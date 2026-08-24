@@ -85,6 +85,25 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   shift with train-only source/topic/coverage groups before another verifier
   is trained.
 
+### R2V-DG-CV-05 — train-only OOF domain audit
+
+- The Flat verifier's five held-out fold predictions cover all `11631` strict
+  training examples; validation and test were not read.
+- Source gap: Politifact Macro-F1 `0.7044` versus Snopes `0.6231`.
+- Evidence-availability gap: qrel-absent (`n=4294`) Macro-F1 `0.5460` versus
+  qrel-available (`n=7337`) `0.6363`. Top-5 gold miss (`n=5030`) accuracy was
+  `0.6022`, versus `0.7390` for a hit.
+- Long claims were weaker (Q4 accuracy `0.6416`) than short claims (Q1
+  `0.7152`), but their Macro-F1 difference was only `0.0387`.
+- Retrieval confidence and score-margin quartiles had nearly flat Macro-F1
+  (`0.6560–0.6624`) and therefore do not justify another scalar uncertainty
+  threshold.
+- Decision: Phase B-v3 targets source and evidence-availability robustness,
+  not calibration. Screen inference-agnostic Evidence-Availability GroupDRO
+  over train-only `source x qrel-availability` groups, using the unchanged
+  Flat verdict loss. Qrel metadata defines training groups only and is never
+  supplied to the verifier prompt or required at inference.
+
 ## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
 
 - Protocol: strict validation only; frozen text anchor and retrieval-ranked

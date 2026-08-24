@@ -128,6 +128,8 @@ class SufficiencyVerifierDataset(Dataset):
             "id": claim["id"] if kind == "natural" else f"{claim['id']}::cf",
             "parent_id": claim["id"], "label": label,
             "sample_weight": float(weight), "kind": kind,
+            "source": claim.get("source", "unknown") or "unknown",
+            "qrel_available": bool(claim.get("text_evidence_ids", [])),
             "user": compose_user_prompt(claim.get("claim", ""), evidence, max_chars),
         }
 
@@ -153,6 +155,8 @@ def make_sv_collate(tokenizer, max_length: int):
             "input_ids": input_ids, "attention_mask": attention,
             "class_labels": torch.tensor([row["label"] for row in rows]),
             "sample_weights": torch.tensor([row["sample_weight"] for row in rows]),
+            "sources": [row["source"] for row in rows],
+            "qrel_available": [row["qrel_available"] for row in rows],
             "ids": [row["id"] for row in rows],
         }
     return collate
@@ -188,6 +192,60 @@ def hierarchical_verification_loss(
         polarity = logits.sum() * 0.0
     total = verdict + sufficiency_weight * sufficiency + polarity_weight * polarity
     return total, {"verdict": verdict, "sufficiency": sufficiency, "polarity": polarity}
+
+
+class GroupDROState:
+    """Exponentiated-gradient worst-group weighting with prior correction."""
+    def __init__(self, groups: list[str], eta: float, device: torch.device):
+        counts = Counter(groups)
+        self.names = sorted(counts)
+        self.index = {name: value for value, name in enumerate(self.names)}
+        total = float(sum(counts.values()))
+        self.prior = torch.tensor(
+            [counts[name] / total for name in self.names],
+            dtype=torch.float32, device=device,
+        )
+        self.weights = torch.full_like(self.prior, 1.0 / len(self.names))
+        self.loss_sum = torch.zeros_like(self.prior)
+        self.loss_count = torch.zeros_like(self.prior)
+        self.eta = eta
+
+    def loss(self, per_sample_loss: torch.Tensor, groups: list[str]) -> torch.Tensor:
+        indices = torch.tensor(
+            [self.index[name] for name in groups],
+            dtype=torch.long, device=per_sample_loss.device,
+        )
+        with torch.no_grad():
+            self.loss_sum.scatter_add_(0, indices, per_sample_loss.detach().float())
+            self.loss_count.scatter_add_(
+                0, indices, torch.ones_like(per_sample_loss, dtype=torch.float32)
+            )
+        importance = self.weights[indices] / self.prior[indices].clamp_min(1e-8)
+        return torch.mean(per_sample_loss * importance)
+
+    @torch.no_grad()
+    def update(self) -> None:
+        observed = self.loss_count > 0
+        means = self.loss_sum / self.loss_count.clamp_min(1.0)
+        self.weights[observed] *= torch.exp(
+            self.eta * means[observed].clamp(max=20.0)
+        )
+        self.weights /= self.weights.sum()
+        self.loss_sum.zero_(); self.loss_count.zero_()
+
+    def as_dict(self) -> dict[str, float]:
+        return {
+            name: float(self.weights[index].detach().cpu())
+            for index, name in enumerate(self.names)
+        }
+
+
+def robust_group_key(source: str, qrel_available: bool, mode: str) -> str:
+    if mode == "source":
+        return source
+    if mode == "source_qrel":
+        return f"{source}|qrel_{'available' if qrel_available else 'absent'}"
+    raise ValueError(f"unsupported robust group mode: {mode}")
 
 
 @torch.inference_mode()
@@ -235,6 +293,7 @@ def main() -> None:
     p.add_argument("--epochs",type=int,default=3); p.add_argument("--patience",type=int,default=2); p.add_argument("--batch-size",type=int,default=1); p.add_argument("--gradient-accumulation",type=int,default=16)
     p.add_argument("--learning-rate",type=float,default=1e-4); p.add_argument("--weight-decay",type=float,default=.01); p.add_argument("--warmup-ratio",type=float,default=.05)
     p.add_argument("--sufficiency-weight",type=float,default=.5); p.add_argument("--polarity-weight",type=float,default=.25); p.add_argument("--counterfactual-ratio",type=float,default=.5); p.add_argument("--counterfactual-weight",type=float,default=.35); p.add_argument("--class-balance",choices=("none","sqrt","inverse"),default="sqrt")
+    p.add_argument("--robust-groups",choices=("none","source","source_qrel"),default="none"); p.add_argument("--group-dro-eta",type=float,default=.05)
     p.add_argument("--no-train-gold-injection",action="store_true"); p.add_argument("--num-workers",type=int,default=2); p.add_argument("--device",default="cuda"); p.add_argument("--seed",type=int,default=42); p.add_argument("--limit-train",type=int,default=0); p.add_argument("--limit-val",type=int,default=0)
     p.add_argument(
         "--evaluate-only", action="store_true",
@@ -245,6 +304,12 @@ def main() -> None:
         help="Epoch that produced best_adapter, for interrupted-run provenance.",
     )
     a=p.parse_args(); random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed)
+    if a.robust_groups != "none" and (
+        a.sufficiency_weight or a.polarity_weight or a.counterfactual_ratio
+    ):
+        raise ValueError(
+            "GroupDRO screen requires flat loss and no counterfactual rows"
+        )
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(a.seed)
     device=torch.device(a.device if torch.cuda.is_available() else "cpu"); a.output.mkdir(parents=True,exist_ok=True)
     train_ids,val_ids,fold_payload=load_fold(a.fold_spec,a.fold_index)
@@ -275,6 +340,17 @@ def main() -> None:
     collate=make_sv_collate(tokenizer,a.max_length); train_loader=DataLoader(train,batch_size=a.batch_size,shuffle=True,num_workers=a.num_workers,collate_fn=collate,pin_memory=device.type=="cuda"); val_loader=DataLoader(val,batch_size=a.batch_size,shuffle=False,num_workers=a.num_workers,collate_fn=collate,pin_memory=device.type=="cuda")
     natural_labels=[row["label"] for row in train.rows if row["kind"]=="natural"]
     class_weights=balanced_class_weights(natural_labels,a.class_balance).to(device)
+    train_group_keys = (
+        [
+            robust_group_key(row["source"], row["qrel_available"], a.robust_groups)
+            for row in train.rows
+        ]
+        if a.robust_groups != "none" else []
+    )
+    group_dro = (
+        GroupDROState(train_group_keys, a.group_dro_eta, device)
+        if train_group_keys else None
+    )
     if a.evaluate_only:
         final,rows=evaluate(model,val_loader,answer_ids,device)
         summary={"method":"GraphCURE-SV","protocol":"train_only_cv" if cv_mode else "external_validation","fold":a.fold_index if cv_mode else None,"model":a.model,"best_epoch":a.checkpoint_epoch or None,"best_val_macro_f1":final["macro_f1"],"final":final,"injected_train_claims":train.injected_claims,"counterfactual_train_claims":train.counterfactual_claims,"train_rows":len(train),"natural_train_label_counts":dict(Counter(map(str,natural_labels))),"class_weights":class_weights.cpu().tolist(),"history":[],"recovered_from_saved_adapter":True,"test_split_used":False,"official_validation_used_for_selection":not cv_mode,"provenance":{"git_commit":git_commit(),"train_manifest_sha256":sha256(train_manifest),"train_retrieval_sha256":sha256(train_retrieval),"fold_spec_sha256":sha256(a.fold_spec) if a.fold_spec else None},"settings":{key:str(value) if isinstance(value,Path) else value for key,value in vars(a).items()}}
@@ -291,14 +367,23 @@ def main() -> None:
             inputs={key:batch[key].to(device,non_blocking=True) for key in ("input_ids","attention_mask")}; labels=batch["class_labels"].to(device); sample_weights=batch["sample_weights"].to(device)
             with torch.autocast(device_type=device.type,dtype=torch.bfloat16,enabled=device.type=="cuda"):
                 all_logits=model(**inputs).logits; final_index=inputs["attention_mask"].sum(-1)-1; logits=all_logits[torch.arange(len(final_index),device=device),final_index][:,answer_tensor]
-                loss,parts=hierarchical_verification_loss(logits,labels,sample_weights,class_weights,a.sufficiency_weight,a.polarity_weight)
+                if group_dro is None:
+                    loss,parts=hierarchical_verification_loss(logits,labels,sample_weights,class_weights,a.sufficiency_weight,a.polarity_weight)
+                else:
+                    per_sample=F.cross_entropy(logits.float(),labels,reduction="none")*sample_weights
+                    group_keys=[robust_group_key(source,qrel,a.robust_groups) for source,qrel in zip(batch["sources"],batch["qrel_available"],strict=True)]
+                    loss=group_dro.loss(per_sample,group_keys)
+                    parts={"verdict":per_sample.mean(),"group_dro":loss}
             (loss/a.gradient_accumulation).backward()
             for name,value in parts.items(): sums[name]+=float(value.detach())
             sums["total"]+=float(loss.detach())
             if step%a.gradient_accumulation==0 or step==len(train_loader):
                 torch.nn.utils.clip_grad_norm_(parameters,1.0); optimizer.step(); scheduler.step(); optimizer.zero_grad(set_to_none=True)
+                if group_dro is not None: group_dro.update()
             progress.set_postfix(loss=f"{loss.item():.4f}")
-        metrics,_=evaluate(model,val_loader,answer_ids,device); row={"epoch":epoch,**{f"train_{key}_loss":value/len(train_loader) for key,value in sums.items()},**metrics}; history.append(row); print(json.dumps(row),flush=True)
+        metrics,_=evaluate(model,val_loader,answer_ids,device); row={"epoch":epoch,**{f"train_{key}_loss":value/len(train_loader) for key,value in sums.items()},**metrics};
+        if group_dro is not None: row["group_dro_weights"]=group_dro.as_dict()
+        history.append(row); print(json.dumps(row),flush=True)
         if metrics["macro_f1"]>best:
             best=metrics["macro_f1"]; best_epoch=epoch; stale=0
             best_state={name:value.detach().cpu().clone() for name,value in model.named_parameters() if value.requires_grad}

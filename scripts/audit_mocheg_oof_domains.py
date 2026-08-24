@@ -64,6 +64,7 @@ def main() -> None:
         "--confirmation-template",
         default="outputs/mocheg_sv_confirm/fold_{fold}_flat/val_predictions.jsonl",
     )
+    parser.add_argument("--folds", nargs="+", type=int, default=[0, 1, 2, 3, 4])
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument(
         "--output", type=Path,
@@ -76,12 +77,15 @@ def main() -> None:
     fold_spec = json.loads(args.fold_spec.read_text(encoding="utf-8"))
     predictions = {}
     prediction_fold = {}
-    for fold in range(5):
+    expected_oof_ids = set()
+    fold_by_number = {int(row["fold"]): row for row in fold_spec["folds"]}
+    for fold in args.folds:
         path = args.fold0_predictions if fold == 0 else Path(
             args.confirmation_template.format(fold=fold)
         )
         fold_rows = read_predictions(path)
-        expected = set(fold_spec["folds"][fold]["val_ids"])
+        expected = set(fold_by_number[fold]["val_ids"])
+        expected_oof_ids.update(expected)
         if set(fold_rows) != expected:
             raise ValueError(
                 f"fold {fold} prediction IDs differ from held-out fold IDs"
@@ -91,8 +95,8 @@ def main() -> None:
             raise ValueError(f"duplicate OOF predictions: {len(overlap)}")
         predictions.update(fold_rows)
         prediction_fold.update({value: fold for value in fold_rows})
-    if set(predictions) != set(claims):
-        raise ValueError("OOF predictions do not cover the strict train manifest")
+    if set(predictions) != expected_oof_ids:
+        raise ValueError("OOF predictions do not cover the requested held-out folds")
 
     claim_lengths = [len(row.get("claim", "").split()) for row in claims.values()]
     confidences = [
@@ -110,7 +114,7 @@ def main() -> None:
     margin_edges = bin_edges(margins)
 
     audit_rows = []
-    for index, sample_id in enumerate(claims):
+    for index, sample_id in enumerate(predictions):
         claim = claims[sample_id]
         retrieved = retrieval[sample_id]
         candidate_ids = {
@@ -154,6 +158,7 @@ def main() -> None:
     worst.sort(key=lambda row: row["macro_f1"])
     payload = {
         "protocol": "strict_train_only_out_of_fold_domain_audit",
+        "folds": args.folds,
         "samples": len(audit_rows),
         "overall": group_metrics(audit_rows),
         "quantile_edges": {
