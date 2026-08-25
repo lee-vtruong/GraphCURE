@@ -23,6 +23,13 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `>=0.6735` validation Macro-F1 versus the prior `0.670471`; no new test access
   is permitted before configuration freeze. See
   `docs/MOCHEG_PHASE_B4_ATOMIC.md`.
+- B-v4 validation atomic-retrieval screen passed (`n=1456`): Qwen3-Embedding-4B
+  ranked `16,211` candidate sentences with Recall@1 `0.567995`, Recall@5
+  `0.832418`, Recall@8 `0.866071`, and MRR `0.680348`. The recorded retrieval
+  signature is `610bedaea8e2e49110a6311b860ef96fcc26f4f00ea0bee56913b6a02096fe68`;
+  `validation_gold_injection=false`. This clears the preregistered retrieval
+  gate (`Recall@8 >= 0.55`), so train retrieval and the seed-42 verifier screen
+  are authorized. Test remains locked.
 
 ## R2V-SV-CV-01 — GraphCURE-SV fold-0 screen (2026-08-23)
 
