@@ -104,6 +104,24 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   Flat verdict loss. Qrel metadata defines training groups only and is never
   supplied to the verifier prompt or required at inference.
 
+### R2V-DG-CV-06 — Evidence-Availability GroupDRO fold-0 screen
+
+- Matched Flat fold-0 reference: accuracy `0.6639`, Macro-F1 `0.6371`.
+  Evidence-Availability GroupDRO: accuracy `0.6450`, Macro-F1 `0.6350`
+  (`-0.0021`).
+- Qrel-absent Macro-F1 improved from `0.5182` to `0.6187` (`+0.1004`), and
+  top-5 gold-miss Macro-F1 improved from `0.5994` to `0.6188` (`+0.0194`).
+- The robustness transfer was not free: qrel-available Macro-F1 fell from
+  `0.6243` to `0.5960` (`-0.0283`), gold-hit Macro-F1 fell from `0.6394` to
+  `0.6123` (`-0.0271`), Politifact fell `-0.0101`, and Snopes fell `-0.0068`.
+- The predeclared qrel-absent and overall non-inferiority conditions passed;
+  the required `+0.01` Snopes improvement failed. No validation/test access.
+- Decision: reject source-by-availability GroupDRO for promotion. It proves
+  that availability robustness is learnable, but over-allocates capacity away
+  from evidence-grounded examples and does not address the source gap. Run one
+  source-only DRO ablation next; only a positive Snopes result justifies a
+  dual-axis robust objective.
+
 ## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
 
 - Protocol: strict validation only; frozen text anchor and retrieval-ranked
