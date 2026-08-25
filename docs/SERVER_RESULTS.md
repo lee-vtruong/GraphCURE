@@ -122,6 +122,24 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   source-only DRO ablation next; only a positive Snopes result justifies a
   dual-axis robust objective.
 
+### R2V-DG-CV-07 — source-only GroupDRO fold-0 screen
+
+- Group weights were unstable: epoch 1 assigned Snopes `0.9604`, epoch 2
+  `0.7195`, then epoch 3 collapsed to Politifact `0.9994`.
+- Overall Macro-F1 changed from `0.6371` to `0.6376` (`+0.0005`). Snopes
+  improved from `0.6141` to `0.6227` (`+0.0086`), below the predeclared
+  `+0.01` gate; Politifact decreased `-0.0132` but remained inside its
+  non-inferiority bound.
+- Qrel-absent Macro-F1 fell from `0.5182` to `0.4821`, while qrel-available
+  increased from `0.6243` to `0.6309`.
+- Decision: reject source-only and dual-axis GroupDRO. The near-zero overall
+  gain and oscillating adversarial weights show that loss reweighting moves
+  errors between domains instead of learning invariant evidence relations.
+  Stop the robust-weighting branch. Phase B-v4 will replace raw article text
+  with claim-conditioned atomic sentence evidence, using MOCHEG's
+  sentence-level qrels for train-only supervision and natural retrieval for
+  held-out evaluation.
+
 ## R2V-VIS-VAL-09 — global-embedding stance diagnostic (2026-08-20)
 
 - Protocol: strict validation only; frozen text anchor and retrieval-ranked
