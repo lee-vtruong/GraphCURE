@@ -98,6 +98,13 @@ from scripts.train_mocheg_set_router import (
 from scripts.audit_mocheg_visual_selector import rank_summary
 from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
 from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
+from scripts.prepare_mocheg_atomic_evidence import (
+    map_unit_id,
+    normalized_text,
+    split_atomic_units,
+    stable_atom_id,
+)
+from scripts.run_mocheg_atomic_retrieval import diverse_order, token_overlap
 from scripts.train_mocheg_qwen3_lora_verifier import (
     as_token_id_list,
     compose_user_prompt,
@@ -1263,3 +1270,37 @@ def test_visual_expert_audit_stratifies_help_and_harm():
     assert result["no_gold_in_candidates"]["helpful"] == 0
     assert result["no_gold_in_candidates"]["harmful"] == 1
     assert result["qrel_oracle_sufficiency_policy"]["accuracy"] == 1.0
+
+
+def test_atomic_evidence_split_is_clean_and_deterministic():
+    article = (
+        "<p>Officials said the event happened in Paris on Monday.</p>"
+        "<p>However, the viral photograph was first published in 2018! "
+        "It did not show the claimed 2024 event.</p>"
+    )
+    units = split_atomic_units(article)
+    assert units == [
+        "Officials said the event happened in Paris on Monday.",
+        "However, the viral photograph was first published in 2018!",
+        "It did not show the claimed 2024 event.",
+    ]
+    assert stable_atom_id("doc-7", units[0]) == stable_atom_id("doc-7", units[0])
+    assert normalized_text("Café <b>FALSE</b>!") == "caf false"
+
+
+def test_atomic_evidence_prefers_unique_official_sentence_id():
+    text = "The image was taken in 2019, not 2024."
+    lookup = {("17", normalized_text(text)): ["17-82-3"]}
+    assert map_unit_id("17", "article-1", text, lookup) == ("17-82-3", True)
+    ambiguous = {("17", normalized_text(text)): ["17-82-3", "17-91-0"]}
+    atom_id, authoritative = map_unit_id("17", "article-1", text, ambiguous)
+    assert atom_id.startswith("atomic-")
+    assert not authoritative
+
+
+def test_atomic_diversity_and_overlap_are_inference_only():
+    order = [0, 1, 2, 3, 4]
+    parents = ["a", "a", "a", "b", "c"]
+    assert diverse_order(order, parents, limit=4, max_per_parent=2) == [0, 1, 3, 4]
+    assert token_overlap("Paris fire 2024", "Fire reported in Paris") > 0
+    assert token_overlap("Paris fire", "unrelated dolphins") == 0

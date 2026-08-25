@@ -6,6 +6,24 @@ Git commit: `86616c3aa87237666212961e134ea8bf49bab642`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
+## Phase B-v4 atomic-evidence preregistration (2026-08-25)
+
+- Source-only DRO was rejected: fold-0 overall Macro-F1 changed from `0.6371`
+  to `0.6376`; Snopes improved only `+0.0086`, Politifact fell `-0.0132`, and
+  evidence-absent claims fell from `0.5182` to `0.4821`.
+- Evidence-availability GroupDRO was also rejected despite its large
+  qrel-absent gain because overall Macro-F1 changed by `-0.0021` and performance
+  moved away from evidence-available claims.
+- The next registered branch is B-v4 claim-conditioned atomic evidence. It
+  changes only evidence representation: frozen Qwen3 article candidates are
+  expanded to official/synthetic sentence units, ranked with dense, lexical,
+  and parent-rank views, diversity packed, then passed to the unchanged
+  Qwen3-LoRA verifier.
+- Validation/test gold injection is forbidden. The seed-42 promotion gate is
+  `>=0.6735` validation Macro-F1 versus the prior `0.670471`; no new test access
+  is permitted before configuration freeze. See
+  `docs/MOCHEG_PHASE_B4_ATOMIC.md`.
+
 ## R2V-SV-CV-01 — GraphCURE-SV fold-0 screen (2026-08-23)
 
 - Protocol: duplicate-family-safe fold `0`, constructed exclusively from the
