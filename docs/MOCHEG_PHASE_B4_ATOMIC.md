@@ -118,7 +118,7 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_lora_verifier \
   --retrieval-root outputs/retrieval_mocheg_atomic_dense \
   --raw-root data/processed/mocheg_atomic_corpus \
   --output outputs/mocheg_atomic_qwen3_seed42 \
-  --top-k 5 --max-length 2048 --max-evidence-chars 900 \
+  --top-k 5 --max-length 3072 --max-evidence-chars 2200 \
   --lora-r 16 --lora-alpha 32 --lora-dropout 0.05 \
   --epochs 3 --patience 2 --batch-size 1 \
   --gradient-accumulation 16 --learning-rate 1e-4 \
@@ -126,8 +126,12 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_lora_verifier \
   2>&1 | tee outputs/mocheg-atomic-qwen3-seed42.log
 ```
 
+The full screen deliberately restores the frozen verifier context settings
+(`3072/2200`). Atomic units are already capped during preparation, so changing
+these values is unnecessary and would confound the representation-only
+comparison. The smaller `2048/900` setting above is smoke-test-only.
+
 The preregistered one-seed promotion gate is Macro-F1 `>= 0.6735`, i.e.
 at least `+0.003` over the original seed-42 validation result `0.670471`.
 Only then run seeds `13, 21, 87, 100`; otherwise stop and preserve the result
 as a negative representation ablation.
-
