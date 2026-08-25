@@ -86,7 +86,11 @@ def main() -> None:
         "weights": [args.dense_weight, args.lexical_weight, args.parent_weight],
         "rrf_k": args.rrf_k,
     }, sort_keys=True).encode()).hexdigest()
-    summary = {}
+    summary_path = args.output_root / "summary.json"
+    summary = (
+        json.loads(summary_path.read_text(encoding="utf-8"))
+        if summary_path.exists() else {}
+    )
     for split in args.splits:
         claims = {row["id"]: row for row in read_jsonl(args.manifest_root / f"{split}.jsonl")}
         candidates = read_jsonl(args.candidate_root / f"{split}.jsonl")
@@ -161,7 +165,7 @@ def main() -> None:
         result["mrr"] = float(np.mean([1 / rank if rank else 0 for rank in ranks]))
         result["validation_gold_injection"] = False
         summary[split] = result; print(json.dumps({split: result}, indent=2))
-    (args.output_root / "summary.json").write_text(
+    summary_path.write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 
