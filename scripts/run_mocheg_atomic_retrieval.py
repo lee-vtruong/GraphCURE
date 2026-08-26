@@ -18,6 +18,14 @@ from graphcure.retrieval import (FACT_CHECK_RETRIEVAL_INSTRUCTION,
 from scripts.prepare_mocheg_atomic_evidence import normalized_text, read_jsonl
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def read_documents(path: Path) -> dict[str, str]:
     with path.open(encoding="utf-8-sig", errors="replace", newline="") as handle:
         return {row["evidence_id"].strip(): row.get("Evidence", "").strip()
@@ -80,25 +88,45 @@ def main() -> None:
     args.output_root.mkdir(parents=True, exist_ok=True)
     args.cache_root.mkdir(parents=True, exist_ok=True)
     model = load_model(args.model, args.device, args.max_length)
-    signature = hashlib.sha256(json.dumps({
+    signature_payload = {
         "model": args.model, "instruction": args.instruction,
         "output_k": args.output_k, "max_per_parent": args.max_per_parent,
         "weights": [args.dense_weight, args.lexical_weight, args.parent_weight],
-        "rrf_k": args.rrf_k,
-    }, sort_keys=True).encode()).hexdigest()
+        "rrf_k": args.rrf_k, "max_length": args.max_length,
+    }
     summary_path = args.output_root / "summary.json"
     summary = (
         json.loads(summary_path.read_text(encoding="utf-8"))
         if summary_path.exists() else {}
     )
     for split in args.splits:
-        claims = {row["id"]: row for row in read_jsonl(args.manifest_root / f"{split}.jsonl")}
-        candidates = read_jsonl(args.candidate_root / f"{split}.jsonl")
-        documents = read_documents(args.corpus_root / split / "Corpus2.csv")
+        manifest_path = args.manifest_root / f"{split}.jsonl"
+        candidate_path = args.candidate_root / f"{split}.jsonl"
+        corpus_path = args.corpus_root / split / "Corpus2.csv"
+        manifest_sha256 = file_sha256(manifest_path)
+        candidate_sha256 = file_sha256(candidate_path)
+        corpus_sha256 = file_sha256(corpus_path)
+        split_signature_payload = {
+            **signature_payload,
+            "manifest_sha256": manifest_sha256,
+            "candidate_sha256": candidate_sha256,
+            "corpus_sha256": corpus_sha256,
+        }
+        signature = hashlib.sha256(json.dumps(
+            split_signature_payload, sort_keys=True
+        ).encode()).hexdigest()
+        claims = {row["id"]: row for row in read_jsonl(manifest_path)}
+        candidates = read_jsonl(candidate_path)
+        documents = read_documents(corpus_path)
         used_ids = list(dict.fromkeys(value for row in candidates
                                       for value in row["retrieved_evidence_ids"]
                                       if value in documents))
-        cache_key = hashlib.sha256((args.model + "\0" + "\0".join(used_ids)).encode()).hexdigest()[:16]
+        cache_key = hashlib.sha256(json.dumps({
+            "model": args.model,
+            "max_length": args.max_length,
+            "corpus_sha256": corpus_sha256,
+            "used_ids": used_ids,
+        }, sort_keys=True).encode()).hexdigest()[:16]
         cache = args.cache_root / f"atomic-{split}-{cache_key}.npy"
         if cache.exists():
             embeddings = np.load(cache)
@@ -157,7 +185,10 @@ def main() -> None:
             "\n".join(json.dumps(row, ensure_ascii=False) for row in output) + "\n",
             encoding="utf-8")
         result = {"claims": len(output), "candidate_sentences": len(used_ids),
-                  "model": args.model, "retrieval_signature": signature}
+                  "model": args.model, "retrieval_signature": signature,
+                  "manifest_sha256": manifest_sha256,
+                  "candidate_sha256": candidate_sha256,
+                  "corpus_sha256": corpus_sha256}
         for cutoff in sorted({min(value, args.output_k)
                               for value in (1, 5, 10, args.output_k)}):
             result[f"recall@{cutoff}"] = float(np.mean([

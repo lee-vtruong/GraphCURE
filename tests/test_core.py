@@ -106,7 +106,11 @@ from scripts.prepare_mocheg_atomic_evidence import (
     split_atomic_units,
     stable_atom_id,
 )
-from scripts.run_mocheg_atomic_retrieval import diverse_order, token_overlap
+from scripts.run_mocheg_atomic_retrieval import (
+    diverse_order,
+    file_sha256,
+    token_overlap,
+)
 from scripts.train_mocheg_qwen3_lora_verifier import (
     as_token_id_list,
     compose_user_prompt,
@@ -1332,3 +1336,11 @@ def test_official_context_windows_do_not_cross_article_boundaries():
     windows = official_context_windows(rows, 1)
     assert "Second." in windows["7-3-0"]
     assert "Other article." not in windows["7-3-0"]
+
+
+def test_atomic_input_hash_changes_with_evidence_text(tmp_path):
+    path = tmp_path / "Corpus2.csv"
+    path.write_text("evidence_id,Evidence\n1,first\n", encoding="utf-8")
+    first = file_sha256(path)
+    path.write_text("evidence_id,Evidence\n1,changed\n", encoding="utf-8")
+    assert file_sha256(path) != first

@@ -66,6 +66,10 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.run_mocheg_atomic_retrieval \
 Proceed only if Recall@8 remains at least `0.84`. Then run the identical
 command with `--splits train`.
 
+The retrieval implementation hashes the manifest, candidate file, and atomic
+corpus into both its cache key and provenance signature. B-v4 and B-v5 must
+therefore have different signatures even though their sentence IDs coincide.
+
 ## Seed-42 verifier screen
 
 Use the frozen seed-42 article result as the explicit anchor so the generated

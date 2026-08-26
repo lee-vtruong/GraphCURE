@@ -41,6 +41,14 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   selected atomic sentence plus adjacent local context, without crossing
   article boundaries. Its seed-42 gate is `>=0.673471`; see
   `docs/MOCHEG_PHASE_B5_CONTEXT_PACKETS.md`.
+- The initial B-v5 validation retrieval screen passed: Recall@1 `0.584478`,
+  Recall@5 `0.848214`, Recall@8 `0.874313`, and MRR `0.689605`, with
+  `validation_gold_injection=false`. These improve over isolated atomic
+  sentences by `+0.016484 / +0.015797 / +0.008242 / +0.009257`. A provenance
+  audit found that the legacy retrieval signature hashed settings and IDs but
+  not evidence text, so it collided with B-v4. Metrics remain valid because a
+  separate packet cache was used, but the validation retrieval must be rerun
+  once with corpus/manifest/candidate hashes before training.
 
 ## R2V-SV-CV-01 — GraphCURE-SV fold-0 screen (2026-08-23)
 
