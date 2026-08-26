@@ -49,6 +49,17 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   not evidence text, so it collided with B-v4. Metrics remain valid because a
   separate packet cache was used, but the validation retrieval must be rerun
   once with corpus/manifest/candidate hashes before training.
+- The provenance rerun reproduced the metrics exactly. Validation signature
+  `06ac5cfb63b5507f59d4f69172a3a30ec4e0b1f23951305ea855d81a08a7b3f7`
+  binds manifest `ce1907...`, candidates `a82f44...`, and corpus `b31322...`.
+  Train Recall@8 is only `0.514573` versus validation `0.874313`; train MRR is
+  `0.394838`, and the verifier required `1742` train-only injections.
+- B-v5 seed 42 reached accuracy `0.661401`, Macro-F1 `0.648592`, and ECE-10
+  `0.216190` at epoch `3`. This improves B-v4 by `+0.005128` Macro-F1 but is
+  still `-0.021879` below the frozen article seed-42 anchor. The corrected
+  promotion code reports `accepted=false`. Additional B-v5 seeds and test are
+  prohibited. Run only a no-training anchor/packet complementarity diagnostic
+  before choosing the next train-only branch.
 
 ## R2V-SV-CV-01 — GraphCURE-SV fold-0 screen (2026-08-23)
 
