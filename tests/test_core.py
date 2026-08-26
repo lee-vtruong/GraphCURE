@@ -98,6 +98,7 @@ from scripts.train_mocheg_set_router import (
 from scripts.audit_mocheg_visual_selector import rank_summary
 from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
 from scripts.analyze_mocheg_expert_complementarity import diagnose
+from scripts.summarize_mocheg_packet_ensemble import summarize as summarize_packet
 from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
 from scripts.prepare_mocheg_atomic_evidence import (
     map_unit_id,
@@ -1363,4 +1364,26 @@ def test_expert_complementarity_reports_packet_only_corrections():
     assert result["outcome_overlap"]["packet_only_correct"] == 1
     assert result["outcome_overlap"]["anchor_only_correct"] == 1
     assert result["oracle_expert_selection"]["accuracy"] == 1.0
+    assert not result["test_split_used"]
+
+
+def test_packet_multiseed_summary_uses_frozen_weight_and_no_test():
+    def rows(first):
+        return {
+            "a": {"id": "a", "gold": 0, "probabilities": first},
+            "b": {"id": "b", "gold": 1, "probabilities": [.1, .8, .1]},
+            "c": {"id": "c", "gold": 2, "probabilities": [.1, .1, .8]},
+        }
+    pairs = [
+        (13, rows([.1, .8, .1]), rows([.9, .05, .05])),
+        (21, rows([.1, .8, .1]), rows([.9, .05, .05])),
+    ]
+    result = summarize_packet(
+        pairs, packet_weight=.8, minimum_delta=0,
+        maximum_delta_std=1, minimum_positive_seeds=2,
+        bootstrap_iterations=20, bootstrap_seed=4,
+    )
+    assert result["packet_weight"] == .8
+    assert result["paired_macro_f1_delta"]["positive_seeds"] == 2
+    assert result["promotion_gate"]["passed"]
     assert not result["test_split_used"]

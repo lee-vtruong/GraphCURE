@@ -60,6 +60,14 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   promotion code reports `accepted=false`. Additional B-v5 seeds and test are
   prohibited. Run only a no-training anchor/packet complementarity diagnostic
   before choosing the next train-only branch.
+- The complementarity diagnostic found `854` both-correct, `136` article-only,
+  `109` packet-only, and `357` both-wrong cases. A validation-selected packet
+  weight `0.44` reached Macro-F1 `0.680614` (`+0.010143` over article), while
+  the expert-selection oracle reached `0.749214`. Evidence is promising but
+  exploratory: McNemar `p=0.1557`, bootstrap 95% CI
+  `[-0.00284, 0.02352]`. Freeze weight `0.44`; confirm on seeds
+  `13/21/42/87/100`. Promotion requires mean and raw-ensemble delta `>=0.003`,
+  delta std `<=0.01`, and at least four positive seeds. Test remains locked.
 
 ## R2V-SV-CV-01 — GraphCURE-SV fold-0 screen (2026-08-23)
 
