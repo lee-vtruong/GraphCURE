@@ -30,6 +30,17 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `validation_gold_injection=false`. This clears the preregistered retrieval
   gate (`Recall@8 >= 0.55`), so train retrieval and the seed-42 verifier screen
   are authorized. Test remains locked.
+- The seed-42 verifier did **not** pass the actual B-v4 promotion gate. It
+  reached accuracy `0.654533`, Macro-F1 `0.643463`, and ECE-10 `0.232143`
+  (best epoch `3`; `1861` train-only injected claims). This is `-0.027007`
+  versus the matched article seed-42 Macro-F1 `0.670471`. The saved
+  `accepted=true` field compared against an obsolete `0.549948` anchor and is
+  therefore superseded by this preregistered decision. No other B-v4 seeds and
+  no test evaluation are authorized.
+- B-v5 is preregistered as retrieval-anchored context packets with radius `1`:
+  selected atomic sentence plus adjacent local context, without crossing
+  article boundaries. Its seed-42 gate is `>=0.673471`; see
+  `docs/MOCHEG_PHASE_B5_CONTEXT_PACKETS.md`.
 
 ## R2V-SV-CV-01 — GraphCURE-SV fold-0 screen (2026-08-23)
 

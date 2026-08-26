@@ -101,6 +101,8 @@ from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
 from scripts.prepare_mocheg_atomic_evidence import (
     map_unit_id,
     normalized_text,
+    official_context_windows,
+    pack_context,
     split_atomic_units,
     stable_atom_id,
 )
@@ -1304,3 +1306,29 @@ def test_atomic_diversity_and_overlap_are_inference_only():
     assert diverse_order(order, parents, limit=4, max_per_parent=2) == [0, 1, 3, 4]
     assert token_overlap("Paris fire 2024", "Fire reported in Paris") > 0
     assert token_overlap("Paris fire", "unrelated dolphins") == 0
+
+
+def test_atomic_context_packet_marks_selected_sentence_without_changing_id():
+    units = ["Before sentence.", "Selected sentence.", "After sentence."]
+    assert pack_context(units, 1, 0) == "Selected sentence."
+    assert pack_context(units, 1, 1) == (
+        "[Local context] Before sentence.\n"
+        "[Selected evidence] Selected sentence.\n"
+        "[Local context] After sentence."
+    )
+    with pytest.raises(ValueError):
+        pack_context(units, 1, -1)
+
+
+def test_official_context_windows_do_not_cross_article_boundaries():
+    rows = {
+        "7-3-0": {"claim_id": "7", "relevant_document_id": "3",
+                  "paragraph_id": "0", "paragraph": "First."},
+        "7-3-1": {"claim_id": "7", "relevant_document_id": "3",
+                  "paragraph_id": "1", "paragraph": "Second."},
+        "7-4-0": {"claim_id": "7", "relevant_document_id": "4",
+                  "paragraph_id": "0", "paragraph": "Other article."},
+    }
+    windows = official_context_windows(rows, 1)
+    assert "Second." in windows["7-3-0"]
+    assert "Other article." not in windows["7-3-0"]

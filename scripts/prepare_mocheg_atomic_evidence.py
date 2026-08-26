@@ -99,6 +99,45 @@ def stable_atom_id(parent_id: str, text: str) -> str:
     return f"atomic-{digest}"
 
 
+def pack_context(units: list[str], selected_index: int, radius: int) -> str:
+    """Pack a selected sentence with local context while marking its role."""
+    if radius < 0:
+        raise ValueError("context radius must be non-negative")
+    if not 0 <= selected_index < len(units):
+        raise IndexError("selected sentence index is outside the article")
+    if radius == 0:
+        return units[selected_index]
+    sections = []
+    start, end = max(0, selected_index - radius), min(
+        len(units), selected_index + radius + 1
+    )
+    for index in range(start, end):
+        role = "Selected evidence" if index == selected_index else "Local context"
+        sections.append(f"[{role}] {units[index]}")
+    return "\n".join(sections)
+
+
+def official_context_windows(sentence_rows: dict[str, dict],
+                             radius: int) -> dict[str, str]:
+    groups: dict[tuple[str, str], list[tuple[str, dict]]] = defaultdict(list)
+    for sentence_id, row in sentence_rows.items():
+        key = (row.get("claim_id", "").strip(),
+               row.get("relevant_document_id", "").strip())
+        groups[key].append((sentence_id, row))
+
+    def position(item: tuple[str, dict]) -> tuple[int, str]:
+        raw = item[1].get("paragraph_id", "").strip()
+        return (int(raw), raw) if raw.isdigit() else (sys.maxsize, raw)
+
+    result = {}
+    for rows in groups.values():
+        rows.sort(key=position)
+        units = [row.get("paragraph", "").strip() for _, row in rows]
+        for index, (sentence_id, _) in enumerate(rows):
+            result[sentence_id] = pack_context(units, index, radius)
+    return result
+
+
 def read_sentence_corpus(path: Path) -> tuple[dict[str, dict], dict[tuple[str, str], list[str]]]:
     raise_csv_field_limit()
     rows: dict[str, dict] = {}
@@ -129,7 +168,7 @@ def build_split(split: str, manifest_root: Path, article_retrieval_root: Path,
                 official_lookup: dict[tuple[str, str], list[str]],
                 output_manifest_root: Path, output_corpus_root: Path,
                 output_candidates_root: Path, article_top_k: int,
-                max_units_per_article: int) -> dict:
+                max_units_per_article: int, context_radius: int = 0) -> dict:
     manifest = read_jsonl(manifest_root / f"{split}.jsonl")
     claims = {row["id"]: row for row in manifest}
     retrieved = read_jsonl(article_retrieval_root / f"{split}.jsonl")
@@ -156,16 +195,17 @@ def build_split(split: str, manifest_root: Path, article_retrieval_root: Path,
             continue
         owner = article.get("claim_id", "").strip()
         atom_ids: list[str] = []
-        for position, text in enumerate(
-            split_atomic_units(article.get("Evidence", ""))[:max_units_per_article]
-        ):
+        units = split_atomic_units(
+            article.get("Evidence", "")
+        )[:max_units_per_article]
+        for position, text in enumerate(units):
             atom_id, authoritative = map_unit_id(
                 owner, str(parent_id), text, official_lookup
             )
             authoritative_matches += int(authoritative)
             atomic_rows.setdefault(atom_id, {
                 "evidence_id": atom_id,
-                "Evidence": text,
+                "Evidence": pack_context(units, position, context_radius),
                 "parent_evidence_id": str(parent_id),
                 "owner_claim_id": owner,
                 "sentence_position": position,
@@ -177,6 +217,7 @@ def build_split(split: str, manifest_root: Path, article_retrieval_root: Path,
     # Gold rows are included in the corpus solely so the existing train-only
     # injection path can access them. They are not added to natural candidates.
     missing_gold = 0
+    official_windows = official_context_windows(sentence_rows, context_radius)
     for claim in manifest:
         for sentence_id in map(str, claim.get("text_sentence_ids", [])):
             source = sentence_rows.get(sentence_id)
@@ -185,7 +226,9 @@ def build_split(split: str, manifest_root: Path, article_retrieval_root: Path,
                 continue
             atomic_rows.setdefault(sentence_id, {
                 "evidence_id": sentence_id,
-                "Evidence": source.get("paragraph", ""),
+                "Evidence": official_windows.get(
+                    sentence_id, source.get("paragraph", "")
+                ),
                 "parent_evidence_id": (
                     f"{source.get('claim_id', '')}-{source.get('relevant_document_id', '')}"
                 ),
@@ -203,7 +246,9 @@ def build_split(split: str, manifest_root: Path, article_retrieval_root: Path,
             str(value) for value in row.get("text_sentence_ids", [])
             if str(value) in atomic_rows
         ]
-        row["atomic_evidence_protocol"] = "official_sentence_qrels_v1"
+        row["atomic_evidence_protocol"] = (
+            f"official_sentence_qrels_context_radius_{context_radius}_v1"
+        )
         atomic_manifest.append(row)
     (output_manifest_root / f"{split}.jsonl").write_text(
         "\n".join(json.dumps(row, ensure_ascii=False) for row in atomic_manifest) + "\n",
@@ -259,6 +304,7 @@ def build_split(split: str, manifest_root: Path, article_retrieval_root: Path,
         "missing_gold_sentence_rows": missing_gold,
         "natural_gold_coverage": sum(rank is not None for rank in natural_ranks) / max(1, len(natural_ranks)),
         "train_gold_injection": False, "validation_gold_injection": False,
+        "context_radius": context_radius,
     }
     return summary
 
@@ -274,6 +320,7 @@ def main() -> None:
     parser.add_argument("--output-candidates-root", type=Path, default=Path("outputs/retrieval_mocheg_atomic_candidates"))
     parser.add_argument("--article-top-k", type=int, default=10)
     parser.add_argument("--max-units-per-article", type=int, default=32)
+    parser.add_argument("--context-radius", type=int, default=0)
     parser.add_argument("--splits", nargs="+", default=["train", "val"])
     args = parser.parse_args()
     sentence_rows, lookup = read_sentence_corpus(args.sentence_corpus)
@@ -283,7 +330,7 @@ def main() -> None:
             split, args.manifest_root, args.article_retrieval_root, args.raw_root,
             sentence_rows, lookup, args.output_manifest_root,
             args.output_corpus_root, args.output_candidates_root,
-            args.article_top_k, args.max_units_per_article,
+            args.article_top_k, args.max_units_per_article, args.context_radius,
         )
         print(json.dumps({split: summary[split]}, indent=2))
     args.output_candidates_root.mkdir(parents=True, exist_ok=True)

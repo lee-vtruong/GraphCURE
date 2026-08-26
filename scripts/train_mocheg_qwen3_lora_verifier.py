@@ -229,6 +229,8 @@ def main() -> None:
     p.add_argument("--learning-rate",type=float,default=1e-4); p.add_argument("--weight-decay",type=float,default=.01); p.add_argument("--warmup-ratio",type=float,default=.05)
     p.add_argument("--no-train-gold-injection",action="store_true"); p.add_argument("--num-workers",type=int,default=2); p.add_argument("--device",default="cuda"); p.add_argument("--seed",type=int,default=42)
     p.add_argument("--limit-train",type=int,default=0); p.add_argument("--limit-val",type=int,default=0)
+    p.add_argument("--anchor-macro-f1",type=float,default=.5499479090475745)
+    p.add_argument("--minimum-delta",type=float,default=.003)
     a=p.parse_args(); random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(a.seed)
     device=torch.device(a.device if torch.cuda.is_available() else "cpu"); a.output.mkdir(parents=True,exist_ok=True)
@@ -292,8 +294,8 @@ def main() -> None:
             if stale>=a.patience: break
     model.load_state_dict(best_state,strict=False)
     final,rows=evaluate(model,val_loader,answer_ids,device)
-    anchor=.5499479090475745; accepted=best>=anchor+.003
-    summary={"model":a.model,"mode":"qwen3_lora" if accepted else "rejected_keep_anchor","accepted":accepted,"label_codes":LABEL_CODES,"label_token_ids":answer_ids,"train_gold_injection":not a.no_train_gold_injection,"injected_train_claims":train.injected_claims,"best_val_macro_f1":best,"best_epoch":best_epoch,"delta_vs_anchor":best-anchor,"anchor_macro_f1":anchor,"final_candidate":final,"history":history,"test_split_used":False,"settings":{key:str(value) if isinstance(value,Path) else value for key,value in vars(a).items()}}
+    anchor=a.anchor_macro_f1; accepted=best>=anchor+a.minimum_delta
+    summary={"model":a.model,"mode":"qwen3_lora" if accepted else "rejected_keep_anchor","accepted":accepted,"label_codes":LABEL_CODES,"label_token_ids":answer_ids,"train_gold_injection":not a.no_train_gold_injection,"injected_train_claims":train.injected_claims,"best_val_macro_f1":best,"best_epoch":best_epoch,"delta_vs_anchor":best-anchor,"anchor_macro_f1":anchor,"minimum_delta":a.minimum_delta,"promotion_threshold":anchor+a.minimum_delta,"final_candidate":final,"history":history,"test_split_used":False,"settings":{key:str(value) if isinstance(value,Path) else value for key,value in vars(a).items()}}
     (a.output/"summary.json").write_text(json.dumps(summary,indent=2)+"\n"); (a.output/"val_predictions.jsonl").write_text("\n".join(json.dumps(row) for row in rows)+"\n"); print(json.dumps(summary,indent=2))
 
 
