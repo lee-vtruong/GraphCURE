@@ -189,6 +189,21 @@ def probability_metrics(probabilities: np.ndarray, labels: np.ndarray) -> dict:
     }
 
 
+def load_frozen_anchor_predictions(path: Path, expected_ids: list[str],
+                                   expected_labels: np.ndarray) -> tuple[dict, np.ndarray]:
+    rows = read_jsonl(path)
+    ids = [row["id"] for row in rows]
+    labels = np.asarray([int(row["gold"]) for row in rows])
+    probabilities = np.asarray(
+        [row["probabilities"] for row in rows], dtype=float
+    )
+    if ids != expected_ids or not np.array_equal(labels, expected_labels):
+        raise ValueError(
+            f"frozen anchor predictions are not aligned with B6 validation: {path}"
+        )
+    return probability_metrics(probabilities, labels), probabilities
+
+
 class B6Claims:
     def __init__(self, target_path: Path, corpus_path: Path,
                  max_evidence_chars: int, limit: int = 0) -> None:
@@ -466,6 +481,10 @@ def main() -> None:
     parser.add_argument("--limit-val", type=int, default=0)
     parser.add_argument("--anchor-macro-f1", type=float,
                         default=.670470583003719)
+    parser.add_argument("--anchor-predictions", type=Path, default=None,
+                        help="defaults to INITIAL_ADAPTER/../val_predictions.jsonl")
+    parser.add_argument("--maximum-anchor-reproduction-delta", type=float,
+                        default=.01)
     parser.add_argument("--minimum-delta", type=float, default=.005)
     parser.add_argument("--minimum-nei-delta", type=float, default=.02)
     parser.add_argument("--maximum-supported-drop", type=float, default=.005)
@@ -580,13 +599,38 @@ def main() -> None:
         model, validation_loaders, token_ids, device, weights
     )
     initial_direct = initial["direct"]
-    if (not args.skip_anchor_check and not args.limit_val and
-            abs(initial_direct["macro_f1"] - args.anchor_macro_f1) > .002):
-        raise ValueError(
-            "initial adapter does not reproduce the frozen anchor: "
-            f"observed={initial_direct['macro_f1']:.6f}, "
-            f"expected={args.anchor_macro_f1:.6f}"
+    anchor_path = args.anchor_predictions
+    if anchor_path is None:
+        anchor_path = args.initial_adapter.parent / "val_predictions.jsonl"
+    anchor_source = "current_reinference"
+    anchor_metrics = initial_direct
+    if not args.limit_val and anchor_path.exists():
+        expected_ids = [row["id"] for row in val_claims.rows]
+        expected_labels = np.asarray([
+            int(row["label"]) for row in val_claims.rows
+        ])
+        anchor_metrics, _ = load_frozen_anchor_predictions(
+            anchor_path, expected_ids, expected_labels
         )
+        anchor_source = "frozen_val_predictions"
+    if not args.skip_anchor_check and not args.limit_val:
+        if abs(anchor_metrics["macro_f1"] - args.anchor_macro_f1) > .002:
+            raise ValueError(
+                "frozen anchor artifact does not match its registered score: "
+                f"artifact={anchor_metrics['macro_f1']:.6f}, "
+                f"registered={args.anchor_macro_f1:.6f}"
+            )
+        reproduction_delta = (
+            initial_direct["macro_f1"] - anchor_metrics["macro_f1"]
+        )
+        if abs(reproduction_delta) > args.maximum_anchor_reproduction_delta:
+            raise ValueError(
+                "current libraries reproduce the frozen adapter outside the "
+                "allowed drift: "
+                f"observed={initial_direct['macro_f1']:.6f}, "
+                f"frozen={anchor_metrics['macro_f1']:.6f}, "
+                f"delta={reproduction_delta:+.6f}"
+            )
     history = [{"epoch": 0, "train_loss": None, **initial}]
     print(json.dumps(history[0]), flush=True)
     best = initial["selected"]["macro_f1"]
@@ -673,15 +717,15 @@ def main() -> None:
         model, validation_loaders, token_ids, device, [best_weight]
     )
     candidate = final["selected"]
-    macro_delta = candidate["macro_f1"] - initial_direct["macro_f1"]
+    macro_delta = candidate["macro_f1"] - anchor_metrics["macro_f1"]
     nei_delta = (
-        candidate["class_f1"]["nei"] - initial_direct["class_f1"]["nei"]
+        candidate["class_f1"]["nei"] - anchor_metrics["class_f1"]["nei"]
     )
     supported_delta = (
         candidate["class_f1"]["supported"]
-        - initial_direct["class_f1"]["supported"]
+        - anchor_metrics["class_f1"]["supported"]
     )
-    accuracy_delta = candidate["accuracy"] - initial_direct["accuracy"]
+    accuracy_delta = candidate["accuracy"] - anchor_metrics["accuracy"]
     promotion_gate = {
         "decomposition_active": best_weight > 0,
         "macro_f1_delta_at_least_minimum": macro_delta >= args.minimum_delta,
@@ -709,7 +753,13 @@ def main() -> None:
         "training_task_counts": train.counts,
         "best_epoch": best_epoch,
         "selected_hierarchical_weight": best_weight,
-        "anchor": initial_direct,
+        "anchor": anchor_metrics,
+        "anchor_source": anchor_source,
+        "anchor_predictions": str(anchor_path) if anchor_path.exists() else None,
+        "anchor_reinference": initial_direct,
+        "anchor_reproduction_macro_f1_delta": (
+            initial_direct["macro_f1"] - anchor_metrics["macro_f1"]
+        ),
         "final_candidate": candidate,
         "direct_at_best": final["direct"],
         "hierarchical_at_best": final["hierarchical"],
@@ -719,7 +769,7 @@ def main() -> None:
             "supported_f1": supported_delta,
             "refuted_f1": (
                 candidate["class_f1"]["refuted"]
-                - initial_direct["class_f1"]["refuted"]
+                - anchor_metrics["class_f1"]["refuted"]
             ),
             "nei_f1": nei_delta,
         },

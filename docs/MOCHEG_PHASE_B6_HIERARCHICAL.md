@@ -12,6 +12,10 @@ The official test split must not be loaded by any B6 development script. The
 trainer accepts only prepared `train` and `val` targets and always records
 `test_split_used: false`.
 
+The scientific anchor is loaded from the frozen `val_predictions.jsonl` next
+to each article adapter. A fresh re-inference is retained only as a library
+drift diagnostic; it is not allowed to lower the promotion threshold.
+
 ## Method
 
 One continued Qwen3-4B LoRA answers three task prompts:

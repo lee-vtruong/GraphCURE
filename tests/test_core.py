@@ -122,6 +122,7 @@ from scripts.train_mocheg_qwen3_hierarchical_lora import (
     B6TrainingTasks,
     blend_probabilities as blend_b6_probabilities,
     hierarchical_probabilities,
+    load_frozen_anchor_predictions,
     probability_metrics as b6_probability_metrics,
 )
 from scripts.summarize_mocheg_b6_hierarchical import summarize as summarize_b6
@@ -1421,6 +1422,27 @@ def test_b6_hierarchical_probability_product_and_blend():
     )
     with pytest.raises(ValueError):
         blend_b6_probabilities(direct, hierarchical, 1.1)
+
+
+def test_b6_frozen_anchor_predictions_require_exact_alignment(tmp_path):
+    path = tmp_path / "val_predictions.jsonl"
+    rows = [
+        {"id": "claim-a", "gold": 0, "probabilities": [.8, .1, .1]},
+        {"id": "claim-b", "gold": 1, "probabilities": [.1, .8, .1]},
+        {"id": "claim-c", "gold": 2, "probabilities": [.1, .1, .8]},
+    ]
+    path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+    metrics, probabilities = load_frozen_anchor_predictions(
+        path, ["claim-a", "claim-b", "claim-c"], np.asarray([0, 1, 2])
+    )
+    assert metrics["macro_f1"] == 1
+    assert probabilities.shape == (3, 3)
+    with pytest.raises(ValueError, match="not aligned"):
+        load_frozen_anchor_predictions(
+            path, ["claim-b", "claim-a", "claim-c"], np.asarray([1, 0, 2])
+        )
 
 
 def test_b6_training_tasks_do_not_fabricate_unknown_sufficiency():
