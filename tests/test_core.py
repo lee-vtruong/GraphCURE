@@ -117,6 +117,14 @@ from scripts.train_mocheg_qwen3_lora_verifier import (
     as_token_id_list,
     compose_user_prompt,
 )
+from scripts.prepare_mocheg_sufficiency_targets import sufficiency_target
+from scripts.train_mocheg_qwen3_hierarchical_lora import (
+    B6TrainingTasks,
+    blend_probabilities as blend_b6_probabilities,
+    hierarchical_probabilities,
+    probability_metrics as b6_probability_metrics,
+)
+from scripts.summarize_mocheg_b6_hierarchical import summarize as summarize_b6
 from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
 from scripts.train_mocheg_sv_lora import (
     GroupDROState,
@@ -1386,4 +1394,96 @@ def test_packet_multiseed_summary_uses_frozen_weight_and_no_test():
     assert result["packet_weight"] == .8
     assert result["paired_macro_f1_delta"]["positive_seeds"] == 2
     assert result["promotion_gate"]["passed"]
+    assert not result["test_split_used"]
+
+
+def test_b6_sufficiency_targets_are_evidence_conditioned():
+    assert sufficiency_target(2, [], []) == 0
+    assert sufficiency_target(2, ["gold"], ["gold"]) == 0
+    assert sufficiency_target(0, [], ["candidate"]) is None
+    assert sufficiency_target(1, ["gold"], ["other"]) == 0
+    assert sufficiency_target(0, ["gold"], ["other", "gold"]) == 1
+
+
+def test_b6_hierarchical_probability_product_and_blend():
+    sufficiency = np.asarray([[.8, .2], [.1, .9]])
+    polarity = np.asarray([[.75, .25], [.4, .6]])
+    hierarchical = hierarchical_probabilities(sufficiency, polarity)
+    assert np.allclose(hierarchical, [
+        [.6, .2, .2], [.04, .06, .9],
+    ])
+    direct = np.asarray([[.3, .3, .4], [.2, .7, .1]])
+    assert np.allclose(
+        blend_b6_probabilities(direct, hierarchical, 0), direct
+    )
+    assert np.allclose(
+        blend_b6_probabilities(direct, hierarchical, 1), hierarchical
+    )
+    with pytest.raises(ValueError):
+        blend_b6_probabilities(direct, hierarchical, 1.1)
+
+
+def test_b6_training_tasks_do_not_fabricate_unknown_sufficiency():
+    claims = type("Claims", (), {})()
+    claims.rows = [
+        {
+            "id": "supported-no-qrel", "label": 0,
+            "sufficiency_target": None, "polarity_target": None,
+            "prompts": {task: task for task in (
+                "verdict", "sufficiency", "ablation", "polarity"
+            )},
+        },
+        {
+            "id": "refuted-with-gold", "label": 1,
+            "sufficiency_target": 1, "polarity_target": 1,
+            "prompts": {task: task for task in (
+                "verdict", "sufficiency", "ablation", "polarity"
+            )},
+        },
+        {
+            "id": "nei", "label": 2,
+            "sufficiency_target": 0, "polarity_target": None,
+            "prompts": {task: task for task in (
+                "verdict", "sufficiency", "ablation", "polarity"
+            )},
+        },
+    ]
+    tasks = B6TrainingTasks(
+        claims, ablation_ratio=1, seed=42, verdict_weight=1,
+        sufficiency_weight=.5, polarity_weight=.5, ablation_weight=.5,
+    )
+    assert tasks.counts == {
+        "verdict": 3, "sufficiency": 2, "polarity": 1, "ablation": 1,
+    }
+    unknown_tasks = [
+        row["task"] for row in tasks.rows
+        if row["id"] == "supported-no-qrel"
+    ]
+    assert unknown_tasks == ["verdict"]
+
+
+def test_b6_multiseed_summary_requires_ensemble_and_class_gains():
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    article = np.asarray([
+        [.8, .1, .1], [.1, .8, .1], [.1, .7, .2],
+        [.8, .1, .1], [.1, .8, .1], [.2, .7, .1],
+    ])
+    candidate = np.asarray([
+        [.8, .1, .1], [.1, .8, .1], [.1, .1, .8],
+        [.8, .1, .1], [.1, .8, .1], [.1, .1, .8],
+    ])
+    runs = [{
+        "seed": seed, "hierarchical_weight": .5, "labels": labels,
+        "article_probabilities": article,
+        "candidate_probabilities": candidate,
+        "article_metrics": b6_probability_metrics(article, labels),
+        "candidate_metrics": b6_probability_metrics(candidate, labels),
+    } for seed in (13, 21)]
+    result = summarize_b6(
+        runs, minimum_mean_delta=0, minimum_ensemble_delta=0,
+        minimum_ensemble_f1=.9, minimum_nei_delta=0,
+        maximum_supported_drop=0, minimum_positive_seeds=2,
+    )
+    assert result["promotion_gate"]["passed"]
+    assert result["raw_ensemble_deltas"]["nei_f1"] > 0
     assert not result["test_split_used"]

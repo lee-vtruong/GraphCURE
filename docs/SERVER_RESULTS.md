@@ -6,6 +6,21 @@ Git commit: `86616c3aa87237666212961e134ea8bf49bab642`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
+## Phase B6 — sufficiency-polarity Qwen3 verifier (planned)
+
+- Motivation: the frozen official article ensemble is Accuracy-SOTA but trails
+  the strongest reported Macro-F1 by `0.010691`; the official confusion matrix
+  overpredicts Refuted, especially for NEI.
+- Frozen anchor: the existing five Qwen3 article adapters and their validation
+  predictions. No existing official-test score may be used for B6 selection.
+- Method: continue each article LoRA with direct-verdict, evidence-sufficiency,
+  and conditional-polarity prompts. Evidence ablation supervises only the
+  sufficiency task and never fabricates verdict labels.
+- Development order: target audit -> seed-42 smoke -> seed-42 frozen-weight
+  screen -> five-seed validation confirmation. Official test remains disabled
+  unless the preregistered confirmation gate passes.
+- Runbook: `docs/MOCHEG_PHASE_B6_HIERARCHICAL.md`.
+
 ## Phase B-v4 atomic-evidence preregistration (2026-08-25)
 
 - Source-only DRO was rejected: fold-0 overall Macro-F1 changed from `0.6371`
