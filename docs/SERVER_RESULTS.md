@@ -6,7 +6,7 @@ Git commit: `86616c3aa87237666212961e134ea8bf49bab642`
 
 PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
-## Phase B6 — sufficiency-polarity Qwen3 verifier (planned)
+## Phase B6 — sufficiency-polarity Qwen3 verifier (seed-42 screen)
 
 - Motivation: the frozen official article ensemble is Accuracy-SOTA but trails
   the strongest reported Macro-F1 by `0.010691`; the official confusion matrix
@@ -20,6 +20,17 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   screen -> five-seed validation confirmation. Official test remains disabled
   unless the preregistered confirmation gate passes.
 - Runbook: `docs/MOCHEG_PHASE_B6_HIERARCHICAL.md`.
+- Seed-42 outcome (validation only, no test): the frozen anchor was reproduced
+  from its saved predictions at Macro-F1 `0.670471`; current-library
+  re-inference drift was `-0.002650`. Continued multi-task training produced
+  approximately `0.686273` Macro-F1 and `0.694368` Accuracy (`+0.015802` and
+  `+0.014423`), but selected hierarchical inference weight `0`. NEI F1 gained
+  only `+0.008736`, below the registered `+0.020` gate. Original B6 is rejected.
+- Follow-up B6-A is a matched causal control: compare the auxiliary-trained
+  direct output with an otherwise identical verdict-only continuation. Do not
+  run additional auxiliary seeds unless it beats the direct control by at
+  least `+0.003` Macro-F1 with bootstrap probability of positive delta at
+  least `0.95`.
 
 ## Phase B-v4 atomic-evidence preregistration (2026-08-25)
 

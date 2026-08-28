@@ -126,6 +126,7 @@ from scripts.train_mocheg_qwen3_hierarchical_lora import (
     probability_metrics as b6_probability_metrics,
 )
 from scripts.summarize_mocheg_b6_hierarchical import summarize as summarize_b6
+from scripts.analyze_mocheg_b6_auxiliary_control import analyze as analyze_b6_auxiliary
 from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
 from scripts.train_mocheg_sv_lora import (
     GroupDROState,
@@ -1482,6 +1483,60 @@ def test_b6_training_tasks_do_not_fabricate_unknown_sufficiency():
         if row["id"] == "supported-no-qrel"
     ]
     assert unknown_tasks == ["verdict"]
+
+
+def test_b6_zero_auxiliary_weights_create_matched_direct_control():
+    claims = type("Claims", (), {})()
+    claims.rows = [{
+        "id": "claim-1", "label": 0,
+        "sufficiency_target": 1, "polarity_target": 0,
+        "prompts": {task: task for task in (
+            "verdict", "sufficiency", "ablation", "polarity"
+        )},
+    }]
+    tasks = B6TrainingTasks(
+        claims, ablation_ratio=1, seed=42, verdict_weight=1,
+        sufficiency_weight=0, polarity_weight=0, ablation_weight=0,
+    )
+    assert tasks.counts == {"verdict": 1}
+    with pytest.raises(ValueError, match="non-negative"):
+        B6TrainingTasks(
+            claims, ablation_ratio=0, seed=42, verdict_weight=1,
+            sufficiency_weight=-1, polarity_weight=0, ablation_weight=0,
+        )
+
+
+def test_b6_auxiliary_control_requires_gain_over_direct(tmp_path):
+    labels = [0, 1, 2, 0, 1, 2]
+    anchor_predictions = [0, 1, 1, 0, 1, 1]
+    control_predictions = [0, 1, 2, 1, 1, 1]
+    auxiliary_predictions = labels
+    paths = {}
+    for name, predictions in (
+        ("anchor", anchor_predictions),
+        ("direct_control", control_predictions),
+        ("auxiliary", auxiliary_predictions),
+    ):
+        path = tmp_path / f"{name}.jsonl"
+        rows = [
+            {
+                "id": f"claim-{index}", "gold": gold,
+                "probabilities": np.eye(3)[prediction].tolist(),
+            }
+            for index, (gold, prediction) in enumerate(zip(labels, predictions))
+        ]
+        path.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        paths[name] = path
+    result = analyze_b6_auxiliary(
+        paths, minimum_anchor_delta=0, minimum_control_delta=0,
+        minimum_bootstrap_probability=0, iterations=20, seed=7,
+    )
+    assert result["auxiliary_vs_direct_control"]["macro_f1_delta"] > 0
+    assert result["promotion_gate"]["passed"]
+    assert not result["test_split_used"]
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():

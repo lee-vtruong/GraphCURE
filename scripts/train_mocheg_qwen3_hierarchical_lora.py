@@ -242,6 +242,16 @@ class B6TrainingTasks(Dataset):
     def __init__(self, claims: B6Claims, ablation_ratio: float, seed: int,
                  verdict_weight: float, sufficiency_weight: float,
                  polarity_weight: float, ablation_weight: float) -> None:
+        weights = {
+            "verdict": verdict_weight,
+            "sufficiency": sufficiency_weight,
+            "polarity": polarity_weight,
+            "ablation": ablation_weight,
+        }
+        if verdict_weight <= 0:
+            raise ValueError("verdict_weight must be positive")
+        if any(value < 0 for value in weights.values()):
+            raise ValueError("training task weights must be non-negative")
         self.rows = []
         for row in claims.rows:
             self.rows.append({
@@ -251,7 +261,7 @@ class B6TrainingTasks(Dataset):
                 "weight": verdict_weight, "label": int(row["label"]),
             })
             target = row.get("sufficiency_target")
-            if target is not None:
+            if target is not None and sufficiency_weight > 0:
                 self.rows.append({
                     "id": row["id"], "task": "sufficiency",
                     "user": row["prompts"]["sufficiency"],
@@ -259,14 +269,14 @@ class B6TrainingTasks(Dataset):
                     "weight": sufficiency_weight, "label": int(row["label"]),
                 })
             polarity = row.get("polarity_target")
-            if polarity is not None:
+            if polarity is not None and polarity_weight > 0:
                 self.rows.append({
                     "id": row["id"], "task": "polarity",
                     "user": row["prompts"]["polarity"],
                     "target_code": "A" if int(polarity) == 0 else "B",
                     "weight": polarity_weight, "label": int(row["label"]),
                 })
-                if (ablation_ratio > 0 and
+                if (ablation_ratio > 0 and ablation_weight > 0 and
                         deterministic_fraction(row["id"], seed) < ablation_ratio):
                     self.rows.append({
                         "id": row["id"], "task": "ablation",

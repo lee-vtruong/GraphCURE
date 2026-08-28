@@ -66,6 +66,20 @@ Frozen five-seed confirmation:
 
 Failure ends B6 without an official-test run.
 
+## Seed-42 outcome and matched control
+
+The first seed-42 screen selected hierarchical inference weight `0`, so the
+registered B6 decomposition gate failed. Nevertheless, the direct verdict
+output after auxiliary training reached approximately `0.686273` validation
+Macro-F1, a `+0.015802` gain over the frozen seed-42 article anchor. This is a
+new hypothesis, not a B6 success: decomposition may be useful as training-only
+supervision even when its probability factorization is unsuitable at inference.
+
+Before any more auxiliary seeds, run a matched direct-only continuation with
+the same adapter, examples, optimizer, schedule, and verdict loss. Auxiliary
+task weights are zero and zero-weight rows are omitted. B6-A advances only if
+the auxiliary run beats both the frozen anchor and this matched control.
+
 ## Server runbook
 
 Activate the environment:
@@ -171,3 +185,38 @@ PY
 Do not run seeds `13/21/87/100` until seed 42 passes. If it passes, freeze the
 reported hierarchical weight and use that one value for every confirmation
 seed; do not repeat the weight grid per seed.
+
+For the observed training-only auxiliary signal, run the seed-42 direct-only
+control instead of the original B6 confirmation:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_hierarchical_lora \
+  --target-root data/processed/mocheg_b6_targets \
+  --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+  --initial-adapter outputs/mocheg_qwen3_lora_seed42_v16/best_adapter \
+  --output outputs/mocheg_b6_direct_control_seed42 \
+  --seed 42 \
+  --epochs 3 \
+  --patience 2 \
+  --batch-size 1 \
+  --gradient-accumulation 16 \
+  --learning-rate 3e-5 \
+  --max-length 3072 \
+  --ablation-ratio 0 \
+  --sufficiency-loss-weight 0 \
+  --polarity-loss-weight 0 \
+  --ablation-loss-weight 0 \
+  --hierarchical-weights 0 \
+  2>&1 | tee outputs/mocheg-b6-direct-control-seed42.log
+```
+
+Then run the preregistered, validation-only causal diagnostic:
+
+```bash
+python -m scripts.analyze_mocheg_b6_auxiliary_control \
+  --anchor outputs/mocheg_qwen3_lora_seed42_v16/val_predictions.jsonl \
+  --direct-control outputs/mocheg_b6_direct_control_seed42/val_predictions.jsonl \
+  --auxiliary outputs/mocheg_b6_hierarchical_seed42/val_predictions.jsonl \
+  --output outputs/mocheg_b6_auxiliary_control.json \
+  2>&1 | tee outputs/mocheg-b6-auxiliary-control.log
+```
