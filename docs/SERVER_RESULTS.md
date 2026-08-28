@@ -26,8 +26,9 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   approximately `0.686273` Macro-F1 and `0.694368` Accuracy (`+0.015802` and
   `+0.014423`), but selected hierarchical inference weight `0`. NEI F1 gained
   only `+0.008736`, below the registered `+0.020` gate. Original B6 is rejected.
-- Follow-up B6-A is a matched causal control: compare the auxiliary-trained
-  direct output with an otherwise identical verdict-only continuation. Do not
+- Follow-up B6-A is a compute-matched causal control: compare the
+  auxiliary-trained direct output with a verdict-only continuation having the
+  same optimizer-update count. Do not
   run additional auxiliary seeds unless it beats the direct control by at
   least `+0.003` Macro-F1 with bootstrap probability of positive delta at
   least `0.95`.

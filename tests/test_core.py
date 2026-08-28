@@ -1499,6 +1499,9 @@ def test_b6_zero_auxiliary_weights_create_matched_direct_control():
         sufficiency_weight=0, polarity_weight=0, ablation_weight=0,
     )
     assert tasks.counts == {"verdict": 1}
+    tasks.repeat_verdict_to_length(5)
+    assert len(tasks) == 5
+    assert tasks.counts == {"verdict": 5}
     with pytest.raises(ValueError, match="non-negative"):
         B6TrainingTasks(
             claims, ablation_ratio=0, seed=42, verdict_weight=1,

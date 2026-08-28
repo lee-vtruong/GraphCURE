@@ -286,6 +286,20 @@ class B6TrainingTasks(Dataset):
                     })
         self.counts = dict(Counter(row["task"] for row in self.rows))
 
+    def repeat_verdict_to_length(self, target_length: int) -> None:
+        if set(self.counts) != {"verdict"}:
+            raise ValueError(
+                "compute matching is only valid for a verdict-only control"
+            )
+        if target_length < len(self.rows):
+            raise ValueError(
+                "matched training length cannot be shorter than the control"
+            )
+        original = self.rows
+        self.rows = [dict(original[index % len(original)])
+                     for index in range(target_length)]
+        self.counts = {"verdict": len(self.rows)}
+
     def __len__(self) -> int:
         return len(self.rows)
 
@@ -484,6 +498,11 @@ def main() -> None:
     parser.add_argument("--polarity-loss-weight", type=float, default=.5)
     parser.add_argument("--ablation-loss-weight", type=float, default=.5)
     parser.add_argument("--hierarchical-weights", default="0,0.25,0.5,0.75,1")
+    parser.add_argument("--match-training-examples-from", type=Path,
+                        default=None, help=(
+                            "B6 summary whose task-count total is used for a "
+                            "compute-matched verdict-only control"
+                        ))
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
@@ -572,6 +591,17 @@ def main() -> None:
         args.verdict_loss_weight, args.sufficiency_loss_weight,
         args.polarity_loss_weight, args.ablation_loss_weight,
     )
+    if args.match_training_examples_from is not None:
+        reference = json.loads(args.match_training_examples_from.read_text(
+            encoding="utf-8"
+        ))
+        counts = reference.get("training_task_counts")
+        if not isinstance(counts, dict) or not counts:
+            raise ValueError(
+                "matched B6 summary has no training_task_counts: "
+                f"{args.match_training_examples_from}"
+            )
+        train.repeat_verdict_to_length(sum(int(value) for value in counts.values()))
     train_loader = DataLoader(
         train, batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers,

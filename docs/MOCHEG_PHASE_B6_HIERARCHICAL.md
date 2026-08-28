@@ -76,9 +76,11 @@ new hypothesis, not a B6 success: decomposition may be useful as training-only
 supervision even when its probability factorization is unsuitable at inference.
 
 Before any more auxiliary seeds, run a matched direct-only continuation with
-the same adapter, examples, optimizer, schedule, and verdict loss. Auxiliary
-task weights are zero and zero-weight rows are omitted. B6-A advances only if
-the auxiliary run beats both the frozen anchor and this matched control.
+the same adapter, optimizer-update count, optimizer, schedule, and verdict
+loss. Auxiliary task weights are zero, zero-weight rows are omitted, and the
+verdict rows are repeated to the exact training-example count recorded by the
+auxiliary summary. B6-A advances only if the auxiliary run beats both the
+frozen anchor and this compute-matched control.
 
 ## Server runbook
 
@@ -207,6 +209,7 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_hierarchical_lora \
   --polarity-loss-weight 0 \
   --ablation-loss-weight 0 \
   --hierarchical-weights 0 \
+  --match-training-examples-from outputs/mocheg_b6_hierarchical_seed42/summary.json \
   2>&1 | tee outputs/mocheg-b6-direct-control-seed42.log
 ```
 
