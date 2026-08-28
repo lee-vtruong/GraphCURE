@@ -223,3 +223,66 @@ python -m scripts.analyze_mocheg_b6_auxiliary_control \
   --output outputs/mocheg_b6_auxiliary_control.json \
   2>&1 | tee outputs/mocheg-b6-auxiliary-control.log
 ```
+
+The seed-42 causal screen passed: auxiliary training improved Macro-F1 by
+`+0.015802` versus the frozen anchor and `+0.018452` versus the compute-matched
+direct control. The latter bootstrap interval was `[+0.000610, +0.036260]`
+with probability of positive delta `0.9788`. Exact McNemar `p=0.05045` is
+borderline and is not treated as confirmation; five frozen seeds are required.
+
+Run auxiliary and compute-matched direct-control arms for the four remaining
+seeds. Hierarchical inference weight stays frozen at zero:
+
+```bash
+for spec in \
+  "13 0.6742734332823367" \
+  "21 0.6621083137026326" \
+  "87 0.6875591947992383" \
+  "100 0.6793433665313913"
+do
+  set -- $spec
+  seed="$1"
+  anchor="$2"
+
+  CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_hierarchical_lora \
+    --target-root data/processed/mocheg_b6_targets \
+    --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+    --initial-adapter "outputs/mocheg_qwen3_lora_seed${seed}_v16/best_adapter" \
+    --output "outputs/mocheg_b6_auxiliary_seed${seed}" \
+    --seed "$seed" \
+    --anchor-macro-f1 "$anchor" \
+    --epochs 3 --patience 2 --batch-size 1 --gradient-accumulation 16 \
+    --learning-rate 3e-5 --max-length 3072 \
+    --hierarchical-weights 0 \
+    2>&1 | tee "outputs/mocheg-b6-auxiliary-seed${seed}.log"
+
+  CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_qwen3_hierarchical_lora \
+    --target-root data/processed/mocheg_b6_targets \
+    --raw-root data/raw/mocheg_dataset/extracted/mocheg \
+    --initial-adapter "outputs/mocheg_qwen3_lora_seed${seed}_v16/best_adapter" \
+    --output "outputs/mocheg_b6_direct_control_seed${seed}" \
+    --seed "$seed" \
+    --anchor-macro-f1 "$anchor" \
+    --epochs 3 --patience 2 --batch-size 1 --gradient-accumulation 16 \
+    --learning-rate 3e-5 --max-length 3072 \
+    --ablation-ratio 0 --sufficiency-loss-weight 0 \
+    --polarity-loss-weight 0 --ablation-loss-weight 0 \
+    --hierarchical-weights 0 \
+    --match-training-examples-from \
+      "outputs/mocheg_b6_auxiliary_seed${seed}/summary.json" \
+    2>&1 | tee "outputs/mocheg-b6-direct-control-seed${seed}.log"
+done
+```
+
+Summarize all five frozen seeds:
+
+```bash
+python -m scripts.summarize_mocheg_b6a_confirmation \
+  --output outputs/mocheg_b6a_validation_summary.json \
+  --markdown outputs/mocheg_b6a_validation_summary.md
+```
+
+The confirmation gate requires mean auxiliary gains over both anchor and
+compute-matched control, gains in both raw ensembles, at least four positive
+seed-level control deltas, auxiliary ensemble Macro-F1 at least `0.695`, and
+ensemble bootstrap probability of a positive control delta at least `0.95`.

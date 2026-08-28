@@ -32,6 +32,13 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   run additional auxiliary seeds unless it beats the direct control by at
   least `+0.003` Macro-F1 with bootstrap probability of positive delta at
   least `0.95`.
+- B6-A seed-42 causal screen passed. Auxiliary-trained direct inference reached
+  Macro-F1 `0.686273`, versus frozen anchor `0.670471` and compute-matched
+  verdict-only control `0.667821`. Auxiliary minus control was `+0.018452`
+  Macro-F1 and `+0.017170` Accuracy; bootstrap 95% interval
+  `[+0.000610, +0.036260]`, positive probability `0.9788`. McNemar was
+  borderline (`p=0.05045`), so this is promoted only to frozen five-seed
+  validation confirmation, not to official test.
 
 ## Phase B-v4 atomic-evidence preregistration (2026-08-25)
 

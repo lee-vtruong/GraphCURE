@@ -97,7 +97,10 @@ from scripts.train_mocheg_set_router import (
 )
 from scripts.audit_mocheg_visual_selector import rank_summary
 from scripts.audit_mocheg_visual_expert import audit as audit_visual_expert
-from scripts.analyze_mocheg_expert_complementarity import diagnose
+from scripts.analyze_mocheg_expert_complementarity import (
+    diagnose,
+    prediction_metrics,
+)
 from scripts.summarize_mocheg_packet_ensemble import summarize as summarize_packet
 from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
 from scripts.prepare_mocheg_atomic_evidence import (
@@ -127,6 +130,7 @@ from scripts.train_mocheg_qwen3_hierarchical_lora import (
 )
 from scripts.summarize_mocheg_b6_hierarchical import summarize as summarize_b6
 from scripts.analyze_mocheg_b6_auxiliary_control import analyze as analyze_b6_auxiliary
+from scripts.summarize_mocheg_b6a_confirmation import summarize as summarize_b6a
 from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
 from scripts.train_mocheg_sv_lora import (
     GroupDROState,
@@ -1538,6 +1542,37 @@ def test_b6_auxiliary_control_requires_gain_over_direct(tmp_path):
         minimum_bootstrap_probability=0, iterations=20, seed=7,
     )
     assert result["auxiliary_vs_direct_control"]["macro_f1_delta"] > 0
+    assert result["promotion_gate"]["passed"]
+    assert not result["test_split_used"]
+
+
+def test_b6a_confirmation_requires_consistent_auxiliary_gain():
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    anchor = np.eye(3)[[0, 1, 1, 0, 1, 1]]
+    control = np.eye(3)[[0, 1, 2, 1, 1, 1]]
+    auxiliary = np.eye(3)[labels]
+    runs = [{
+        "seed": seed,
+        "labels": labels,
+        "probabilities": {
+            "anchor": anchor,
+            "direct_control": control,
+            "auxiliary": auxiliary,
+        },
+        "metrics": {
+            "anchor": prediction_metrics(labels, anchor),
+            "direct_control": prediction_metrics(labels, control),
+            "auxiliary": prediction_metrics(labels, auxiliary),
+        },
+    } for seed in (13, 21)]
+    result = summarize_b6a(
+        runs, minimum_anchor_mean_delta=0,
+        minimum_control_mean_delta=0, minimum_ensemble_delta=0,
+        minimum_ensemble_f1=.9, minimum_positive_seeds=2,
+        minimum_bootstrap_probability=0, bootstrap_iterations=20,
+        bootstrap_seed=3,
+    )
+    assert result["paired_auxiliary_vs_direct_control"]["positive_seeds"] == 2
     assert result["promotion_gate"]["passed"]
     assert not result["test_split_used"]
 
