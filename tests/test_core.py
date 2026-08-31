@@ -123,6 +123,7 @@ from scripts.train_mocheg_qwen3_lora_verifier import (
 from scripts.prepare_mocheg_sufficiency_targets import sufficiency_target
 from scripts.train_mocheg_qwen3_hierarchical_lora import (
     B6TrainingTasks,
+    add_gradient_buffers,
     blend_probabilities as blend_b6_probabilities,
     hierarchical_probabilities,
     load_frozen_anchor_predictions,
@@ -131,6 +132,7 @@ from scripts.train_mocheg_qwen3_hierarchical_lora import (
 from scripts.summarize_mocheg_b6_hierarchical import summarize as summarize_b6
 from scripts.analyze_mocheg_b6_auxiliary_control import analyze as analyze_b6_auxiliary
 from scripts.summarize_mocheg_b6a_confirmation import summarize as summarize_b6a
+from scripts.analyze_mocheg_b6b_pcgrad_screen import summarize as summarize_b6b
 from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
 from scripts.train_mocheg_sv_lora import (
     GroupDROState,
@@ -1573,6 +1575,50 @@ def test_b6a_confirmation_requires_consistent_auxiliary_gain():
         bootstrap_seed=3,
     )
     assert result["paired_auxiliary_vs_direct_control"]["positive_seeds"] == 2
+    assert result["promotion_gate"]["passed"]
+    assert not result["test_split_used"]
+
+
+def test_b6b_gradient_buffers_preserve_missing_components():
+    first = (torch.tensor([1.0]), None, torch.tensor([2.0]))
+    second = (torch.tensor([3.0]), torch.tensor([4.0]), None)
+    combined = add_gradient_buffers(first, second)
+    assert torch.equal(combined[0], torch.tensor([4.0]))
+    assert torch.equal(combined[1], torch.tensor([4.0]))
+    assert torch.equal(combined[2], torch.tensor([2.0]))
+
+
+def test_b6b_screen_requires_active_conflict_protection_and_seed87_repair():
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    anchor = np.eye(3)[[0, 1, 1, 0, 1, 1]]
+    control = np.eye(3)[[0, 1, 2, 1, 1, 1]]
+    standard = np.eye(3)[[0, 1, 2, 0, 1, 1]]
+    conflict = np.eye(3)[labels]
+    runs = [{
+        "seed": seed,
+        "labels": labels,
+        "probabilities": {
+            "anchor": anchor,
+            "direct_control": control,
+            "standard_auxiliary": standard,
+            "conflict_auxiliary": conflict,
+        },
+        "metrics": {
+            "anchor": prediction_metrics(labels, anchor),
+            "direct_control": prediction_metrics(labels, control),
+            "standard_auxiliary": prediction_metrics(labels, standard),
+            "conflict_auxiliary": prediction_metrics(labels, conflict),
+        },
+        "history": [{"epoch": 1, "gradient_conflict_rate": .2}],
+    } for seed in (42, 87)]
+    result = summarize_b6b(
+        runs, minimum_control_mean_delta=0,
+        minimum_seed87_control_delta=0,
+        minimum_standard_mean_delta=0,
+        minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=9,
+    )
+    assert result["promotion_gate"]["pcgrad_active_in_both_seeds"]
     assert result["promotion_gate"]["passed"]
     assert not result["test_split_used"]
 

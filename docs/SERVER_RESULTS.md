@@ -49,6 +49,14 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `[-0.002870, +0.022677]`, and McNemar `p=0.16058`. Decision: preserve as a
   validation ablation/development result, do not run official test, and do not
   lower the registered gate.
+- Phase B6-B is preregistered as a new post-hoc robustness branch; it does not
+  revise the failed B6-A decision. B6-B keeps direct inference and uses PCGrad
+  to remove only auxiliary gradient components that conflict with the verdict
+  gradient. The frozen screen uses seeds `42` and `87`, requires active
+  conflicts in both, positive control deltas in both, mean control delta at
+  least `+0.005`, seed-87 delta at least `+0.003`, no mean regression versus
+  standard auxiliary training, and bootstrap probability at least `0.95`.
+  See `docs/MOCHEG_PHASE_B6B_CONFLICT_AWARE.md`.
 
 ## Phase B-v4 atomic-evidence preregistration (2026-08-25)
 

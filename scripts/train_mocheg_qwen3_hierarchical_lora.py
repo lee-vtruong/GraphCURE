@@ -30,6 +30,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+from graphcure.optimization import project_auxiliary_gradients
 from scripts.run_mocheg_visual_retrieval import read_jsonl
 from scripts.train_mocheg_cached_verifier import expected_calibration_error
 from scripts.train_mocheg_qwen3_lora_verifier import (
@@ -343,6 +344,7 @@ def make_collate(tokenizer, token_ids: dict[str, int], max_length: int,
             "attention_mask": attention,
             "prediction_index": attention.sum(-1) - 1,
             "ids": [row["id"] for row in rows],
+            "tasks": [row["task"] for row in rows],
             "class_labels": torch.tensor(
                 [int(row["label"]) for row in rows], dtype=torch.long
             ),
@@ -357,6 +359,29 @@ def make_collate(tokenizer, token_ids: dict[str, int], max_length: int,
             )
         return result
     return collate
+
+
+def captured_gradients(parameters: list[torch.nn.Parameter]) -> tuple[
+        torch.Tensor | None, ...]:
+    return tuple(
+        None if parameter.grad is None else parameter.grad.detach().clone()
+        for parameter in parameters
+    )
+
+
+def add_gradient_buffers(
+    first: tuple[torch.Tensor | None, ...],
+    second: tuple[torch.Tensor | None, ...],
+) -> tuple[torch.Tensor | None, ...]:
+    result = []
+    for left, right in zip(first, second):
+        if left is None:
+            result.append(right)
+        elif right is None:
+            result.append(left)
+        else:
+            result.append(left + right)
+    return tuple(result)
 
 
 @torch.inference_mode()
@@ -498,6 +523,9 @@ def main() -> None:
     parser.add_argument("--polarity-loss-weight", type=float, default=.5)
     parser.add_argument("--ablation-loss-weight", type=float, default=.5)
     parser.add_argument("--hierarchical-weights", default="0,0.25,0.5,0.75,1")
+    parser.add_argument("--gradient-mode", choices=("standard", "pcgrad"),
+                        default="standard")
+    parser.add_argument("--auxiliary-gradient-scale", type=float, default=1.0)
     parser.add_argument("--match-training-examples-from", type=Path,
                         default=None, help=(
                             "B6 summary whose task-count total is used for a "
@@ -602,6 +630,11 @@ def main() -> None:
                 f"{args.match_training_examples_from}"
             )
         train.repeat_verdict_to_length(sum(int(value) for value in counts.values()))
+    if args.gradient_mode == "pcgrad":
+        if args.batch_size != 1:
+            raise ValueError("pcgrad currently requires --batch-size 1")
+        if args.auxiliary_gradient_scale <= 0:
+            raise ValueError("auxiliary_gradient_scale must be positive")
     train_loader = DataLoader(
         train, batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers,
@@ -685,6 +718,14 @@ def main() -> None:
     for epoch in range(1, args.epochs + 1):
         model.train()
         running = 0.0
+        gradient_cosines = []
+        gradient_conflicts = []
+        protected_windows = 0
+        unprotected_auxiliary_windows = 0
+        empty_gradients = tuple(None for _ in parameters)
+        primary_buffer = empty_gradients
+        auxiliary_buffer = empty_gradients
+        primary_in_window = auxiliary_in_window = 0
         progress = tqdm(train_loader, desc=f"epoch {epoch}/{args.epochs}")
         for step, batch in enumerate(progress, 1):
             inputs = {
@@ -708,14 +749,48 @@ def main() -> None:
                     selected, targets, reduction="none"
                 )
                 loss = (per_example * loss_weights).sum() / loss_weights.sum()
-            (loss / args.gradient_accumulation).backward()
+            if args.gradient_mode == "standard":
+                (loss / args.gradient_accumulation).backward()
+            else:
+                task = batch["tasks"][0]
+                scaled_loss = loss if task == "verdict" else (
+                    loss * args.auxiliary_gradient_scale
+                )
+                (scaled_loss / args.gradient_accumulation).backward()
+                observed = captured_gradients(parameters)
+                optimizer.zero_grad(set_to_none=True)
+                if task == "verdict":
+                    primary_buffer = add_gradient_buffers(
+                        primary_buffer, observed
+                    )
+                    primary_in_window += 1
+                else:
+                    auxiliary_buffer = add_gradient_buffers(
+                        auxiliary_buffer, observed
+                    )
+                    auxiliary_in_window += 1
             running += float(loss.detach())
             if (step % args.gradient_accumulation == 0 or
                     step == len(train_loader)):
+                if args.gradient_mode == "pcgrad":
+                    combined, diagnostics = project_auxiliary_gradients(
+                        primary_buffer, auxiliary_buffer
+                    )
+                    for parameter, gradient in zip(parameters, combined):
+                        parameter.grad = gradient
+                    gradient_cosines.append(diagnostics["cosine"])
+                    gradient_conflicts.append(diagnostics["conflict"])
+                    if primary_in_window and auxiliary_in_window:
+                        protected_windows += 1
+                    elif auxiliary_in_window and not primary_in_window:
+                        unprotected_auxiliary_windows += 1
                 torch.nn.utils.clip_grad_norm_(parameters, 1.0)
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
+                primary_buffer = empty_gradients
+                auxiliary_buffer = empty_gradients
+                primary_in_window = auxiliary_in_window = 0
             progress.set_postfix(loss=f"{loss.item():.4f}")
         evaluation, _ = evaluate_all(
             model, validation_loaders, token_ids, device, weights
@@ -725,6 +800,13 @@ def main() -> None:
             "train_loss": running / max(1, len(train_loader)),
             **evaluation,
         }
+        if args.gradient_mode == "pcgrad":
+            row["gradient_cosine"] = float(np.mean(gradient_cosines))
+            row["gradient_conflict_rate"] = float(np.mean(gradient_conflicts))
+            row["protected_windows"] = protected_windows
+            row["unprotected_auxiliary_windows"] = (
+                unprotected_auxiliary_windows
+            )
         history.append(row)
         print(json.dumps(row), flush=True)
         score = evaluation["selected"]["macro_f1"]
