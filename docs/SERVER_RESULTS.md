@@ -39,6 +39,16 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `[+0.000610, +0.036260]`, positive probability `0.9788`. McNemar was
   borderline (`p=0.05045`), so this is promoted only to frozen five-seed
   validation confirmation, not to official test.
+- B6-A frozen five-seed confirmation failed its preregistered bootstrap gate.
+  Auxiliary-minus-anchor was `+0.012826 +/- 0.007729` Macro-F1 with `5/5`
+  positive seeds; auxiliary-minus-compute-control was
+  `+0.008863 +/- 0.010806` with `4/5` positive seeds. Raw ensemble Macro-F1 was
+  `0.692045` anchor, `0.698093` direct control, and `0.708005` auxiliary.
+  Auxiliary-minus-control ensemble delta was `+0.009912`, but bootstrap
+  probability was only `0.9354` (required `0.95`), CI
+  `[-0.002870, +0.022677]`, and McNemar `p=0.16058`. Decision: preserve as a
+  validation ablation/development result, do not run official test, and do not
+  lower the registered gate.
 
 ## Phase B-v4 atomic-evidence preregistration (2026-08-25)
 

@@ -286,3 +286,24 @@ The confirmation gate requires mean auxiliary gains over both anchor and
 compute-matched control, gains in both raw ensembles, at least four positive
 seed-level control deltas, auxiliary ensemble Macro-F1 at least `0.695`, and
 ensemble bootstrap probability of a positive control delta at least `0.95`.
+
+## Frozen five-seed outcome
+
+B6-A failed the preregistered confirmation gate and must not access official
+test. The result is nevertheless a strong development signal:
+
+- all five auxiliary runs beat their corresponding frozen article anchors;
+- four of five beat their compute-matched direct controls;
+- mean auxiliary-minus-anchor Macro-F1 was `+0.012826 +/- 0.007729`;
+- mean auxiliary-minus-control Macro-F1 was `+0.008863 +/- 0.010806`;
+- the raw auxiliary ensemble reached `0.708005` Macro-F1 and `0.714973`
+  Accuracy, versus control ensemble `0.698093` and `0.705357`;
+- ensemble auxiliary-minus-control was `+0.009912` Macro-F1, but its bootstrap
+  interval crossed zero (`[-0.002870, +0.022677]`) and probability of positive
+  delta was `0.9354`, below the frozen `0.95` gate;
+- exact McNemar `p=0.16058` also does not establish a reliable causal gain.
+
+The gate must not be weakened after observing this outcome. A future B6-B
+branch, if pursued, is a new post-hoc robustness experiment and must preserve
+this failed B6-A result. Its target is the seed-dependent auxiliary harm seen
+at seed `87`, not a re-analysis of the current predictions.
