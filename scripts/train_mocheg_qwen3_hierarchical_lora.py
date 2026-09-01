@@ -37,8 +37,10 @@ from scripts.train_mocheg_qwen3_lora_verifier import (
     LABEL_CODES,
     SYSTEM_PROMPT,
     as_token_id_list,
+    load_fold,
     read_documents,
 )
+from scripts.prepare_mocheg_sv_folds import sha256
 
 
 SUFFICIENCY_SYSTEM_PROMPT = (
@@ -207,8 +209,16 @@ def load_frozen_anchor_predictions(path: Path, expected_ids: list[str],
 
 class B6Claims:
     def __init__(self, target_path: Path, corpus_path: Path,
-                 max_evidence_chars: int, limit: int = 0) -> None:
+                 max_evidence_chars: int, limit: int = 0,
+                 allowed_ids: set[str] | None = None) -> None:
         rows = read_jsonl(target_path)
+        if allowed_ids is not None:
+            rows = [row for row in rows if row["id"] in allowed_ids]
+            missing = allowed_ids - {row["id"] for row in rows}
+            if missing:
+                raise ValueError(
+                    f"fold IDs missing from B6 targets: {len(missing)}"
+                )
         if limit:
             rows = rows[:limit]
         documents = read_documents(corpus_path)
@@ -492,12 +502,37 @@ def validate_target_metadata(target_root: Path) -> dict:
     return summaries
 
 
+def validate_fold_target_metadata(
+    training_root: Path, held_root: Path, fold_payload: dict
+) -> dict:
+    summaries = {}
+    for name, root in (("training", training_root), ("held", held_root)):
+        path = root / "train.summary.json"
+        if not path.exists():
+            raise FileNotFoundError(f"missing fold target audit: {path}")
+        summaries[name] = json.loads(path.read_text(encoding="utf-8"))
+    expected = fold_payload["manifest_sha256"]
+    if any(row.get("manifest_sha256") != expected for row in summaries.values()):
+        raise ValueError("B6 fold targets do not match the fold manifest")
+    if summaries["training"]["top_k"] != summaries["held"]["top_k"]:
+        raise ValueError("training and held-fold target top-k mismatch")
+    if summaries["held"].get("train_gold_injected", 0) != 0:
+        raise ValueError("held-fold targets contain forbidden gold injection")
+    return summaries
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target-root", type=Path,
                         default=Path("data/processed/mocheg_b6_targets"))
+    parser.add_argument("--held-target-root", type=Path, default=None,
+                        help="Natural, non-injected targets used by held folds")
     parser.add_argument("--raw-root", type=Path,
                         default=Path("data/raw/mocheg_dataset/extracted/mocheg"))
+    parser.add_argument("--fold-spec", type=Path, default=None)
+    parser.add_argument("--fold-index", type=int, default=0)
+    parser.add_argument("--fixed-checkpoint-epoch", type=int, default=0,
+                        help="Select exactly this epoch; required for folds")
     parser.add_argument("--model", default="Qwen/Qwen3-4B-Instruct-2507")
     parser.add_argument("--initial-adapter", type=Path,
                         default=Path("outputs/mocheg_qwen3_lora_seed42_v16/best_adapter"))
@@ -526,6 +561,9 @@ def main() -> None:
     parser.add_argument("--gradient-mode", choices=("standard", "pcgrad"),
                         default="standard")
     parser.add_argument("--auxiliary-gradient-scale", type=float, default=1.0)
+    parser.add_argument("--projection-strength", type=float, default=1.0)
+    parser.add_argument("--conflict-temperature", type=float, default=None,
+                        help="Enable conflict-severity adaptive projection")
     parser.add_argument("--match-training-examples-from", type=Path,
                         default=None, help=(
                             "B6 summary whose task-count total is used for a "
@@ -550,7 +588,28 @@ def main() -> None:
     args = parser.parse_args()
     if not 0 <= args.ablation_ratio <= 1:
         raise ValueError("ablation ratio must be in [0, 1]")
+    if not 0 <= args.projection_strength <= 1:
+        raise ValueError("projection strength must be in [0, 1]")
+    if args.conflict_temperature is not None and args.conflict_temperature <= 0:
+        raise ValueError("conflict temperature must be positive")
+    fit_ids, held_ids, fold_payload = load_fold(
+        args.fold_spec, args.fold_index
+    )
+    cv_mode = fold_payload is not None
+    if cv_mode and not 1 <= args.fixed_checkpoint_epoch <= args.epochs:
+        raise ValueError(
+            "train-only folds require --fixed-checkpoint-epoch in [1, epochs]"
+        )
+    if args.fixed_checkpoint_epoch < 0 or args.fixed_checkpoint_epoch > args.epochs:
+        raise ValueError("fixed checkpoint epoch must be in [0, epochs]")
+    if cv_mode and args.held_target_root is None:
+        raise ValueError("train-only folds require --held-target-root")
     weights = parse_weights(args.hierarchical_weights)
+    if cv_mode and weights != [0.0]:
+        raise ValueError(
+            "B6-C fold runs require --hierarchical-weights 0; no held-fold "
+            "blend search is allowed"
+        )
     from peft import LoraConfig, PeftModel, TaskType, get_peft_model
     from transformers import (
         AutoModelForCausalLM,
@@ -567,7 +626,11 @@ def main() -> None:
         args.device if torch.cuda.is_available() else "cpu"
     )
     args.output.mkdir(parents=True, exist_ok=True)
-    target_metadata = validate_target_metadata(args.target_root)
+    target_metadata = (
+        validate_fold_target_metadata(
+            args.target_root, args.held_target_root, fold_payload
+        ) if cv_mode else validate_target_metadata(args.target_root)
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     tokenizer.padding_side = "right"
@@ -604,15 +667,21 @@ def main() -> None:
         model = get_peft_model(base_model, config)
     model.print_trainable_parameters()
 
+    train_corpus = args.raw_root / "train" / "Corpus2.csv"
+    val_target = (
+        args.held_target_root / "train.jsonl" if cv_mode
+        else args.target_root / "val.jsonl"
+    )
+    val_corpus = train_corpus if cv_mode else (
+        args.raw_root / "val" / "Corpus2.csv"
+    )
     train_claims = B6Claims(
-        args.target_root / "train.jsonl",
-        args.raw_root / "train" / "Corpus2.csv",
-        args.max_evidence_chars, args.limit_train,
+        args.target_root / "train.jsonl", train_corpus,
+        args.max_evidence_chars, args.limit_train, fit_ids,
     )
     val_claims = B6Claims(
-        args.target_root / "val.jsonl",
-        args.raw_root / "val" / "Corpus2.csv",
-        args.max_evidence_chars, args.limit_val,
+        val_target, val_corpus,
+        args.max_evidence_chars, args.limit_val, held_ids,
     )
     train = B6TrainingTasks(
         train_claims, args.ablation_ratio, args.seed,
@@ -635,6 +704,10 @@ def main() -> None:
             raise ValueError("pcgrad currently requires --batch-size 1")
         if args.auxiliary_gradient_scale <= 0:
             raise ValueError("auxiliary_gradient_scale must be positive")
+    elif args.projection_strength != 1 or args.conflict_temperature is not None:
+        raise ValueError(
+            "projection controls require --gradient-mode pcgrad"
+        )
     train_loader = DataLoader(
         train, batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers,
@@ -686,7 +759,20 @@ def main() -> None:
             anchor_path, expected_ids, expected_labels
         )
         anchor_source = "frozen_val_predictions"
-    if not args.skip_anchor_check and not args.limit_val:
+    if cv_mode and anchor_source != "frozen_val_predictions":
+        raise FileNotFoundError(
+            "fold anchor predictions are required for aligned comparison: "
+            f"{anchor_path}"
+        )
+    if cv_mode and abs(
+        initial_direct["macro_f1"] - anchor_metrics["macro_f1"]
+    ) > args.maximum_anchor_reproduction_delta:
+        raise ValueError(
+            "fold anchor reproduction drift exceeds the fixed tolerance: "
+            f"reinference={initial_direct['macro_f1']:.6f}, "
+            f"artifact={anchor_metrics['macro_f1']:.6f}"
+        )
+    if not cv_mode and not args.skip_anchor_check and not args.limit_val:
         if abs(anchor_metrics["macro_f1"] - args.anchor_macro_f1) > .002:
             raise ValueError(
                 "frozen anchor artifact does not match its registered score: "
@@ -706,10 +792,16 @@ def main() -> None:
             )
     history = [{"epoch": 0, "train_loss": None, **initial}]
     print(json.dumps(history[0]), flush=True)
-    best = initial["selected"]["macro_f1"]
+    fixed_epoch = args.fixed_checkpoint_epoch or None
+    best = (
+        float("-inf") if fixed_epoch is not None
+        else initial["selected"]["macro_f1"]
+    )
     best_epoch = 0
-    best_weight = initial["selected_hierarchical_weight"]
-    best_state = {
+    best_weight = 0.0 if fixed_epoch is not None else (
+        initial["selected_hierarchical_weight"]
+    )
+    best_state = None if fixed_epoch is not None else {
         name: value.detach().cpu().clone()
         for name, value in model.named_parameters() if value.requires_grad
     }
@@ -720,6 +812,7 @@ def main() -> None:
         running = 0.0
         gradient_cosines = []
         gradient_conflicts = []
+        applied_projection_strengths = []
         protected_windows = 0
         unprotected_auxiliary_windows = 0
         empty_gradients = tuple(None for _ in parameters)
@@ -774,12 +867,17 @@ def main() -> None:
                     step == len(train_loader)):
                 if args.gradient_mode == "pcgrad":
                     combined, diagnostics = project_auxiliary_gradients(
-                        primary_buffer, auxiliary_buffer
+                        primary_buffer, auxiliary_buffer,
+                        projection_strength=args.projection_strength,
+                        conflict_temperature=args.conflict_temperature,
                     )
                     for parameter, gradient in zip(parameters, combined):
                         parameter.grad = gradient
                     gradient_cosines.append(diagnostics["cosine"])
                     gradient_conflicts.append(diagnostics["conflict"])
+                    applied_projection_strengths.append(
+                        diagnostics["applied_projection_strength"]
+                    )
                     if primary_in_window and auxiliary_in_window:
                         protected_windows += 1
                     elif auxiliary_in_window and not primary_in_window:
@@ -792,25 +890,37 @@ def main() -> None:
                 auxiliary_buffer = empty_gradients
                 primary_in_window = auxiliary_in_window = 0
             progress.set_postfix(loss=f"{loss.item():.4f}")
-        evaluation, _ = evaluate_all(
-            model, validation_loaders, token_ids, device, weights
-        )
         row = {
             "epoch": epoch,
             "train_loss": running / max(1, len(train_loader)),
-            **evaluation,
         }
         if args.gradient_mode == "pcgrad":
             row["gradient_cosine"] = float(np.mean(gradient_cosines))
             row["gradient_conflict_rate"] = float(np.mean(gradient_conflicts))
+            row["applied_projection_strength_mean"] = float(
+                np.mean(applied_projection_strengths)
+            )
             row["protected_windows"] = protected_windows
             row["unprotected_auxiliary_windows"] = (
                 unprotected_auxiliary_windows
             )
+        if fixed_epoch is not None and epoch < fixed_epoch:
+            row["held_fold_evaluated"] = False
+            history.append(row)
+            print(json.dumps(row), flush=True)
+            continue
+        evaluation, _ = evaluate_all(
+            model, validation_loaders, token_ids, device, weights
+        )
+        row.update(evaluation)
+        row["held_fold_evaluated"] = True
         history.append(row)
         print(json.dumps(row), flush=True)
         score = evaluation["selected"]["macro_f1"]
-        if score > best:
+        selected = (
+            epoch == fixed_epoch if fixed_epoch is not None else score > best
+        )
+        if selected:
             best = score
             best_epoch = epoch
             best_weight = evaluation["selected_hierarchical_weight"]
@@ -829,11 +939,15 @@ def main() -> None:
             if target.exists():
                 shutil.rmtree(target)
             temporary.replace(target)
+            if fixed_epoch is not None:
+                break
         else:
             stale += 1
             if stale >= args.patience:
                 break
 
+    if best_state is None:
+        raise RuntimeError("fixed checkpoint epoch was not reached")
     model.load_state_dict(best_state, strict=False)
     final, prediction_rows = evaluate_all(
         model, validation_loaders, token_ids, device, [best_weight]
@@ -862,6 +976,13 @@ def main() -> None:
     promotion_gate["passed"] = all(promotion_gate.values())
     summary = {
         "method": "GraphCURE-B6-sufficiency-polarity",
+        "protocol": (
+            "train_only_duplicate_safe_fixed_epoch_cv" if cv_mode
+            else "external_validation"
+        ),
+        "fold": args.fold_index if cv_mode else None,
+        "fixed_checkpoint_epoch": fixed_epoch,
+        "official_validation_used_for_selection": not cv_mode,
         "mode": "candidate" if promotion_gate["passed"]
         else "rejected_keep_article_anchor",
         "accepted": promotion_gate["passed"],
@@ -899,6 +1020,14 @@ def main() -> None:
         "history": history,
         "target_metadata": target_metadata,
         "test_split_used": False,
+        "provenance": {
+            "fold_spec_sha256": sha256(args.fold_spec)
+            if args.fold_spec else None,
+            "training_target_sha256": file_sha256(
+                args.target_root / "train.jsonl"
+            ),
+            "held_target_sha256": file_sha256(val_target),
+        },
         "settings": {
             key: str(value) if isinstance(value, Path) else value
             for key, value in vars(args).items()

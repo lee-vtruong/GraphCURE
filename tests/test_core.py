@@ -133,6 +133,7 @@ from scripts.summarize_mocheg_b6_hierarchical import summarize as summarize_b6
 from scripts.analyze_mocheg_b6_auxiliary_control import analyze as analyze_b6_auxiliary
 from scripts.summarize_mocheg_b6a_confirmation import summarize as summarize_b6a
 from scripts.analyze_mocheg_b6b_pcgrad_screen import summarize as summarize_b6b
+from scripts.analyze_mocheg_b6c_oof_screen import screen as screen_b6c
 from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
 from scripts.train_mocheg_sv_lora import (
     GroupDROState,
@@ -385,6 +386,24 @@ def test_primary_projection_removes_negative_gradient_dot_product():
     assert diagnostics["conflict"] == 1.0
     assert torch.dot(primary[0], projected_auxiliary).abs() < 1e-6
     assert torch.equal(combined[0], torch.tensor([1.0, 1.0]))
+
+
+def test_soft_projection_preserves_part_of_conflicting_component():
+    primary = (torch.tensor([1.0, 0.0]),)
+    auxiliary = (torch.tensor([-1.0, 1.0]),)
+    combined, diagnostics = project_auxiliary_gradients(
+        primary, auxiliary, projection_strength=.5
+    )
+    assert torch.allclose(combined[0], torch.tensor([.5, 1.0]))
+    assert diagnostics["applied_projection_strength"] == .5
+    adaptive, adaptive_diagnostics = project_auxiliary_gradients(
+        primary, auxiliary, projection_strength=1,
+        conflict_temperature=1,
+    )
+    assert 0 < adaptive_diagnostics["applied_projection_strength"] < 1
+    assert adaptive[0][0] < 1
+    with pytest.raises(ValueError, match="projection_strength"):
+        project_auxiliary_gradients(primary, auxiliary, projection_strength=2)
 
 
 def test_evi_stops_when_every_action_is_costly():
@@ -1620,6 +1639,66 @@ def test_b6b_screen_requires_active_conflict_protection_and_seed87_repair():
     )
     assert result["promotion_gate"]["pcgrad_active_in_both_seeds"]
     assert result["promotion_gate"]["passed"]
+    assert not result["test_split_used"]
+
+
+def test_b6c_screen_rejects_leaky_selection_and_freezes_winner(tmp_path):
+    labels = [0, 1, 2, 0, 1, 2]
+    predictions = {
+        "anchor": [0, 1, 1, 0, 1, 1],
+        "direct_control": [0, 1, 2, 1, 1, 1],
+        "standard_auxiliary": [0, 1, 2, 0, 1, 1],
+        "soft_050": labels,
+    }
+    paths = {}
+    for name, values in predictions.items():
+        path = tmp_path / name
+        path.mkdir()
+        settings = {
+            "fixed_checkpoint_epoch": 3,
+            "learning_rate": 3e-5,
+        }
+        history = []
+        if name == "soft_050":
+            settings.update({
+                "gradient_mode": "pcgrad",
+                "projection_strength": .5,
+                "conflict_temperature": None,
+                "auxiliary_gradient_scale": 1,
+            })
+            history = [{
+                "epoch": 3, "gradient_conflict_rate": .2,
+                "applied_projection_strength_mean": .1,
+            }]
+        summary = {
+            "protocol": "train_only_duplicate_safe_fixed_epoch_cv",
+            "fold": 0, "fixed_checkpoint_epoch": 3, "best_epoch": 3,
+            "official_validation_used_for_selection": False,
+            "test_split_used": False, "selected_hierarchical_weight": 0,
+            "settings": settings, "history": history,
+        }
+        (path / "summary.json").write_text(
+            json.dumps(summary), encoding="utf-8"
+        )
+        rows = [{
+            "id": f"claim-{index}", "gold": gold,
+            "probabilities": np.eye(3)[prediction].tolist(),
+        } for index, (gold, prediction) in enumerate(zip(labels, values))]
+        (path / "val_predictions.jsonl").write_text(
+            "".join(json.dumps(row) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        paths[name] = path
+    result = screen_b6c(
+        paths["anchor"], paths["direct_control"],
+        paths["standard_auxiliary"], [("soft_050", paths["soft_050"])],
+        fold=0, minimum_control_delta=0, minimum_standard_delta=0,
+        bootstrap_iterations=20, bootstrap_seed=5,
+    )
+    assert result["selected_candidate"] == "soft_050"
+    assert result["selected_configuration"]["projection_strength"] == .5
+    assert result["promotion_gate"]["passed"]
+    assert not result["official_validation_used"]
     assert not result["test_split_used"]
 
 

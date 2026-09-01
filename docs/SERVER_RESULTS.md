@@ -1521,3 +1521,13 @@ Discovered test metric files: 50
 - Counterfactual metrics: `{"constraint_pair_order_accuracy": 0.6264236902050114, "counterfactual_verdict_consistency": 0.2984054669703872, "descendant_intervention_accuracy": 0.4635535307517084, "non_descendant_invariance": 1.0, "note": "paired rows are evaluated bidirectionally; CVC expects verdict flip", "verdict_pair_order_accuracy": 0.6338268792710706}`
 - Class 0: precision=0.623708, recall=0.738610, F1=0.676313
 - Class 1: precision=0.679581, recall=0.554385, F1=0.610632
+## Registered next experiment: B6-C train-only soft conflict projection
+
+B6-B is closed as a failed screen. Full PCGrad was active but did not improve
+standard auxiliary training, indicating over-projection rather than absence of
+gradient conflict. B6-C therefore evaluates fixed partial projection
+(`0.25`, `0.50`) and conflict-severity projection (`tau=0.10`) on duplicate-
+family-safe train fold 0 only. Fold anchors and continuations use a fixed epoch;
+held-fold targets prohibit gold injection; hierarchical inference weight is
+zero. Official validation and test remain locked. The frozen protocol and
+commands are in `docs/MOCHEG_PHASE_B6C_SOFT_CONFLICT.md`.
