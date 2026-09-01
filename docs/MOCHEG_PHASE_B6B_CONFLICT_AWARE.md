@@ -83,3 +83,26 @@ python -m scripts.analyze_mocheg_b6b_pcgrad_screen \
 
 Do not run seeds `13/21/100` and do not access official test unless every
 screen gate is true.
+
+## Frozen screen outcome
+
+B6-B failed and is closed without additional seeds or official-test access.
+PCGrad was active in both runs: epoch-1 conflict rates were `0.4637` (seed 42)
+and `0.4539` (seed 87), decreasing to `0.0738` and `0.0666` by epoch 3. There
+were no auxiliary-only unprotected windows.
+
+- Seed 42: PCGrad `0.6789` Macro-F1, `+0.0111` over compute control but
+  `-0.0074` versus standard auxiliary.
+- Seed 87: PCGrad `0.6966`, only `+0.0002` over compute control and `+0.0038`
+  versus standard auxiliary; this missed the frozen `+0.003` control-repair
+  gate.
+- Mean PCGrad-minus-control was `+0.005645`, but mean
+  PCGrad-minus-standard-auxiliary was `-0.001752`.
+- The two-seed PCGrad ensemble was `-0.010508` Macro-F1 versus the control
+  ensemble. Bootstrap probability of positive delta was `0.138`, interval
+  `[-0.029824, +0.008313]`, and McNemar `p=0.37246`.
+
+This shows that full auxiliary projection is too aggressive: it protects one
+unstable seed but removes useful auxiliary signal in the stronger seed. The
+registered gate must not be weakened, and partial projection must not be tuned
+on these same validation outcomes as if it were confirmatory evidence.

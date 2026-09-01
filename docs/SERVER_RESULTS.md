@@ -57,6 +57,15 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   least `+0.005`, seed-87 delta at least `+0.003`, no mean regression versus
   standard auxiliary training, and bootstrap probability at least `0.95`.
   See `docs/MOCHEG_PHASE_B6B_CONFLICT_AWARE.md`.
+- B6-B frozen seed-42/87 screen failed. PCGrad was active (epoch-1 conflict
+  rates `0.4637/0.4539`) and had no unprotected auxiliary-only windows. It
+  reached Macro-F1 `0.6789` on seed 42 and `0.6966` on seed 87. Mean delta
+  versus compute control was `+0.005645`, but seed-87 control delta was only
+  `+0.000191`, mean delta versus standard auxiliary was `-0.001752`, and the
+  two-seed ensemble delta versus control was `-0.010508`. Bootstrap positive
+  probability was `0.138`, CI `[-0.029824, +0.008313]`, McNemar `p=0.37246`.
+  Decision: do not run seeds `13/21/100`, do not access test, and close full
+  PCGrad as an unsuccessful post-hoc robustness branch.
 
 ## Phase B-v4 atomic-evidence preregistration (2026-08-25)
 
