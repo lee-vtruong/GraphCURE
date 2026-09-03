@@ -134,6 +134,10 @@ from scripts.analyze_mocheg_b6_auxiliary_control import analyze as analyze_b6_au
 from scripts.summarize_mocheg_b6a_confirmation import summarize as summarize_b6a
 from scripts.analyze_mocheg_b6b_pcgrad_screen import summarize as summarize_b6b
 from scripts.analyze_mocheg_b6c_oof_screen import screen as screen_b6c
+from scripts.analyze_mocheg_b7_frozen_router import (
+    route_mask as b7_route_mask,
+    screen as screen_b7,
+)
 from scripts.prepare_mocheg_sv_folds import build_folds, claim_family
 from scripts.train_mocheg_sv_lora import (
     GroupDROState,
@@ -1697,6 +1701,39 @@ def test_b6c_screen_rejects_leaky_selection_and_freezes_winner(tmp_path):
     )
     assert result["selected_candidate"] == "soft_050"
     assert result["selected_configuration"]["projection_strength"] == .5
+    assert result["promotion_gate"]["passed"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b7_router_keeps_anchor_except_for_frozen_confident_corrections():
+    labels = np.asarray([0, 1, 2, 0, 1, 2] * 2)
+    anchor_prediction = labels.copy()
+    anchor_prediction[[2, 8]] = 1
+    anchor = np.full((len(labels), 3), .15)
+    anchor[np.arange(len(labels)), anchor_prediction] = .70
+    anchor[[2, 8]] = [.30, .40, .30]
+    expert = anchor.copy()
+    expert[[2, 8]] = [.05, .05, .90]
+    route = b7_route_mask(
+        anchor, expert, anchor_confidence_max=.55,
+        expert_confidence_min=.8, confidence_advantage_min=.2,
+        class_mode="expert_nei",
+    )
+    assert route.tolist() == [False, False, True, False, False, False,
+                              False, False, True, False, False, False]
+    result = screen_b7(
+        labels, anchor, {"safe_expert": expert},
+        np.asarray(["snopes"] * 6 + ["politifact"] * 6),
+        minimum_route_rate=.01, maximum_route_rate=.25,
+        minimum_macro_f1_delta=0, minimum_source_delta=0,
+        minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=2,
+    )
+    assert result["selected_policy"]["expert"] == "safe_expert"
+    assert result["selected_metrics"]["route_count"] == 2
+    assert result["comparison_vs_anchor"]["helpful"] == 2
+    assert result["comparison_vs_anchor"]["harmful"] == 0
     assert result["promotion_gate"]["passed"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]

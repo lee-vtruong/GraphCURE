@@ -1542,3 +1542,15 @@ projection candidate, gaining `+0.002563` over standard auxiliary but losing
 `-0.003051` to compute control and `-0.019540` to the anchor. Its anchor delta
 had bootstrap interval `[-0.034777, -0.004056]`, positive probability `0.006`,
 and McNemar `p=0.000938`. No folds 1--4, official validation, or test were used.
+
+## Registered next experiment: B7 frozen-anchor selective router
+
+B7 directly targets the dominant B6-C failure: continuation damage to the
+strong anchor. It performs no training and never alters anchor parameters. A
+fixed confidence/disagreement grid on duplicate-safe train fold 0 chooses
+whether to keep the anchor or use one existing B6-C expert. Route coverage is
+restricted to `1%--25%`; promotion requires at least `+0.005` Macro-F1,
+bootstrap positive probability at least `0.95`, more help than harm, and
+source-wise non-inferiority within `0.002`. Fold 0 is development-only, and
+official validation/test remain locked. See
+`docs/MOCHEG_PHASE_B7_FROZEN_ROUTER.md`.
