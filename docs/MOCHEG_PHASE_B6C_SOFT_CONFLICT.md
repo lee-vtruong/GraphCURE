@@ -145,3 +145,34 @@ python -m scripts.analyze_mocheg_b6c_oof_screen \
 Do not run official validation/test. Do not start folds 1--4 until
 `promotion_gate.passed` is true; the screen JSON supplies the configuration
 that must be frozen for confirmation.
+
+## Frozen fold-0 outcome
+
+B6-C failed and is closed without folds 1--4 or official validation/test.
+All runs used `n=2327` held-fold claims, checkpoint epoch 3, hierarchical
+inference weight zero, and no held-fold gold injection.
+
+| Run | Accuracy | Macro-F1 | Delta vs anchor |
+|---|---:|---:|---:|
+| Fixed-epoch anchor | 0.6571 | 0.6411 | -- |
+| Compute-matched direct control | 0.6352 | 0.6246 | -0.0165 |
+| Standard auxiliary | 0.6296 | 0.6190 | -0.0221 |
+| Soft projection 0.25 | 0.6317 | 0.6213 | -0.0198 |
+| Soft projection 0.50 | 0.6317 | 0.6215 | -0.0195 |
+| Severity-adaptive, tau 0.10 | 0.6193 | 0.6085 | -0.0326 |
+
+The selected development candidate was soft projection `0.50`. It improved
+over standard auxiliary by `+0.002563` Macro-F1, but lost `-0.003051` to the
+compute-matched direct control and `-0.019540` to the frozen fold anchor.
+Against the anchor, the bootstrap interval was
+`[-0.034777, -0.004056]`, probability of a positive delta was `0.006`, and
+exact McNemar `p=0.000938`. Against the direct control, the bootstrap interval
+was `[-0.016643, +0.010699]` and probability of a positive delta was `0.3388`.
+
+The result separates two effects. Continuing the anchor for three matched
+epochs already costs `-0.016489` Macro-F1, while standard auxiliary training
+adds another `-0.005615` relative to that control. Partial projection recovers
+only `+0.002563` of the auxiliary loss and cannot repair the dominant
+continued-training degradation. Further projection-strength tuning is not
+justified; the next branch must protect the frozen anchor itself and address
+generalization/domain shift rather than gradient geometry alone.

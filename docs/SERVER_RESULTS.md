@@ -1531,3 +1531,14 @@ family-safe train fold 0 only. Fold anchors and continuations use a fixed epoch;
 held-fold targets prohibit gold injection; hierarchical inference weight is
 zero. Official validation and test remain locked. The frozen protocol and
 commands are in `docs/MOCHEG_PHASE_B6C_SOFT_CONFLICT.md`.
+
+### B6-C frozen fold-0 outcome (2026-09-04)
+
+B6-C failed its train-only development gate and is closed. Anchor, direct
+control, standard auxiliary, soft-0.25, soft-0.50, and severity-adaptive
+Macro-F1 were respectively `0.6411`, `0.6246`, `0.6190`, `0.6213`, `0.6215`,
+and `0.6085` on duplicate-safe train fold 0 (`n=2327`). Soft-0.50 was the best
+projection candidate, gaining `+0.002563` over standard auxiliary but losing
+`-0.003051` to compute control and `-0.019540` to the anchor. Its anchor delta
+had bootstrap interval `[-0.034777, -0.004056]`, positive probability `0.006`,
+and McNemar `p=0.000938`. No folds 1--4, official validation, or test were used.
