@@ -71,3 +71,18 @@ PY
 
 Do not run fold confirmation or official validation/test unless every
 promotion-gate field is true.
+
+## Frozen fold-0 outcome
+
+B7 is **promising but not promoted**. The selected `soft_050` policy routed
+only anchor-predicted NEI cases with anchor confidence at most `0.75` and an
+expert confidence advantage of at least `0.20`. It routed `61/2327` examples
+(`2.62%`) and improved accuracy from `0.6571` to `0.6648` and Macro-F1 from
+`0.6411` to `0.6457` (`+0.004604`). The routed decisions produced `35`
+helpful and `17` harmful corrections (exact McNemar `p=0.0175`).
+
+The result missed both preregistered statistical gates: the Macro-F1 gain was
+below `0.005`, and bootstrap probability of a positive gain was `0.9294`,
+below `0.95` (95% interval `[-0.00147, 0.01090]`). Source non-inferiority and
+route-rate gates passed. No confirmation folds, official validation, or test
+were used. Thresholds are not relaxed after observing this result.

@@ -26,6 +26,10 @@ from scripts.analyze_mocheg_claim_images import (
     conversations as claim_image_conversations,
     report_signature,
 )
+from scripts.analyze_mocheg_b8_logit_adjustment import (
+    apply_logit_bias,
+    screen as screen_b8,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -1732,6 +1736,28 @@ def test_b7_router_keeps_anchor_except_for_frozen_confident_corrections():
     )
     assert result["selected_policy"]["expert"] == "safe_expert"
     assert result["selected_metrics"]["route_count"] == 2
+    assert result["comparison_vs_anchor"]["helpful"] == 2
+    assert result["comparison_vs_anchor"]["harmful"] == 0
+    assert result["promotion_gate"]["passed"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b8_logit_adjustment_repairs_stable_class_boundary():
+    labels = np.asarray([0, 1, 2, 0, 1, 2] * 2)
+    anchor = np.eye(3)[labels] * .55 + .15
+    anchor /= anchor.sum(1, keepdims=True)
+    anchor[[2, 8]] = [.10, .46, .44]
+    adjusted = apply_logit_bias(anchor, 0, .10)
+    assert adjusted[[2, 8]].argmax(-1).tolist() == [2, 2]
+    result = screen_b8(
+        labels, anchor,
+        np.asarray(["snopes"] * 6 + ["politifact"] * 6),
+        minimum_macro_f1_delta=0, maximum_accuracy_drop=0,
+        minimum_source_delta=0, minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=4,
+    )
+    assert result["selected_adjustment"]["nei_logit_bias"] > 0
     assert result["comparison_vs_anchor"]["helpful"] == 2
     assert result["comparison_vs_anchor"]["harmful"] == 0
     assert result["promotion_gate"]["passed"]

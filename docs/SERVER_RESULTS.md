@@ -1554,3 +1554,25 @@ bootstrap positive probability at least `0.95`, more help than harm, and
 source-wise non-inferiority within `0.002`. Fold 0 is development-only, and
 official validation/test remain locked. See
 `docs/MOCHEG_PHASE_B7_FROZEN_ROUTER.md`.
+
+### B7 frozen fold-0 outcome (2026-09-04)
+
+B7 is **promising but not promoted**. The selected `soft_050` policy routed
+`61/2327` anchor-predicted NEI cases (`2.62%`) and changed Macro-F1 from
+`0.641063` to `0.645667` (`+0.004604`) and accuracy from `0.657069` to
+`0.664804` (`+0.007735`). It made `35` helpful versus `17` harmful
+corrections (McNemar `p=0.0175`) and remained source-safe. The Macro-F1 gain
+missed the fixed `+0.005` gate, while bootstrap positive probability `0.9294`
+missed `0.95` (95% interval `[-0.001474, 0.010901]`). No confirmation folds,
+official validation, or test were used; thresholds were not relaxed.
+
+## Registered next experiment: B8 prior-robust logit adjustment
+
+B8 freezes the anchor and tests whether a stable class decision-boundary
+mismatch explains remaining Macro-F1 error. A preregistered `13 x 13` grid
+adds supported and NEI logit offsets while fixing the refuted offset to zero.
+Promotion requires `+0.005` Macro-F1, accuracy non-inferiority within `0.002`,
+source-wise non-inferiority within `0.002`, more help than harm, and bootstrap
+positive probability at least `0.95`. Fold 0 is development-only; official
+validation and test remain locked. See
+`docs/MOCHEG_PHASE_B8_LOGIT_ADJUSTMENT.md`.
