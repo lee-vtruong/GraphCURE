@@ -1576,3 +1576,24 @@ source-wise non-inferiority within `0.002`, more help than harm, and bootstrap
 positive probability at least `0.95`. Fold 0 is development-only; official
 validation and test remain locked. See
 `docs/MOCHEG_PHASE_B8_LOGIT_ADJUSTMENT.md`.
+
+### B8 frozen fold-0 outcome (2026-09-04)
+
+B8 failed and is closed. Offsets `[supported=+0.30, refuted=0,
+NEI=+0.15]` improved accuracy by `+0.002578` and Macro-F1 by only
+`+0.002160`. They produced `25` helpful and `19` harmful changes, improved
+both source groups, and preserved accuracy, but bootstrap positive probability
+was `0.7604` with interval `[-0.003905, 0.007970]`. The Macro-F1 and bootstrap
+gates failed. No confirmation folds, official validation, or test were used;
+the observed boundary value is not used to widen the grid post hoc.
+
+## Registered next experiment: B9 fixed-seed anchor stabilization
+
+B9 resolves a baseline mismatch: the official GraphCURE-Qwen3 result uses a
+seed ensemble, whereas B6--B8 train-only screens used a single seed-42 anchor.
+It preregisters seeds `13, 42, 87`, fixed epoch 3, and an unweighted arithmetic
+probability mean on duplicate-safe train fold 0. Promotion requires `+0.005`
+Macro-F1 over seed 42, bootstrap positive probability at least `0.95`, source
+and accuracy non-inferiority within `0.002`, more help than harm, and
+non-inferiority to the strongest constituent. This is anchor stabilization,
+not a novelty claim. See `docs/MOCHEG_PHASE_B9_ANCHOR_ENSEMBLE.md`.

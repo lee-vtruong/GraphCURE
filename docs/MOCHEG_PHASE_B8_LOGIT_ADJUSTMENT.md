@@ -57,3 +57,16 @@ PY
 
 Do not run confirmation folds or official validation/test unless every gate
 field is true.
+
+## Frozen fold-0 outcome
+
+B8 failed and is closed. The selected offsets were `+0.30` for supported,
+`0` for refuted, and `+0.15` for NEI. They changed accuracy from `0.657069`
+to `0.659648` and Macro-F1 from `0.641063` to `0.643223` (`+0.002160`).
+There were `25` helpful and `19` harmful changes, but bootstrap positive
+probability was only `0.7604` with interval `[-0.003905, 0.007970]`.
+
+Both sources improved and the accuracy gate passed, but the Macro-F1 and
+bootstrap gates failed. No confirmation fold, official validation, or test
+was used. The grid is not widened after observing that the supported offset
+reached its upper boundary.

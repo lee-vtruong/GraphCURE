@@ -30,6 +30,7 @@ from scripts.analyze_mocheg_b8_logit_adjustment import (
     apply_logit_bias,
     screen as screen_b8,
 )
+from scripts.analyze_mocheg_b9_anchor_ensemble import screen as screen_b9
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -1760,6 +1761,31 @@ def test_b8_logit_adjustment_repairs_stable_class_boundary():
     assert result["selected_adjustment"]["nei_logit_bias"] > 0
     assert result["comparison_vs_anchor"]["helpful"] == 2
     assert result["comparison_vs_anchor"]["harmful"] == 0
+    assert result["promotion_gate"]["passed"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b9_fixed_seed_ensemble_reduces_anchor_errors():
+    labels = np.asarray([0, 1, 2, 0, 1, 2] * 2)
+    seed42 = np.full((len(labels), 3), .05)
+    seed42[np.arange(len(labels)), labels] = .90
+    seed42[[2, 8]] = [.05, .55, .40]
+    seed13 = seed42.copy()
+    seed87 = seed42.copy()
+    seed13[[2, 8]] = [.05, .15, .80]
+    seed87[[2, 8]] = [.05, .15, .80]
+    result = screen_b9(
+        labels, {13: seed13, 42: seed42, 87: seed87},
+        np.asarray(["snopes"] * 6 + ["politifact"] * 6),
+        minimum_reference_delta=0, maximum_best_seed_drop=0,
+        maximum_accuracy_drop=0, minimum_source_delta=0,
+        minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=6,
+    )
+    assert result["frozen_seeds"] == [13, 42, 87]
+    assert result["comparison_vs_seed42"]["helpful"] == 2
+    assert result["comparison_vs_seed42"]["harmful"] == 0
     assert result["promotion_gate"]["passed"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
