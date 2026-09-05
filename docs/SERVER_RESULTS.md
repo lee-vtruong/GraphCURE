@@ -1597,3 +1597,15 @@ Macro-F1 over seed 42, bootstrap positive probability at least `0.95`, source
 and accuracy non-inferiority within `0.002`, more help than harm, and
 non-inferiority to the strongest constituent. This is anchor stabilization,
 not a novelty claim. See `docs/MOCHEG_PHASE_B9_ANCHOR_ENSEMBLE.md`.
+
+### B9 frozen fold-0 outcome (2026-09-05)
+
+B9 passed every gate. Seeds `13/42/87` reached Macro-F1
+`0.642515/0.641063/0.645612`; their fixed unweighted ensemble reached
+`0.654539` Macro-F1 and `0.669961` accuracy. Versus seed 42, deltas were
+`+0.013476` Macro-F1 and `+0.012892` accuracy, with `104` helpful and `74`
+harmful changes. The 95% bootstrap interval was `[0.002140, 0.024850]`,
+positive probability `0.9902`, and McNemar `p=0.02945`. Politifact and Snopes
+gained `+0.016119` and `+0.012187` Macro-F1 respectively. Official validation
+and test were not used. The exact ensemble is promoted to frozen confirmation
+on duplicate-safe train folds 1--4; fold 0 is excluded from confirmation.

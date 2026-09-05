@@ -31,6 +31,9 @@ from scripts.analyze_mocheg_b8_logit_adjustment import (
     screen as screen_b8,
 )
 from scripts.analyze_mocheg_b9_anchor_ensemble import screen as screen_b9
+from scripts.summarize_mocheg_b9_confirmation import (
+    summarize as summarize_b9,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -1787,6 +1790,39 @@ def test_b9_fixed_seed_ensemble_reduces_anchor_errors():
     assert result["comparison_vs_seed42"]["helpful"] == 2
     assert result["comparison_vs_seed42"]["harmful"] == 0
     assert result["promotion_gate"]["passed"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b9_confirmation_excludes_fold0_and_requires_consistency():
+    runs = []
+    for fold in (1, 2, 3, 4):
+        labels = np.asarray([0, 1, 2, 0, 1, 2])
+        seed42 = np.full((len(labels), 3), .05)
+        seed42[np.arange(len(labels)), labels] = .90
+        seed42[2] = [.05, .55, .40]
+        seed13 = seed42.copy()
+        seed87 = seed42.copy()
+        seed13[2] = [.05, .15, .80]
+        seed87[2] = [.05, .15, .80]
+        runs.append({
+            "fold": fold,
+            "ids": [f"fold-{fold}-claim-{index}"
+                    for index in range(len(labels))],
+            "labels": labels,
+            "probabilities": {13: seed13, 42: seed42, 87: seed87},
+            "sources": np.asarray(["snopes"] * 3 + ["politifact"] * 3),
+        })
+    result = summarize_b9(
+        runs, minimum_mean_delta=0, minimum_positive_folds=4,
+        minimum_aggregate_delta=0, maximum_best_seed_drop=0,
+        maximum_accuracy_drop=0, minimum_source_delta=0,
+        minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=8,
+    )
+    assert result["paired_fold_macro_f1_delta"]["positive_folds"] == 4
+    assert result["promotion_gate"]["passed"]
+    assert not result["fold0_used_for_confirmation"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
 

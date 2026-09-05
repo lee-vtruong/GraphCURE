@@ -73,3 +73,33 @@ PY
 
 Do not run folds 1--4 or official validation/test unless the complete gate
 passes.
+
+## Frozen fold-0 outcome
+
+B9 passed every preregistered gate. Seed `13/42/87` Macro-F1 was respectively
+`0.642515/0.641063/0.645612`; their unweighted ensemble reached `0.654539`
+and accuracy `0.669961`. Relative to seed 42, the ensemble gained `+0.013476`
+Macro-F1 and `+0.012892` accuracy, with `104` helpful versus `74` harmful
+changes (McNemar `p=0.02945`). The bootstrap interval was
+`[0.002140, 0.024850]` and positive probability was `0.9902`.
+
+Both source groups improved: Politifact `+0.016119` and Snopes `+0.012187`
+Macro-F1. No official validation or test was used. The seeds, checkpoint epoch,
+and unweighted arithmetic probability mean are now frozen for confirmation on
+train folds 1--4.
+
+## Frozen confirmation protocol
+
+Run exactly seeds `13, 42, 87` at fixed epoch 3 on each of folds 1--4. The
+confirmation gate requires:
+
+- mean per-fold ensemble delta over seed 42 at least `+0.005`;
+- positive delta on at least three of four folds;
+- concatenated held-fold Macro-F1 delta at least `+0.005`;
+- concatenated bootstrap probability of positive delta at least `0.95`;
+- concatenated accuracy and each source within `-0.002` of seed 42;
+- concatenated ensemble within `-0.002` of its strongest constituent;
+- more helpful than harmful concatenated changes.
+
+Fold 0 is excluded from confirmation. Official validation and test remain
+locked.
