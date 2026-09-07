@@ -1631,3 +1631,23 @@ nested OOF. Fold 0, official validation, and test remain excluded. Promotion
 requires gains over both seed 42 and the frozen unweighted ensemble plus
 fold-wise, bootstrap, accuracy, and source robustness gates. See
 `docs/MOCHEG_PHASE_B10_CROSSFIT_CALIBRATOR.md`.
+
+### B10 frozen outcome (2026-09-07)
+
+B10 failed and is closed. Nested OOF Macro-F1 was `0.670543`, gaining
+`+0.007318` over seed 42 and `+0.003445` over the unweighted ensemble, with
+three positive fold deltas. Its bootstrap positive probability versus the
+ensemble was only `0.8702`, however, and source Macro-F1 fell by `-0.001854`
+on Politifact and `-0.005432` on Snopes. The aggregate improvement alongside
+both within-source losses is treated as a mixture-prior/Simpson effect, not a
+robust promotion. No official validation or test was used.
+
+## Registered exploratory experiment: B11 provenance calibration
+
+B11 uses provenance as an explicit contextual constraint and fits a separate
+fixed disagreement calibrator per source under nested OOF evaluation. It must
+improve the unweighted ensemble, the B10 global calibrator, and every source.
+Because the hypothesis was formed after inspecting B10 on folds 1--4, even a
+pass requires confirmation on a newly generated fold assignment. Official
+validation and test remain locked. See
+`docs/MOCHEG_PHASE_B11_PROVENANCE_CALIBRATOR.md`.

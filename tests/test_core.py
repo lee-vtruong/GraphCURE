@@ -38,6 +38,10 @@ from scripts.analyze_mocheg_b10_crossfit_calibrator import (
     disagreement_features,
     screen as screen_b10,
 )
+from scripts.analyze_mocheg_b11_provenance_calibrator import (
+    provenance_crossfit,
+    screen as screen_b11,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -1867,6 +1871,46 @@ def test_b10_crossfit_calibrator_learns_seed_disagreement_without_fold0():
     )
     assert result["aggregate"]["crossfit_calibrator"]["macro_f1"] == 1
     assert result["promotion_gate"]["passed"]
+    assert not result["fold0_used"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b11_provenance_calibrator_is_nested_oof_and_requires_fresh_confirm():
+    folds = []
+    for fold in (1, 2, 3, 4):
+        labels = np.tile(np.arange(3), 30)
+        sources = np.asarray([
+            "snopes" if index % 2 else "politifact"
+            for index in range(len(labels))
+        ])
+        probabilities = {}
+        for seed in (13, 42, 87):
+            values = np.full((len(labels), 3), .05)
+            for index, label in enumerate(labels):
+                shifted = label
+                if sources[index] == "snopes" and label == 2:
+                    shifted = 1
+                values[index, shifted] = .90
+            probabilities[seed] = values
+        folds.append({
+            "fold": fold,
+            "ids": [f"fold-{fold}-claim-{index}"
+                    for index in range(len(labels))],
+            "labels": labels,
+            "probabilities": probabilities,
+            "sources": sources,
+        })
+    nested = provenance_crossfit(folds, seed=12)
+    assert [row["fold"] for row in nested] == [1, 2, 3, 4]
+    result = screen_b11(
+        folds, minimum_ensemble_delta=0, minimum_global_delta=-1,
+        minimum_positive_folds=0, maximum_accuracy_drop=1,
+        minimum_source_delta=-1, minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=12,
+    )
+    assert result["exploratory_after_b10"]
+    assert result["fresh_split_confirmation_required"]
     assert not result["fold0_used"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]

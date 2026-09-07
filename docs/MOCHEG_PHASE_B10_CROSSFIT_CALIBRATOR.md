@@ -54,3 +54,17 @@ print("official validation used:", s["official_validation_used"])
 print("test used:", s["test_split_used"])
 PY
 ```
+
+## Frozen outcome
+
+B10 failed and is closed. The nested OOF calibrator reached `0.670543`
+Macro-F1, gaining `+0.007318` over seed 42 and `+0.003445` over the unweighted
+ensemble. Three of four fold deltas over the ensemble were positive. However,
+bootstrap positive probability versus the ensemble was only `0.8702` with an
+interval crossing zero, and within-source Macro-F1 fell by `-0.001854` on
+Politifact and `-0.005432` on Snopes.
+
+The aggregate gain alongside losses in both source strata is consistent with
+a mixture-prior/Simpson effect rather than a robust verifier improvement. No
+official validation or test was used. B10 hyperparameters and features are not
+tuned after this outcome.
