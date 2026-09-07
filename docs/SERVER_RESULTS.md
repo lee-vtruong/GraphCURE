@@ -1651,3 +1651,22 @@ Because the hypothesis was formed after inspecting B10 on folds 1--4, even a
 pass requires confirmation on a newly generated fold assignment. Official
 validation and test remain locked. See
 `docs/MOCHEG_PHASE_B11_PROVENANCE_CALIBRATOR.md`.
+
+### B11 frozen outcome (2026-09-07)
+
+B11 failed every primary gate and closes the calibration/seed-stacking branch.
+Provenance-conditioned Macro-F1 was `0.665340`, versus `0.667097` for the
+unweighted ensemble and `0.670543` for the global calibrator. Accuracy fell
+`-0.008061`; only two folds improved; helpful/harmful changes were `418/493`;
+and Snopes Macro-F1 fell `-0.001492`. No fresh confirmation, official
+validation, or test was used.
+
+## Registered next experiment: B12 joint-from-base constraints
+
+B12 changes the training trajectory rather than tuning post-hoc decisions. A
+new LoRA is jointly trained from base initialization on verdict, sufficiency,
+polarity, and evidence-ablation tasks. A verdict-only model receives exactly
+the same number of updates as the compute control. Development uses a new
+duplicate-safe fold assignment (`seed=2027`), fixed checkpoint epoch 3, and no
+hierarchical inference blend. Official validation and test remain locked. See
+`docs/MOCHEG_PHASE_B12_JOINT_CONSTRAINTS.md`.

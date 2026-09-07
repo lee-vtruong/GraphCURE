@@ -31,3 +31,12 @@ python -m scripts.analyze_mocheg_b11_provenance_calibrator \
   --predictions outputs/mocheg_b11_provenance_predictions.jsonl \
   2>&1 | tee outputs/mocheg-b11-provenance-calibrator.log
 ```
+
+## Frozen outcome
+
+B11 failed every primary promotion criterion. Its Macro-F1 was `0.665340`,
+which was `-0.001757` below the unweighted ensemble and `-0.005202` below the
+global calibrator. Only two folds improved, accuracy fell by `-0.008061`, and
+there were `418` helpful versus `493` harmful changes. Snopes also declined
+by `-0.001492`. No fresh confirmation, official validation, or test was run.
+The calibration/seed-stacking branch is closed.

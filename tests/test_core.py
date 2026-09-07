@@ -42,6 +42,7 @@ from scripts.analyze_mocheg_b11_provenance_calibrator import (
     provenance_crossfit,
     screen as screen_b11,
 )
+from scripts.analyze_mocheg_b12_joint_constraints import screen as screen_b12
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -1912,6 +1913,26 @@ def test_b11_provenance_calibrator_is_nested_oof_and_requires_fresh_confirm():
     assert result["exploratory_after_b10"]
     assert result["fresh_split_confirmation_required"]
     assert not result["fold0_used"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b12_joint_constraints_must_beat_matched_from_base_control():
+    labels = np.asarray([0, 1, 2, 0, 1, 2] * 2)
+    anchor = np.eye(3)[[0, 1, 1, 0, 1, 1] * 2]
+    control = np.eye(3)[[0, 1, 2, 1, 1, 1] * 2]
+    joint = np.eye(3)[labels]
+    result = screen_b12(
+        labels, anchor, control, joint,
+        np.asarray(["snopes"] * 6 + ["politifact"] * 6),
+        minimum_anchor_delta=0, minimum_control_delta=0,
+        maximum_accuracy_drop=0, minimum_source_delta=0,
+        minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=14,
+    )
+    assert result["joint_vs_compute_matched_control"]["macro_f1_delta"] > 0
+    assert result["promotion_gate"]["passed"]
+    assert result["fresh_fold_assignment"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
 

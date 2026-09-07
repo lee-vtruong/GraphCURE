@@ -1,7 +1,8 @@
 """Phase-B6 Qwen3 LoRA verifier with sufficiency/polarity decomposition.
 
-This script is validation-only by construction.  It continues a frozen article
-verifier adapter and trains three task prompts with one shared LoRA:
+This script is validation-only by construction. It can either continue a
+frozen article-verifier adapter or initialize a fresh LoRA from the base model,
+then trains four task prompts with one shared LoRA:
 
 * direct verdict: supported / refuted / NEI;
 * evidence sufficiency: sufficient for a binary verdict or insufficient;
@@ -75,8 +76,8 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def adapter_signature(path: Path) -> dict | None:
-    if not path.exists():
+def adapter_signature(path: Path | None) -> dict | None:
+    if path is None or not path.exists():
         return None
     result = {"path": str(path)}
     for name in ("adapter_config.json", "adapter_model.safetensors"):
@@ -538,6 +539,11 @@ def main() -> None:
                         default=Path("outputs/mocheg_qwen3_lora_seed42_v16/best_adapter"))
     parser.add_argument("--resume-from-best", action="store_true",
                         help="continue from OUTPUT/best_adapter after interruption")
+    parser.add_argument("--train-from-base", action="store_true",
+                        help=(
+                            "initialize a new LoRA from the base model instead "
+                            "of continuing INITIAL_ADAPTER"
+                        ))
     parser.add_argument("--output", type=Path,
                         default=Path("outputs/mocheg_b6_hierarchical_seed42"))
     parser.add_argument("--max-evidence-chars", type=int, default=2200)
@@ -586,6 +592,8 @@ def main() -> None:
     parser.add_argument("--maximum-accuracy-drop", type=float, default=.003)
     parser.add_argument("--skip-anchor-check", action="store_true")
     args = parser.parse_args()
+    if args.train_from_base and args.resume_from_best:
+        raise ValueError("--train-from-base and --resume-from-best conflict")
     if not 0 <= args.ablation_ratio <= 1:
         raise ValueError("ablation ratio must be in [0, 1]")
     if not 0 <= args.projection_strength <= 1:
@@ -647,10 +655,17 @@ def main() -> None:
         base_model.gradient_checkpointing_enable()
     if hasattr(base_model, "enable_input_require_grads"):
         base_model.enable_input_require_grads()
-    adapter_path = args.output / "best_adapter" if args.resume_from_best else args.initial_adapter
-    if args.resume_from_best and not adapter_path.exists():
+    adapter_path = (
+        None if args.train_from_base else (
+            args.output / "best_adapter"
+            if args.resume_from_best else args.initial_adapter
+        )
+    )
+    if args.resume_from_best and (
+        adapter_path is None or not adapter_path.exists()
+    ):
         raise FileNotFoundError(f"resume adapter does not exist: {adapter_path}")
-    if adapter_path.exists():
+    if adapter_path is not None and adapter_path.exists():
         model = PeftModel.from_pretrained(
             base_model, str(adapter_path), is_trainable=True
         )
@@ -764,7 +779,7 @@ def main() -> None:
             "fold anchor predictions are required for aligned comparison: "
             f"{anchor_path}"
         )
-    if cv_mode and abs(
+    if cv_mode and not args.train_from_base and abs(
         initial_direct["macro_f1"] - anchor_metrics["macro_f1"]
     ) > args.maximum_anchor_reproduction_delta:
         raise ValueError(
@@ -987,8 +1002,12 @@ def main() -> None:
         else "rejected_keep_article_anchor",
         "accepted": promotion_gate["passed"],
         "model": args.model,
+        "training_from_base": args.train_from_base,
         "initial_adapter": str(args.initial_adapter),
-        "loaded_adapter": str(adapter_path) if adapter_path.exists() else None,
+        "loaded_adapter": (
+            str(adapter_path)
+            if adapter_path is not None and adapter_path.exists() else None
+        ),
         "loaded_adapter_signature": adapter_signature(adapter_path),
         "resumed_from_best": args.resume_from_best,
         "git_commit": current_git_commit(),
