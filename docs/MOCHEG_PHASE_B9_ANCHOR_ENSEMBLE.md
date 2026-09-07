@@ -103,3 +103,17 @@ confirmation gate requires:
 
 Fold 0 is excluded from confirmation. Official validation and test remain
 locked.
+
+## Frozen confirmation outcome
+
+B9 failed confirmation and is not promoted. On folds 1--4, ensemble deltas
+over seed 42 were `+0.006476, -0.000641, -0.002406, +0.012480`. The mean was
+`+0.003977 +/- 0.005929`, with only two positive folds. Concatenated OOF
+Macro-F1 was `0.667097`, a `+0.003873` gain over seed 42, but bootstrap
+positive probability was `0.905` and its interval crossed zero.
+
+The ensemble remained accuracy-safe, beat the strongest constituent by
+`+0.002736`, produced more helpful than harmful changes, and improved both
+sources. These are useful diagnostics but do not override the frozen gate.
+No official validation or test was used, and neither seeds nor averaging
+weights are changed after confirmation.

@@ -34,6 +34,10 @@ from scripts.analyze_mocheg_b9_anchor_ensemble import screen as screen_b9
 from scripts.summarize_mocheg_b9_confirmation import (
     summarize as summarize_b9,
 )
+from scripts.analyze_mocheg_b10_crossfit_calibrator import (
+    disagreement_features,
+    screen as screen_b10,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -1823,6 +1827,47 @@ def test_b9_confirmation_excludes_fold0_and_requires_consistency():
     assert result["paired_fold_macro_f1_delta"]["positive_folds"] == 4
     assert result["promotion_gate"]["passed"]
     assert not result["fold0_used_for_confirmation"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b10_crossfit_calibrator_learns_seed_disagreement_without_fold0():
+    folds = []
+    for fold in (1, 2, 3, 4):
+        labels = np.tile(np.arange(3), 20)
+        seed42 = np.full((len(labels), 3), .05)
+        seed13 = np.full((len(labels), 3), .05)
+        seed87 = np.full((len(labels), 3), .05)
+        for index, label in enumerate(labels):
+            if label == 2:
+                seed42[index] = [.05, .70, .25]
+                seed13[index] = [.05, .65, .30]
+                seed87[index] = [.05, .15, .80]
+            else:
+                seed42[index, label] = .90
+                seed13[index, label] = .90
+                seed87[index, label] = .90
+        folds.append({
+            "fold": fold,
+            "ids": [f"fold-{fold}-claim-{index}"
+                    for index in range(len(labels))],
+            "labels": labels,
+            "probabilities": {13: seed13, 42: seed42, 87: seed87},
+            "sources": np.asarray(
+                ["snopes" if index % 2 else "politifact"
+                 for index in range(len(labels))]
+            ),
+        })
+    assert disagreement_features(folds[0]["probabilities"]).shape == (60, 24)
+    result = screen_b10(
+        folds, minimum_seed42_delta=0, minimum_ensemble_delta=0,
+        minimum_positive_folds=4, maximum_accuracy_drop=0,
+        minimum_source_delta=0, minimum_bootstrap_probability=0,
+        bootstrap_iterations=20, bootstrap_seed=10,
+    )
+    assert result["aggregate"]["crossfit_calibrator"]["macro_f1"] == 1
+    assert result["promotion_gate"]["passed"]
+    assert not result["fold0_used"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
 

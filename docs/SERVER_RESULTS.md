@@ -1609,3 +1609,25 @@ positive probability `0.9902`, and McNemar `p=0.02945`. Politifact and Snopes
 gained `+0.016119` and `+0.012187` Macro-F1 respectively. Official validation
 and test were not used. The exact ensemble is promoted to frozen confirmation
 on duplicate-safe train folds 1--4; fold 0 is excluded from confirmation.
+
+### B9 frozen confirmation outcome (2026-09-07)
+
+B9 failed confirmation and is not promoted. Fold 1--4 Macro-F1 deltas over
+seed 42 were `+0.006476, -0.000641, -0.002406, +0.012480`; the mean was
+`+0.003977 +/- 0.005929`, with only two positive folds. Concatenated OOF
+Macro-F1 was `0.667097`, a `+0.003873` delta, but bootstrap positive
+probability was `0.905` and the interval `[-0.001821, 0.009519]` crossed zero.
+The ensemble was source-safe and improved accuracy, but those secondary gates
+do not override the failed primary gates. No official validation or test was
+used.
+
+## Registered next experiment: B10 cross-fitted disagreement calibration
+
+B10 tests whether seed disagreement contains a stable signal that uniform
+averaging discards. A fixed balanced multinomial logistic calibrator uses
+per-seed probabilities and uncertainty features. Each fold 1--4 is predicted
+by a calibrator trained only on the other three folds, making all outputs
+nested OOF. Fold 0, official validation, and test remain excluded. Promotion
+requires gains over both seed 42 and the frozen unweighted ensemble plus
+fold-wise, bootstrap, accuracy, and source robustness gates. See
+`docs/MOCHEG_PHASE_B10_CROSSFIT_CALIBRATOR.md`.
