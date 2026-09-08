@@ -2,6 +2,7 @@ import torch
 import json
 import numpy as np
 import pytest
+from collections import Counter
 from pathlib import Path
 
 from graphcure.acquisition import choose_evi_action
@@ -2007,6 +2008,51 @@ def test_b12_failure_atlas_decomposes_compute_damage_and_auxiliary_recovery():
     assert len(cases) == len(ids)
     assert not atlas["official_validation_used"]
     assert not atlas["test_split_used"]
+
+
+def test_b13_curriculum_is_compute_neutral_balanced_and_recovers_verdicts():
+    training = B6TrainingTasks.__new__(B6TrainingTasks)
+    training.rows = []
+    for index in range(100):
+        training.rows.append({
+            "id": f"v-{index}", "task": "verdict",
+            "target_code": "A", "weight": 1.0, "label": 0,
+        })
+    for index in range(80):
+        training.rows.append({
+            "id": f"s-{index}", "task": "sufficiency",
+            "target_code": "Y" if index < 40 else "N",
+            "weight": .5, "label": 0,
+        })
+        training.rows.append({
+            "id": f"p-{index}", "task": "polarity",
+            "target_code": "A" if index < 20 else "B",
+            "weight": .5, "label": 0,
+        })
+    training.counts = dict(Counter(
+        row["task"] for row in training.rows
+    ))
+
+    mixed = training.curriculum_epoch(
+        epoch=1, seed=42, auxiliary_epochs=1,
+        auxiliary_fraction=.25, sufficiency_share=.6,
+        sufficient_fraction=.7, supported_fraction=.5,
+    )
+    recovered = training.curriculum_epoch(
+        epoch=2, seed=42, auxiliary_epochs=1,
+        auxiliary_fraction=.25, sufficiency_share=.6,
+        sufficient_fraction=.7, supported_fraction=.5,
+    )
+
+    assert len(mixed) == 100
+    assert mixed.counts == {"verdict": 75, "sufficiency": 15, "polarity": 10}
+    sufficiency = [row for row in mixed.rows
+                   if row["task"] == "sufficiency"]
+    polarity = [row for row in mixed.rows if row["task"] == "polarity"]
+    assert sum(row["target_code"] == "Y" for row in sufficiency) == 10
+    assert sum(row["target_code"] == "A" for row in polarity) == 5
+    assert len(recovered) == 100
+    assert recovered.counts == {"verdict": 100}
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():

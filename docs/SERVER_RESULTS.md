@@ -1689,3 +1689,16 @@ predictions across optimization exposure, auxiliary-head quality, class,
 source, qrel availability, retrieval rank/coverage, confidence, claim length,
 and helpful/harmful transitions. It also writes a claim-level casebook and an
 anchor-or-joint oracle ceiling. See `docs/MOCHEG_PHASE_B13_FAILURE_ATLAS.md`.
+
+### B13 failure-atlas conclusion and registered intervention
+
+The atlas attributes B12 primarily to asymmetric NEI collapse, not retrieval.
+Correct supported/refuted predictions accounted for 150 of the 207 harmful
+changes when they moved to NEI. The sufficiency head produced 282 false
+insufficient decisions among 1120 sufficient targets, while the polarity head
+misclassified 94 of 320 supported targets. Extra optimization cost `-0.019145`
+Macro-F1 and auxiliary tasks recovered only 28.1% of that loss. The registered
+follow-up is therefore a compute-neutral constraint curriculum: balanced
+auxiliary replacement in epoch 1 followed by two verdict-only recovery epochs,
+with direct verdict inference and a frozen fold-0 gate. See
+`docs/MOCHEG_PHASE_B13_CURRICULUM.md`.

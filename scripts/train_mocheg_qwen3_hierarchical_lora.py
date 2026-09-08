@@ -298,6 +298,52 @@ class B6TrainingTasks(Dataset):
                     })
         self.counts = dict(Counter(row["task"] for row in self.rows))
 
+    def curriculum_epoch(
+        self,
+        epoch: int,
+        seed: int,
+        auxiliary_epochs: int,
+        auxiliary_fraction: float,
+        sufficiency_share: float,
+        sufficient_fraction: float,
+        supported_fraction: float,
+    ) -> "FixedTrainingTasks":
+        """Build one compute-neutral, class-balanced training epoch.
+
+        The epoch always contains exactly one row per verdict example. During
+        the auxiliary curriculum, a fixed fraction of verdict rows is replaced
+        by labelled sufficiency/polarity rows. Later epochs contain verdicts
+        only, providing an explicit verdict-recovery stage without increasing
+        optimizer updates relative to the anchor.
+        """
+        verdict = [row for row in self.rows if row["task"] == "verdict"]
+        epoch_size = len(verdict)
+        if epoch > auxiliary_epochs or auxiliary_fraction <= 0:
+            rows = [dict(row) for row in verdict]
+        else:
+            rng = random.Random(seed * 1009 + epoch)
+            auxiliary_count = min(
+                epoch_size,
+                int(round(epoch_size * auxiliary_fraction)),
+            )
+            sufficiency_count = int(round(
+                auxiliary_count * sufficiency_share
+            ))
+            polarity_count = auxiliary_count - sufficiency_count
+            rows = sample_rows(
+                verdict, epoch_size - auxiliary_count, rng
+            )
+            rows += balanced_binary_rows(
+                [row for row in self.rows if row["task"] == "sufficiency"],
+                sufficiency_count, "Y", sufficient_fraction, rng,
+            )
+            rows += balanced_binary_rows(
+                [row for row in self.rows if row["task"] == "polarity"],
+                polarity_count, "A", supported_fraction, rng,
+            )
+            rng.shuffle(rows)
+        return FixedTrainingTasks(rows)
+
     def repeat_verdict_to_length(self, target_length: int) -> None:
         if set(self.counts) != {"verdict"}:
             raise ValueError(
@@ -317,6 +363,52 @@ class B6TrainingTasks(Dataset):
 
     def __getitem__(self, index: int) -> dict:
         return self.rows[index]
+
+
+class FixedTrainingTasks(Dataset):
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.counts = dict(Counter(row["task"] for row in rows))
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def __getitem__(self, index: int) -> dict:
+        return self.rows[index]
+
+
+def sample_rows(rows: list[dict], count: int,
+                rng: random.Random) -> list[dict]:
+    """Deterministically sample rows, cycling only when count exceeds pool."""
+    if count <= 0:
+        return []
+    if not rows:
+        raise ValueError("cannot sample from an empty task pool")
+    result = []
+    while len(result) < count:
+        shuffled = list(rows)
+        rng.shuffle(shuffled)
+        result.extend(dict(row) for row in shuffled[:count - len(result)])
+    return result
+
+
+def balanced_binary_rows(
+    rows: list[dict],
+    count: int,
+    positive_code: str,
+    positive_fraction: float,
+    rng: random.Random,
+) -> list[dict]:
+    """Sample a binary auxiliary task at a pre-registered class ratio."""
+    if count <= 0:
+        return []
+    positive = [row for row in rows if row["target_code"] == positive_code]
+    negative = [row for row in rows if row["target_code"] != positive_code]
+    positive_count = int(round(count * positive_fraction))
+    result = sample_rows(positive, positive_count, rng)
+    result += sample_rows(negative, count - positive_count, rng)
+    rng.shuffle(result)
+    return result
 
 
 class B6EvaluationTask(Dataset):
@@ -575,6 +667,28 @@ def main() -> None:
                             "B6 summary whose task-count total is used for a "
                             "compute-matched verdict-only control"
                         ))
+    parser.add_argument("--compute-neutral-curriculum", action="store_true",
+                        help=(
+                            "B13: keep each epoch the same size as the anchor, "
+                            "use balanced auxiliary replacement only in early "
+                            "epochs, then recover with verdict-only epochs"
+                        ))
+    parser.add_argument("--curriculum-auxiliary-epochs", type=int, default=1)
+    parser.add_argument("--curriculum-auxiliary-fraction", type=float,
+                        default=.25)
+    parser.add_argument("--curriculum-sufficiency-share", type=float,
+                        default=.5)
+    parser.add_argument("--curriculum-sufficient-fraction", type=float,
+                        default=.7, help=(
+                            "fraction of sufficiency curriculum examples with "
+                            "a sufficient target; counters false-insufficient "
+                            "NEI collapse"
+                        ))
+    parser.add_argument("--curriculum-supported-fraction", type=float,
+                        default=.5, help=(
+                            "fraction of polarity curriculum examples with a "
+                            "supported target"
+                        ))
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
@@ -600,6 +714,21 @@ def main() -> None:
         raise ValueError("projection strength must be in [0, 1]")
     if args.conflict_temperature is not None and args.conflict_temperature <= 0:
         raise ValueError("conflict temperature must be positive")
+    curriculum_values = (
+        args.curriculum_auxiliary_fraction,
+        args.curriculum_sufficiency_share,
+        args.curriculum_sufficient_fraction,
+        args.curriculum_supported_fraction,
+    )
+    if any(value < 0 or value > 1 for value in curriculum_values):
+        raise ValueError("curriculum fractions must be in [0, 1]")
+    if args.curriculum_auxiliary_epochs < 0:
+        raise ValueError("curriculum auxiliary epochs must be non-negative")
+    if args.compute_neutral_curriculum and args.match_training_examples_from:
+        raise ValueError(
+            "compute-neutral curriculum cannot be combined with "
+            "--match-training-examples-from"
+        )
     fit_ids, held_ids, fold_payload = load_fold(
         args.fold_spec, args.fold_index
     )
@@ -723,14 +852,18 @@ def main() -> None:
         raise ValueError(
             "projection controls require --gradient-mode pcgrad"
         )
-    train_loader = DataLoader(
-        train, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.num_workers,
-        collate_fn=make_collate(
-            tokenizer, token_ids, args.max_length, training=True
-        ),
-        pin_memory=device.type == "cuda",
+    training_collate = make_collate(
+        tokenizer, token_ids, args.max_length, training=True
     )
+
+    def training_loader(dataset: Dataset) -> DataLoader:
+        return DataLoader(
+            dataset, batch_size=args.batch_size, shuffle=True,
+            num_workers=args.num_workers, collate_fn=training_collate,
+            pin_memory=device.type == "cuda",
+        )
+
+    train_loader = training_loader(train)
     validation_loaders = {
         task: DataLoader(
             B6EvaluationTask(val_claims, task),
@@ -748,9 +881,16 @@ def main() -> None:
     optimizer = torch.optim.AdamW(
         parameters, lr=args.learning_rate, weight_decay=args.weight_decay
     )
-    updates_per_epoch = max(
-        1, int(np.ceil(len(train_loader) / args.gradient_accumulation))
+    scheduler_epoch_examples = (
+        train.counts["verdict"]
+        if args.compute_neutral_curriculum else len(train)
     )
+    scheduler_epoch_batches = int(np.ceil(
+        scheduler_epoch_examples / args.batch_size
+    ))
+    updates_per_epoch = max(1, int(np.ceil(
+        scheduler_epoch_batches / args.gradient_accumulation
+    )))
     updates = updates_per_epoch * args.epochs
     scheduler = get_cosine_schedule_with_warmup(
         optimizer, int(updates * args.warmup_ratio), updates
@@ -821,8 +961,35 @@ def main() -> None:
         for name, value in model.named_parameters() if value.requires_grad
     }
     stale = 0
+    epoch_training_task_counts = []
     optimizer.zero_grad(set_to_none=True)
     for epoch in range(1, args.epochs + 1):
+        if args.compute_neutral_curriculum:
+            epoch_train = train.curriculum_epoch(
+                epoch=epoch,
+                seed=args.seed,
+                auxiliary_epochs=args.curriculum_auxiliary_epochs,
+                auxiliary_fraction=args.curriculum_auxiliary_fraction,
+                sufficiency_share=args.curriculum_sufficiency_share,
+                sufficient_fraction=args.curriculum_sufficient_fraction,
+                supported_fraction=args.curriculum_supported_fraction,
+            )
+            train_loader = training_loader(epoch_train)
+        epoch_counts = dict(Counter(
+            row["task"] for row in train_loader.dataset.rows
+        ))
+        epoch_target_counts = {
+            task: dict(Counter(
+                row["target_code"] for row in train_loader.dataset.rows
+                if row["task"] == task
+            ))
+            for task in epoch_counts
+        }
+        epoch_training_task_counts.append({
+            "epoch": epoch, **epoch_counts,
+            "total": len(train_loader.dataset),
+            "target_counts": epoch_target_counts,
+        })
         model.train()
         running = 0.0
         gradient_cosines = []
@@ -990,7 +1157,11 @@ def main() -> None:
     }
     promotion_gate["passed"] = all(promotion_gate.values())
     summary = {
-        "method": "GraphCURE-B6-sufficiency-polarity",
+        "method": (
+            "GraphCURE-B13-compute-neutral-constraint-curriculum"
+            if args.compute_neutral_curriculum
+            else "GraphCURE-B6-sufficiency-polarity"
+        ),
         "protocol": (
             "train_only_duplicate_safe_fixed_epoch_cv" if cv_mode
             else "external_validation"
@@ -1013,6 +1184,7 @@ def main() -> None:
         "git_commit": current_git_commit(),
         "verbalizer_token_ids": token_ids,
         "training_task_counts": train.counts,
+        "epoch_training_task_counts": epoch_training_task_counts,
         "best_epoch": best_epoch,
         "selected_hierarchical_weight": best_weight,
         "anchor": anchor_metrics,
