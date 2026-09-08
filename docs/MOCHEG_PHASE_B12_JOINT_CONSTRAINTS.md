@@ -38,3 +38,19 @@ python -m scripts.prepare_mocheg_sv_folds \
 The full server commands are provided in the associated handoff. Run the
 standard anchor, then the joint candidate, then its count-matched direct-only
 control. Do not run folds 1--4 unless the fold-0 gate passes.
+
+## Frozen fold-0 outcome
+
+B12 failed and must not be confirmed on folds 1--4. The standard anchor reached
+`0.661057` Macro-F1, the compute-matched verdict-only control reached
+`0.641912`, and joint constraints reached `0.647293`. Joint supervision
+therefore contributed `+0.005382` over the matched control, but recovered only
+part of the `-0.019145` extra-optimization loss and remained `-0.013763` below
+the anchor. The joint model made `162` helpful and `207` harmful changes versus
+the anchor. Politifact fell `-0.024162`, while Snopes increased `+0.004027`.
+The bootstrap probability of a positive joint-versus-control delta was only
+`0.7282`. No official validation or test split was used.
+
+The next step is diagnostic B13, not another training run. It decomposes the
+failure by optimization exposure, auxiliary-head quality, label, provenance,
+retrieval coverage/rank, claim length, confidence, and prediction transition.

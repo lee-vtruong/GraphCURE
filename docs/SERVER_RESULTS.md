@@ -1670,3 +1670,22 @@ the same number of updates as the compute control. Development uses a new
 duplicate-safe fold assignment (`seed=2027`), fixed checkpoint epoch 3, and no
 hierarchical inference blend. Official validation and test remain locked. See
 `docs/MOCHEG_PHASE_B12_JOINT_CONSTRAINTS.md`.
+
+### B12 frozen fold-0 outcome (2026-09-08)
+
+B12 failed. Macro-F1 was `0.661057` for the standard anchor, `0.641912`
+for the compute-matched direct-only control, and `0.647293` for joint
+constraints. Thus auxiliary supervision showed a small positive effect over
+the matched control (`+0.005382`) but did not recover the damage from the much
+longer optimization trajectory (`-0.013763` versus anchor). Politifact fell
+`-0.024162`; Snopes improved `+0.004027`; and the joint-versus-control
+bootstrap positive probability was `0.7282`. No confirmation, official
+validation, or test was used.
+
+## Registered diagnostic: B13 B12 failure atlas
+
+B13 performs no training or model selection. It audits the locked B12 fold-0
+predictions across optimization exposure, auxiliary-head quality, class,
+source, qrel availability, retrieval rank/coverage, confidence, claim length,
+and helpful/harmful transitions. It also writes a claim-level casebook and an
+anchor-or-joint oracle ceiling. See `docs/MOCHEG_PHASE_B13_FAILURE_ATLAS.md`.

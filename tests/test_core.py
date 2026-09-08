@@ -43,6 +43,7 @@ from scripts.analyze_mocheg_b11_provenance_calibrator import (
     screen as screen_b11,
 )
 from scripts.analyze_mocheg_b12_joint_constraints import screen as screen_b12
+from scripts.analyze_mocheg_b12_failure_atlas import build_atlas
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -1935,6 +1936,77 @@ def test_b12_joint_constraints_must_beat_matched_from_base_control():
     assert result["fresh_fold_assignment"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
+
+
+def test_b12_failure_atlas_decomposes_compute_damage_and_auxiliary_recovery():
+    ids = [f"claim-{index}" for index in range(12)]
+    labels = np.asarray([0, 1, 2] * 4)
+    anchor_prediction = labels.copy()
+    anchor_prediction[[0, 1]] = [1, 2]
+    control_prediction = labels.copy()
+    control_prediction[[0, 1, 2, 3]] = [1, 2, 0, 1]
+    joint_prediction = labels.copy()
+    joint_prediction[[0, 1, 2]] = [1, 2, 0]
+    probabilities = {
+        "anchor": np.eye(3)[anchor_prediction],
+        "control": np.eye(3)[control_prediction],
+        "joint": np.eye(3)[joint_prediction],
+    }
+    manifests = {
+        sample_id: {
+            "id": sample_id,
+            "claim": "A synthetic diagnostic claim",
+            "source": "snopes" if index < 6 else "politifact",
+        }
+        for index, sample_id in enumerate(ids)
+    }
+    retrieval = {
+        sample_id: {
+            "id": sample_id,
+            "retrieved_evidence_ids": [f"e-{index}"],
+            "retrieved_scores": [1.0, .5],
+            "retrieval_confidence": .75,
+            "first_gold_rank": 1,
+        }
+        for index, sample_id in enumerate(ids)
+    }
+    targets, joint_rows = {}, {}
+    for index, sample_id in enumerate(ids):
+        sufficient = int(labels[index] != 2)
+        targets[sample_id] = {
+            "id": sample_id,
+            "qrel_available": True,
+            "natural_gold_hit": True,
+            "sufficiency_target": sufficient,
+            "polarity_target": int(labels[index]) if sufficient else None,
+        }
+        joint_rows[sample_id] = {
+            "id": sample_id,
+            "sufficiency_probabilities": (
+                [.9, .1] if sufficient else [.1, .9]
+            ),
+            "polarity_probabilities": (
+                [.9, .1] if labels[index] == 0 else [.1, .9]
+            ),
+        }
+    atlas, cases = build_atlas(
+        ids, labels, probabilities, manifests, retrieval, targets,
+        joint_rows, minimum_group_size=1,
+    )
+    assert atlas["evidence_based_signals"][
+        "additional_optimization_hurts_anchor"
+    ]
+    assert atlas["evidence_based_signals"][
+        "auxiliary_constraints_help_vs_matched_control"
+    ]
+    assert not atlas["evidence_based_signals"][
+        "auxiliary_fully_recovers_compute_damage"
+    ]
+    assert atlas["auxiliary_heads"]["sufficiency"]["accuracy"] == 1
+    assert atlas["auxiliary_heads"]["polarity"]["accuracy"] == 1
+    assert len(cases) == len(ids)
+    assert not atlas["official_validation_used"]
+    assert not atlas["test_split_used"]
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():
