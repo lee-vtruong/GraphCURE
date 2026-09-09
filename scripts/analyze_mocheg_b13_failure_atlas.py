@@ -20,6 +20,7 @@ from scripts.analyze_mocheg_b6c_oof_screen import validate_run
 from scripts.analyze_mocheg_expert_complementarity import read_predictions
 from scripts.prepare_mocheg_sv_folds import sha256
 from scripts.run_mocheg_visual_retrieval import read_jsonl
+from scripts.train_mocheg_qwen3_hierarchical_lora import hierarchical_probabilities
 
 
 def interpolation_diagnostic(
@@ -46,6 +47,37 @@ def interpolation_diagnostic(
         "candidate_signal_used": best["candidate_weight"] > 0,
         "exploratory_only": True,
         "weights_evaluated": len(rows),
+    }
+
+
+def head_verdict_diagnostic(
+    labels: np.ndarray,
+    anchor: np.ndarray,
+    direct: np.ndarray,
+    hierarchical: np.ndarray,
+) -> dict:
+    direct_prediction = direct.argmax(axis=1)
+    hierarchical_prediction = hierarchical.argmax(axis=1)
+    direct_correct = direct_prediction == labels
+    hierarchical_correct = hierarchical_prediction == labels
+    return {
+        "direct": classification_metrics(labels, direct),
+        "hierarchical": classification_metrics(labels, hierarchical),
+        "direct_hierarchical_agreement": float(np.mean(
+            direct_prediction == hierarchical_prediction
+        )),
+        "hierarchical_only_correct": int(np.sum(
+            ~direct_correct & hierarchical_correct
+        )),
+        "direct_only_correct": int(np.sum(
+            direct_correct & ~hierarchical_correct
+        )),
+        "anchor_hierarchical_interpolation": interpolation_diagnostic(
+            labels, anchor, hierarchical
+        ),
+        "direct_hierarchical_interpolation": interpolation_diagnostic(
+            labels, direct, hierarchical
+        ),
     }
 
 
@@ -104,6 +136,7 @@ def prediction_shift(labels: np.ndarray, anchor: np.ndarray,
 def markdown_summary(result: dict) -> str:
     overall = result["overall"]
     interpolation = result["probability_interpolation"]
+    head_verdict = result["head_verdict_diagnostic"]
     shift = result["prediction_shift"]
     lines = [
         "# B13 curriculum failure atlas (fresh train-only fold 0)", "",
@@ -124,6 +157,18 @@ def markdown_summary(result: dict) -> str:
         f"- Best Macro-F1: {interpolation['best']['macro_f1']:.6f}",
         f"- Delta over anchor: "
         f"{interpolation['macro_f1_delta_vs_anchor']:+.6f}",
+        "", "## Head-derived hierarchical verdict", "",
+        f"- Hierarchical Macro-F1: "
+        f"{head_verdict['hierarchical']['macro_f1']:.6f}",
+        f"- Direct/hierarchical agreement: "
+        f"{head_verdict['direct_hierarchical_agreement']:.4f}",
+        f"- Hierarchical-only/direct-only correct: "
+        f"{head_verdict['hierarchical_only_correct']} / "
+        f"{head_verdict['direct_only_correct']}",
+        f"- Best anchor + hierarchical Macro-F1: "
+        f"{head_verdict['anchor_hierarchical_interpolation']['best']['macro_f1']:.6f}",
+        f"- Delta over anchor: "
+        f"{head_verdict['anchor_hierarchical_interpolation']['macro_f1_delta_vs_anchor']:+.6f}",
         "", "## Auxiliary heads", "",
         "| Head | Accuracy | Macro-F1 |", "|---|---:|---:|",
     ]
@@ -203,6 +248,13 @@ def main() -> None:
     ])
     anchor = normalized_probabilities(prediction_rows["anchor"], ids)
     candidate = normalized_probabilities(prediction_rows["candidate"], ids)
+    sufficiency = normalized_probabilities(
+        prediction_rows["candidate"], ids, "sufficiency_probabilities", 2
+    )
+    polarity = normalized_probabilities(
+        prediction_rows["candidate"], ids, "polarity_probabilities", 2
+    )
+    hierarchical = hierarchical_probabilities(sufficiency, polarity)
     observed = np.asarray([
         int(prediction_rows["candidate"][value]["gold"]) for value in ids
     ])
@@ -250,6 +302,9 @@ def main() -> None:
         "oracle_anchor_or_candidate": generic["oracle_anchor_or_joint"],
         "probability_interpolation": interpolation_diagnostic(
             labels, anchor, candidate
+        ),
+        "head_verdict_diagnostic": head_verdict_diagnostic(
+            labels, anchor, candidate, hierarchical
         ),
         "slices": generic["slices"],
         "worst_candidate_vs_anchor_groups": (
@@ -314,6 +369,7 @@ def main() -> None:
         "auxiliary_heads": result["auxiliary_heads"],
         "oracle": result["oracle_anchor_or_candidate"],
         "probability_interpolation": result["probability_interpolation"],
+        "head_verdict_diagnostic": result["head_verdict_diagnostic"],
         "worst_groups": result["worst_candidate_vs_anchor_groups"][:12],
         "official_validation_used": False,
         "test_split_used": False,

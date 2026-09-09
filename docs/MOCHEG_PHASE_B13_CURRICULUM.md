@@ -49,5 +49,8 @@ confound. Folds 1--4, official validation, and test must not be run.
 The next action is a CPU-only failure atlas, not another training method. It
 measures auxiliary-head changes, exact error transitions, group failures,
 anchor/candidate oracle complementarity, and an exploratory probability
-interpolation. These diagnostics decide whether to build an anchor-preserving
-student or close the auxiliary branch.
+interpolation. Because the B13 heads improved while direct-verdict performance
+fell, the atlas also reconstructs the hierarchical verdict from sufficiency
+and polarity probabilities and tests a leakage-labelled exploratory blend with
+the anchor. These diagnostics decide whether to confirm a frozen inference
+composition, build an anchor-preserving student, or close the auxiliary branch.
