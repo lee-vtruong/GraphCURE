@@ -1702,3 +1702,14 @@ follow-up is therefore a compute-neutral constraint curriculum: balanced
 auxiliary replacement in epoch 1 followed by two verdict-only recovery epochs,
 with direct verdict inference and a frozen fold-0 gate. See
 `docs/MOCHEG_PHASE_B13_CURRICULUM.md`.
+
+### B13 compute-neutral curriculum outcome
+
+B13 failed on the fresh train-only fold 0. Macro-F1 was `0.651393`, a
+`-0.009663` delta from the `0.661057` anchor; accuracy fell `-0.009888` and
+helpful/harmful changes were `123/146`. Both sources regressed (Politifact
+`-0.014369`, Snopes `-0.010785`). The audit verified an identical 9305-example
+budget in every epoch and two verdict-only recovery epochs, so the remaining
+failure cannot be attributed to extra optimizer steps. A CPU-only B13 failure
+atlas is registered before any further training. No official validation or
+test data was used.

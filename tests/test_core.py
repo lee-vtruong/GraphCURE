@@ -45,6 +45,7 @@ from scripts.analyze_mocheg_b11_provenance_calibrator import (
 )
 from scripts.analyze_mocheg_b12_joint_constraints import screen as screen_b12
 from scripts.analyze_mocheg_b12_failure_atlas import build_atlas
+from scripts.analyze_mocheg_b13_failure_atlas import interpolation_diagnostic
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2053,6 +2054,22 @@ def test_b13_curriculum_is_compute_neutral_balanced_and_recovers_verdicts():
     assert sum(row["target_code"] == "A" for row in polarity) == 5
     assert len(recovered) == 100
     assert recovered.counts == {"verdict": 100}
+
+
+def test_b13_interpolation_diagnostic_detects_complementary_candidate():
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    anchor = np.asarray([
+        [.8, .1, .1], [.1, .8, .1], [.1, .7, .2],
+        [.8, .1, .1], [.1, .8, .1], [.2, .7, .1],
+    ])
+    candidate = np.asarray([
+        [.7, .2, .1], [.1, .7, .2], [.1, .1, .8],
+        [.7, .2, .1], [.1, .7, .2], [.1, .1, .8],
+    ])
+    result = interpolation_diagnostic(labels, anchor, candidate)
+    assert result["candidate_signal_used"]
+    assert result["macro_f1_delta_vs_anchor"] > 0
+    assert result["exploratory_only"]
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():

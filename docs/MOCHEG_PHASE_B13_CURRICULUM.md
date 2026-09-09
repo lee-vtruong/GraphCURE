@@ -35,3 +35,19 @@ remain untouched.
 - each source remains within `-0.002` Macro-F1 of the anchor.
 
 Only a passing fold-0 candidate may be confirmed on folds 1--4.
+
+## Frozen fold-0 outcome
+
+B13 failed. The compute-neutral curriculum reached `0.651393` Macro-F1 versus
+`0.661057` for the anchor (`-0.009663`), with `123/146` helpful/harmful
+changes. Accuracy fell `-0.009888`; Politifact and Snopes Macro-F1 fell
+`-0.014369` and `-0.010785`, respectively. The curriculum audit passed: all
+three epochs contained 9305 examples, only epoch 1 contained auxiliary tasks,
+and epochs 2--3 were verdict-only. Thus the result is not an update-budget
+confound. Folds 1--4, official validation, and test must not be run.
+
+The next action is a CPU-only failure atlas, not another training method. It
+measures auxiliary-head changes, exact error transitions, group failures,
+anchor/candidate oracle complementarity, and an exploratory probability
+interpolation. These diagnostics decide whether to build an anchor-preserving
+student or close the auxiliary branch.
