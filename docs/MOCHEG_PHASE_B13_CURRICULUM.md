@@ -54,3 +54,18 @@ fell, the atlas also reconstructs the hierarchical verdict from sufficiency
 and polarity probabilities and tests a leakage-labelled exploratory blend with
 the anchor. These diagnostics decide whether to confirm a frozen inference
 composition, build an anchor-preserving student, or close the auxiliary branch.
+
+## Frozen composition selected for confirmation
+
+The failure atlas found that direct curriculum interpolation provided only
+`+0.002206` Macro-F1, but the logically composed sufficiency/polarity verdict
+contained complementary signal. A frozen blend with hierarchical weight
+`0.11` reached `0.666157` Macro-F1, `+0.005101` over the anchor. The standalone
+hierarchical model remained weak (`0.622778`), so the composition is not yet a
+promoted method. Weight `0.11` is frozen once and must not be retuned.
+
+Confirmation requires fresh-fold anchors and curriculum candidates on folds
+1--4. The gate requires mean and aggregate gains of at least `0.005`, at least
+three positive folds, paired-bootstrap probability at least `0.95`, accuracy
+within `-0.002`, more helpful than harmful changes, and every source within
+`-0.002`. Fold 0, official validation, and test are excluded from confirmation.

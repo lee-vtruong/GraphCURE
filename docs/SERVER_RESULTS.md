@@ -1713,3 +1713,10 @@ budget in every epoch and two verdict-only recovery epochs, so the remaining
 failure cannot be attributed to extra optimizer steps. A CPU-only B13 failure
 atlas is registered before any further training. No official validation or
 test data was used.
+
+The B13 atlas found a `+0.005101` exploratory Macro-F1 gain when the anchor was
+combined with the head-derived hierarchical verdict at frozen weight `0.11`.
+Standalone hierarchical Macro-F1 was only `0.622778`, while direct curriculum
+interpolation gained only `+0.002206`; therefore no claim is made from fold 0.
+Weight `0.11` is now frozen for independent train-only confirmation on folds
+1--4 with no per-fold tuning. Official validation and test remain locked.

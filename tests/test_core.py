@@ -49,6 +49,9 @@ from scripts.analyze_mocheg_b13_failure_atlas import (
     head_verdict_diagnostic,
     interpolation_diagnostic,
 )
+from scripts.summarize_mocheg_b13_confirmation import (
+    summarize as summarize_b13_confirmation,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2089,6 +2092,41 @@ def test_b13_head_verdict_diagnostic_counts_complementarity():
     assert result["anchor_hierarchical_interpolation"][
         "macro_f1_delta_vs_anchor"
     ] > 0
+
+
+def test_b13_confirmation_uses_frozen_weight_and_excludes_fold_zero():
+    runs = []
+    for fold in (1, 2, 3, 4):
+        labels = np.asarray([0, 1, 2, 0, 1, 2])
+        anchor = np.asarray([
+            [.8, .1, .1], [.1, .8, .1], [.1, .46, .44],
+            [.8, .1, .1], [.1, .8, .1], [.1, .46, .44],
+        ])
+        hierarchical = np.asarray([
+            [.7, .2, .1], [.1, .7, .2], [.1, .1, .8],
+            [.7, .2, .1], [.1, .7, .2], [.1, .1, .8],
+        ])
+        runs.append({
+            "fold": fold,
+            "ids": [f"{fold}-{index}" for index in range(len(labels))],
+            "labels": labels,
+            "sources": ["snopes", "politifact"] * 3,
+            "anchor": anchor,
+            "direct": anchor,
+            "hierarchical": hierarchical,
+        })
+    result = summarize_b13_confirmation(
+        runs, minimum_mean_delta=0, minimum_aggregate_delta=0,
+        minimum_positive_folds=0, maximum_accuracy_drop=1,
+        minimum_source_delta=-1, minimum_bootstrap_probability=0,
+        bootstrap_iterations=20,
+    )
+    assert result["frozen_hierarchical_weight"] == .11
+    assert result["folds"] == [1, 2, 3, 4]
+    assert result["fold0_used_for_confirmation"] is False
+    assert result["promotion_gate"]["passed"]
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():
