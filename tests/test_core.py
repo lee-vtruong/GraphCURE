@@ -55,6 +55,9 @@ from scripts.summarize_mocheg_b13_confirmation import (
 from scripts.analyze_mocheg_b14_direct_curriculum_atlas import (
     fold_diagnostics as b14_fold_diagnostics,
 )
+from scripts.analyze_mocheg_b14_nei_escape_policy import (
+    nei_escape_predictions,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2146,6 +2149,14 @@ def test_b14_fold_diagnostics_exposes_unstable_effects():
     assert result["macro_f1_delta"]["minimum"] < 0
     assert result["macro_f1_delta"]["maximum"] > 0
     assert not result["stable_positive_in_all_folds"]
+
+
+def test_b14_nei_escape_only_changes_anchor_nei_predictions():
+    anchor = np.asarray([2, 2, 0, 1, 2])
+    candidate = np.asarray([0, 2, 2, 0, 1])
+    prediction, route = nei_escape_predictions(anchor, candidate)
+    assert prediction.tolist() == [0, 2, 0, 1, 1]
+    assert route.tolist() == [True, False, False, False, True]
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():

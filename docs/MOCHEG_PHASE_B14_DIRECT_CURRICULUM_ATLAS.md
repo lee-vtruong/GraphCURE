@@ -34,3 +34,18 @@ Do not retune B13 on these five folds. Use the atlas to formulate one bounded
 B14 hypothesis tied to a repeated harmful slice. Then generate a new locked
 train-only fold assignment before screening that hypothesis. Official
 validation and test stay locked until the new method passes fresh-fold gates.
+
+## Atlas-derived fixed policy diagnostic
+
+The first bounded candidate is asymmetric NEI escape: retain every determinate
+anchor prediction and use the curriculum expert only when the anchor predicts
+NEI while the expert predicts supported or refuted. There is no confidence
+threshold or interpolation weight. Because this rule was derived from the
+five-fold atlas, its evaluation on those folds remains exploratory. It is
+eligible for preregistration only if its fixed diagnostic gate passes; actual
+confirmation requires a new fold assignment.
+
+```bash
+python -m scripts.analyze_mocheg_b14_nei_escape_policy \
+  2>&1 | tee outputs/mocheg-b14-nei-escape-diagnostic.log
+```

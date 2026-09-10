@@ -1746,3 +1746,15 @@ intervention is justified and which failure slice it must target. The current
 fold assignment is diagnostic-only after B13; any B14 model hypothesis must be
 preregistered and evaluated on a new fold assignment. Official validation and
 test remain locked. See `docs/MOCHEG_PHASE_B14_DIRECT_CURRICULUM_ATLAS.md`.
+
+The five-fold atlas found that B13 direct curriculum was not a general model
+improvement: aggregate Macro-F1 changed only `+0.000998`, with fold effects
+from `-0.009663` to `+0.012420`. Its repeatable asymmetry was class-specific:
+supported improved `+0.007455`, refuted improved `+0.001805`, but NEI fell
+`-0.006266`. The model made 457 useful determinate escapes from anchor NEI,
+versus 326 harmful escapes, while changes in the opposite direction had
+360 harms versus 253 helps. B14 therefore registers one diagnostic policy:
+preserve determinate anchor decisions and permit only NEI-to-determinate
+curriculum routing. This fixed rule has no tunable threshold or weight. Its
+current-fold result is exploratory and can only authorize preregistration on
+a new fold assignment.
