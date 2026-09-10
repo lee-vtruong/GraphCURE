@@ -1720,3 +1720,29 @@ Standalone hierarchical Macro-F1 was only `0.622778`, while direct curriculum
 interpolation gained only `+0.002206`; therefore no claim is made from fold 0.
 Weight `0.11` is now frozen for independent train-only confirmation on folds
 1--4 with no per-fold tuning. Official validation and test remain locked.
+
+### B13 frozen-blend confirmation outcome (2026-09-10)
+
+The preregistered hierarchical blend failed independent confirmation and this
+branch is closed. Across folds 1--4 its paired Macro-F1 delta was
+`-0.000170 +/- 0.002706`; only two folds improved. Aggregate blend Macro-F1
+was `0.657688` versus `0.657902` for the anchor, with `108/117`
+helpful/harmful corrections and bootstrap probability `0.4474` that the delta
+was positive. The hierarchical verdict itself achieved only `0.621176`.
+
+The direct curriculum produced an unregistered exploratory aggregate
+Macro-F1 of `0.661370` on those confirmation folds, but its direction differed
+between folds and fold 0 had already regressed by `-0.009663`. It is therefore
+not promoted post hoc. No official validation or test data was used.
+
+## Registered diagnostic: B14 five-fold direct-curriculum atlas
+
+B14 first performs no training. It combines the disjoint B13 direct-verdict
+predictions over all five seed-2027 train-only folds, verifies complete OOF
+coverage, and audits fold stability, source, qrel availability, retrieval
+status, gold label, claim length, confidence, two-way interactions, auxiliary
+heads, and exact helpful/harmful transitions. This determines whether a new
+intervention is justified and which failure slice it must target. The current
+fold assignment is diagnostic-only after B13; any B14 model hypothesis must be
+preregistered and evaluated on a new fold assignment. Official validation and
+test remain locked. See `docs/MOCHEG_PHASE_B14_DIRECT_CURRICULUM_ATLAS.md`.

@@ -52,6 +52,9 @@ from scripts.analyze_mocheg_b13_failure_atlas import (
 from scripts.summarize_mocheg_b13_confirmation import (
     summarize as summarize_b13_confirmation,
 )
+from scripts.analyze_mocheg_b14_direct_curriculum_atlas import (
+    fold_diagnostics as b14_fold_diagnostics,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2127,6 +2130,22 @@ def test_b13_confirmation_uses_frozen_weight_and_excludes_fold_zero():
     assert result["promotion_gate"]["passed"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
+
+
+def test_b14_fold_diagnostics_exposes_unstable_effects():
+    labels = np.asarray([0, 1, 2])
+    correct = np.eye(3)[labels]
+    wrong = np.eye(3)[[1, 2, 0]]
+    result = b14_fold_diagnostics([
+        {"fold": 0, "labels": labels, "anchor": correct,
+         "candidate": wrong},
+        {"fold": 1, "labels": labels, "anchor": wrong,
+         "candidate": correct},
+    ])
+    assert result["macro_f1_delta"]["positive_folds"] == 1
+    assert result["macro_f1_delta"]["minimum"] < 0
+    assert result["macro_f1_delta"]["maximum"] > 0
+    assert not result["stable_positive_in_all_folds"]
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():
