@@ -58,6 +58,11 @@ from scripts.analyze_mocheg_b14_direct_curriculum_atlas import (
 from scripts.analyze_mocheg_b14_nei_escape_policy import (
     nei_escape_predictions,
 )
+from scripts.analyze_mocheg_b15_crossfit_value_gate import (
+    FEATURE_NAMES as B15_FEATURE_NAMES,
+    PROHIBITED_FEATURES as B15_PROHIBITED_FEATURES,
+    observable_features as b15_observable_features,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2157,6 +2162,29 @@ def test_b14_nei_escape_only_changes_anchor_nei_predictions():
     prediction, route = nei_escape_predictions(anchor, candidate)
     assert prediction.tolist() == [0, 2, 0, 1, 1]
     assert route.tolist() == [True, False, False, False, True]
+
+
+def test_b15_value_gate_features_exclude_gold_and_provenance():
+    row = {
+        "retrieval_confidence": .8,
+        "retrieval_margin": .2,
+        "claim_words": 12,
+        "confidence": {"anchor": .6, "candidate": .75},
+        "entropy": {"anchor": .9, "candidate": .5},
+        "sufficiency_prediction": 1,
+        "sufficiency_confidence": .7,
+        "polarity_prediction": 0,
+        "polarity_confidence": .8,
+        "predictions": {"anchor": "nei", "candidate": "supported"},
+        "source": "forbidden",
+        "qrel_available": True,
+        "gold": "supported",
+        "first_gold_rank": 1,
+    }
+    features = b15_observable_features(row)
+    assert features.shape == (len(B15_FEATURE_NAMES),)
+    assert np.isfinite(features).all()
+    assert not (set(B15_FEATURE_NAMES) & B15_PROHIBITED_FEATURES)
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():

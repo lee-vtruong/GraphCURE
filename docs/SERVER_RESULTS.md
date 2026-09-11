@@ -1758,3 +1758,29 @@ preserve determinate anchor decisions and permit only NEI-to-determinate
 curriculum routing. This fixed rule has no tunable threshold or weight. Its
 current-fold result is exploratory and can only authorize preregistration on
 a new fold assignment.
+
+### B14 asymmetric NEI-escape outcome
+
+The fixed NEI-escape diagnostic failed preregistration. It increased accuracy
+from `0.672427` to `0.683690` (`+0.011263`) but increased Macro-F1 by only
+`+0.002091`; the bootstrap positive probability was `0.7958`. Supported and
+refuted improved, while NEI F1 fell from `0.533856` to `0.505267`. The source
+effect was also unsafe: Snopes gained `+0.005750` Macro-F1 but Politifact lost
+`-0.002756`. The decisive failure slice was evidence availability: the policy
+gained `+0.006110` when qrels existed but lost `-0.020680` when they did not.
+Because qrel availability is not observable at inference, it cannot be used as
+a routing rule.
+
+## Registered diagnostic: B15 cross-fitted value-of-information gate
+
+B15 tests whether the benefit of a candidate NEI escape is predictable using
+only inference-time features. A logistic gate is trained on helpful versus
+harmful expert calls in four train-only OOF folds and applied to the fifth.
+Features include retrieval confidence/margin, claim length, model confidence,
+entropy, disagreement, and predicted auxiliary-head states. Source, qrel
+annotations, gold rank, gold label, and auxiliary targets are explicitly
+forbidden. The threshold is frozen at `0.5`; no threshold search is performed.
+This is an exploratory feasibility diagnostic on the already inspected
+seed-2027 folds. Passing can only authorize preregistration on a new fold
+assignment; failure closes routing between these two experts. Official
+validation and test remain locked.

@@ -49,3 +49,11 @@ confirmation requires a new fold assignment.
 python -m scripts.analyze_mocheg_b14_nei_escape_policy \
   2>&1 | tee outputs/mocheg-b14-nei-escape-diagnostic.log
 ```
+
+The fixed policy failed: accuracy increased by `+0.011263`, but Macro-F1
+increased only `+0.002091`, NEI F1 fell `-0.028590`, Politifact regressed, and
+bootstrap probability was only `0.7958`. Its effect depended strongly on
+unobservable qrel availability. B15 therefore measures whether value of an
+expert call can instead be predicted from observable signals under five-way
+cross-fitting. The value threshold is frozen at `0.5`, and source/qrel/gold
+features are prohibited.
