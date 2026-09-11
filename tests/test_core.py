@@ -63,6 +63,9 @@ from scripts.analyze_mocheg_b15_crossfit_value_gate import (
     PROHIBITED_FEATURES as B15_PROHIBITED_FEATURES,
     observable_features as b15_observable_features,
 )
+from scripts.analyze_mocheg_b16_counterfactual_curriculum import (
+    screen as screen_b16,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2185,6 +2188,53 @@ def test_b15_value_gate_features_exclude_gold_and_provenance():
     assert features.shape == (len(B15_FEATURE_NAMES),)
     assert np.isfinite(features).all()
     assert not (set(B15_FEATURE_NAMES) & B15_PROHIBITED_FEATURES)
+
+
+def test_b16_counterfactual_curriculum_is_compute_neutral_and_recovers():
+    training = B6TrainingTasks.__new__(B6TrainingTasks)
+    training.rows = [
+        {"id": f"v-{index}", "task": "verdict", "target_code": "A",
+         "weight": 1.0, "label": 0}
+        for index in range(100)
+    ] + [
+        {"id": f"c-{index}", "task": "counterfactual_verdict",
+         "target_code": "C", "weight": 1.0, "label": 0}
+        for index in range(60)
+    ]
+    mixed = training.counterfactual_verdict_epoch(1, 42, 1, .15)
+    recovered = training.counterfactual_verdict_epoch(2, 42, 1, .15)
+    assert len(mixed) == 100
+    assert mixed.counts == {"verdict": 85, "counterfactual_verdict": 15}
+    assert all(
+        row["target_code"] == "C"
+        for row in mixed.rows if row["task"] == "counterfactual_verdict"
+    )
+    assert len(recovered) == 100
+    assert recovered.counts == {"verdict": 100}
+
+
+def test_b16_screen_requires_nei_and_matched_control_gains():
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    anchor = np.eye(3)[[0, 1, 0, 0, 1, 1]]
+    control = anchor.copy()
+    candidate = np.eye(3)[labels]
+    result = screen_b16(
+        labels, anchor, control, candidate,
+        np.asarray(["snopes", "politifact"] * 3),
+        minimum_delta=0, minimum_nei_delta=0,
+        maximum_supported_drop=1, maximum_accuracy_drop=1,
+        minimum_source_delta=-1, minimum_bootstrap_probability=0,
+        bootstrap_iterations=20,
+    )
+    assert result["promotion_gate"][
+        "macro_f1_delta_vs_anchor_at_least_minimum"
+    ]
+    assert result["promotion_gate"][
+        "macro_f1_delta_vs_control_at_least_0_003"
+    ]
+    assert result["class_f1_delta"]["nei"] > 0
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():

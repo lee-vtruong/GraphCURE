@@ -57,6 +57,7 @@ POLARITY_SYSTEM_PROMPT = (
 )
 TASK_SYSTEM_PROMPTS = {
     "verdict": SYSTEM_PROMPT,
+    "counterfactual_verdict": SYSTEM_PROMPT,
     "sufficiency": SUFFICIENCY_SYSTEM_PROMPT,
     "ablation": SUFFICIENCY_SYSTEM_PROMPT,
     "polarity": POLARITY_SYSTEM_PROMPT,
@@ -107,6 +108,7 @@ def evidence_prompt(claim: str, evidence: list[str], task: str,
         sections.append("[No usable evidence retrieved]")
     instruction = {
         "verdict": "Return only A, B, or C.",
+        "counterfactual_verdict": "Return only A, B, or C.",
         "sufficiency": "Return only Y or N.",
         "ablation": "Return only Y or N.",
         "polarity": "Return only A or B.",
@@ -241,11 +243,15 @@ class B6Claims:
             item["prompts"] = {
                 task: evidence_prompt(
                     item.get("claim", ""),
-                    item["ablated_evidence"] if task == "ablation"
+                    item["ablated_evidence"]
+                    if task in ("ablation", "counterfactual_verdict")
                     else item["evidence"],
                     task, max_evidence_chars,
                 )
-                for task in ("verdict", "sufficiency", "ablation", "polarity")
+                for task in (
+                    "verdict", "counterfactual_verdict", "sufficiency",
+                    "ablation", "polarity",
+                )
             }
             self.rows.append(item)
 
@@ -253,12 +259,14 @@ class B6Claims:
 class B6TrainingTasks(Dataset):
     def __init__(self, claims: B6Claims, ablation_ratio: float, seed: int,
                  verdict_weight: float, sufficiency_weight: float,
-                 polarity_weight: float, ablation_weight: float) -> None:
+                 polarity_weight: float, ablation_weight: float,
+                 counterfactual_verdict_weight: float = 0.0) -> None:
         weights = {
             "verdict": verdict_weight,
             "sufficiency": sufficiency_weight,
             "polarity": polarity_weight,
             "ablation": ablation_weight,
+            "counterfactual_verdict": counterfactual_verdict_weight,
         }
         if verdict_weight <= 0:
             raise ValueError("verdict_weight must be positive")
@@ -296,6 +304,14 @@ class B6TrainingTasks(Dataset):
                         "target_code": "N", "weight": ablation_weight,
                         "label": int(row["label"]),
                     })
+            if polarity is not None and counterfactual_verdict_weight > 0:
+                self.rows.append({
+                    "id": row["id"], "task": "counterfactual_verdict",
+                    "user": row["prompts"]["counterfactual_verdict"],
+                    "target_code": "C",
+                    "weight": counterfactual_verdict_weight,
+                    "label": int(row["label"]),
+                })
         self.counts = dict(Counter(row["task"] for row in self.rows))
 
     def curriculum_epoch(
@@ -342,6 +358,41 @@ class B6TrainingTasks(Dataset):
                 polarity_count, "A", supported_fraction, rng,
             )
             rng.shuffle(rows)
+        return FixedTrainingTasks(rows)
+
+    def counterfactual_verdict_epoch(
+        self,
+        epoch: int,
+        seed: int,
+        counterfactual_epochs: int,
+        counterfactual_fraction: float,
+    ) -> "FixedTrainingTasks":
+        """Use evidence-omission pairs without increasing optimizer updates.
+
+        During early curriculum epochs, a fixed fraction of ordinary verdict
+        examples is replaced by the same-label-space counterfactual task whose
+        gold evidence has been removed and whose target is NEI. Later epochs
+        are verdict-only recovery. No auxiliary verbalizer or inference head
+        is involved.
+        """
+        verdict = [row for row in self.rows if row["task"] == "verdict"]
+        epoch_size = len(verdict)
+        if epoch > counterfactual_epochs or counterfactual_fraction <= 0:
+            return FixedTrainingTasks([dict(row) for row in verdict])
+        counterfactual = [
+            row for row in self.rows
+            if row["task"] == "counterfactual_verdict"
+        ]
+        rng = random.Random(seed * 2029 + epoch)
+        counterfactual_count = min(
+            epoch_size,
+            int(round(epoch_size * counterfactual_fraction)),
+        )
+        rows = sample_rows(
+            verdict, epoch_size - counterfactual_count, rng
+        )
+        rows += sample_rows(counterfactual, counterfactual_count, rng)
+        rng.shuffle(rows)
         return FixedTrainingTasks(rows)
 
     def repeat_verdict_to_length(self, target_length: int) -> None:
@@ -673,6 +724,17 @@ def main() -> None:
                             "use balanced auxiliary replacement only in early "
                             "epochs, then recover with verdict-only epochs"
                         ))
+    parser.add_argument(
+        "--counterfactual-verdict-curriculum", action="store_true",
+        help=(
+            "B16: replace early verdict rows with evidence-omission rows "
+            "targeting NEI, then use verdict-only recovery epochs"
+        ),
+    )
+    parser.add_argument("--counterfactual-verdict-epochs", type=int, default=1)
+    parser.add_argument(
+        "--counterfactual-verdict-fraction", type=float, default=.15
+    )
     parser.add_argument("--curriculum-auxiliary-epochs", type=int, default=1)
     parser.add_argument("--curriculum-auxiliary-fraction", type=float,
                         default=.25)
@@ -724,9 +786,21 @@ def main() -> None:
         raise ValueError("curriculum fractions must be in [0, 1]")
     if args.curriculum_auxiliary_epochs < 0:
         raise ValueError("curriculum auxiliary epochs must be non-negative")
+    if not 0 <= args.counterfactual_verdict_fraction <= 1:
+        raise ValueError("counterfactual verdict fraction must be in [0, 1]")
+    if args.counterfactual_verdict_epochs < 0:
+        raise ValueError("counterfactual verdict epochs must be non-negative")
+    if args.compute_neutral_curriculum and args.counterfactual_verdict_curriculum:
+        raise ValueError("B13 and B16 curricula are mutually exclusive")
     if args.compute_neutral_curriculum and args.match_training_examples_from:
         raise ValueError(
             "compute-neutral curriculum cannot be combined with "
+            "--match-training-examples-from"
+        )
+    if (args.counterfactual_verdict_curriculum
+            and args.match_training_examples_from):
+        raise ValueError(
+            "counterfactual verdict curriculum cannot be combined with "
             "--match-training-examples-from"
         )
     fit_ids, held_ids, fold_payload = load_fold(
@@ -831,6 +905,10 @@ def main() -> None:
         train_claims, args.ablation_ratio, args.seed,
         args.verdict_loss_weight, args.sufficiency_loss_weight,
         args.polarity_loss_weight, args.ablation_loss_weight,
+        counterfactual_verdict_weight=(
+            args.verdict_loss_weight
+            if args.counterfactual_verdict_curriculum else 0.0
+        ),
     )
     if args.match_training_examples_from is not None:
         reference = json.loads(args.match_training_examples_from.read_text(
@@ -883,7 +961,9 @@ def main() -> None:
     )
     scheduler_epoch_examples = (
         train.counts["verdict"]
-        if args.compute_neutral_curriculum else len(train)
+        if (args.compute_neutral_curriculum
+            or args.counterfactual_verdict_curriculum)
+        else len(train)
     )
     scheduler_epoch_batches = int(np.ceil(
         scheduler_epoch_examples / args.batch_size
@@ -964,7 +1044,15 @@ def main() -> None:
     epoch_training_task_counts = []
     optimizer.zero_grad(set_to_none=True)
     for epoch in range(1, args.epochs + 1):
-        if args.compute_neutral_curriculum:
+        if args.counterfactual_verdict_curriculum:
+            epoch_train = train.counterfactual_verdict_epoch(
+                epoch=epoch,
+                seed=args.seed,
+                counterfactual_epochs=args.counterfactual_verdict_epochs,
+                counterfactual_fraction=args.counterfactual_verdict_fraction,
+            )
+            train_loader = training_loader(epoch_train)
+        elif args.compute_neutral_curriculum:
             epoch_train = train.curriculum_epoch(
                 epoch=epoch,
                 seed=args.seed,
@@ -1145,7 +1233,14 @@ def main() -> None:
     )
     accuracy_delta = candidate["accuracy"] - anchor_metrics["accuracy"]
     promotion_gate = {
-        "decomposition_active": best_weight > 0,
+        (
+            "counterfactual_curriculum_active"
+            if args.counterfactual_verdict_curriculum
+            else "decomposition_active"
+        ): (
+            args.counterfactual_verdict_curriculum
+            if args.counterfactual_verdict_curriculum else best_weight > 0
+        ),
         "macro_f1_delta_at_least_minimum": macro_delta >= args.minimum_delta,
         "nei_f1_delta_at_least_minimum": nei_delta >= args.minimum_nei_delta,
         "supported_f1_drop_within_limit": (
@@ -1158,9 +1253,12 @@ def main() -> None:
     promotion_gate["passed"] = all(promotion_gate.values())
     summary = {
         "method": (
-            "GraphCURE-B13-compute-neutral-constraint-curriculum"
-            if args.compute_neutral_curriculum
-            else "GraphCURE-B6-sufficiency-polarity"
+            "GraphCURE-B16-counterfactual-verdict-curriculum"
+            if args.counterfactual_verdict_curriculum else (
+                "GraphCURE-B13-compute-neutral-constraint-curriculum"
+                if args.compute_neutral_curriculum
+                else "GraphCURE-B6-sufficiency-polarity"
+            )
         ),
         "protocol": (
             "train_only_duplicate_safe_fixed_epoch_cv" if cv_mode
@@ -1184,6 +1282,17 @@ def main() -> None:
         "git_commit": current_git_commit(),
         "verbalizer_token_ids": token_ids,
         "training_task_counts": train.counts,
+        "counterfactual_verdict_curriculum": (
+            args.counterfactual_verdict_curriculum
+        ),
+        "counterfactual_verdict_fraction": (
+            args.counterfactual_verdict_fraction
+            if args.counterfactual_verdict_curriculum else None
+        ),
+        "counterfactual_verdict_epochs": (
+            args.counterfactual_verdict_epochs
+            if args.counterfactual_verdict_curriculum else None
+        ),
         "epoch_training_task_counts": epoch_training_task_counts,
         "best_epoch": best_epoch,
         "selected_hierarchical_weight": best_weight,

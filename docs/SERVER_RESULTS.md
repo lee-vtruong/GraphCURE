@@ -1784,3 +1784,25 @@ This is an exploratory feasibility diagnostic on the already inspected
 seed-2027 folds. Passing can only authorize preregistration on a new fold
 assignment; failure closes routing between these two experts. Official
 validation and test remain locked.
+
+### B15 cross-fitted value-gate outcome
+
+B15 failed preregistration and closes routing between the anchor and B13
+expert. The source-free cross-fitted gate increased accuracy by `+0.008340`
+and Macro-F1 by `+0.003801`, with a positive bootstrap CI and four positive
+folds. However, helpful-versus-harmful ranking AUROC was only `0.5660`, fold 3
+was negative, and Politifact Macro-F1 fell `-0.000356`. The gate therefore did
+not reach the locked `0.005` Macro-F1, `0.60` AUROC, or all-source criteria.
+No threshold tuning or official validation/test evaluation follows.
+
+## Registered experiment: B16 counterfactual verdict curriculum
+
+B16 targets the diagnosed evidence-absence/NEI failure inside the verifier.
+For supported/refuted training claims, labelled gold evidence is removed and
+the resulting prompt is supervised directly with the normal verdict token `C`
+(NEI). Fifteen percent of epoch-1 verdict examples are replaced by these
+counterfactuals; epochs 2--3 are verdict-only recovery. The schedule is
+compute-neutral and uses no auxiliary inference head. Development uses a new
+duplicate-safe fold assignment (`seed=2039`), a matched verdict-only control,
+and fixed epoch 3. See `docs/MOCHEG_PHASE_B16_COUNTERFACTUAL_VERDICT.md`.
+Official validation and test remain locked.
