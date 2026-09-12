@@ -40,3 +40,16 @@ update budget as the matched direct control.
 - every source remains within `-0.002` Macro-F1 of the anchor.
 
 Only a passing fold-0 run may be confirmed on folds 1--4.
+
+## Fold-0 outcome and frozen confirmation
+
+Fold 0 passed every preregistered gate. B16 reached Macro-F1 `0.656830`,
+improving `+0.016543` over the standard anchor and `+0.021946` over the
+compute-matched direct control. NEI F1 improved `+0.029730`; supported and
+refuted F1 also improved. Both Politifact and Snopes were positive, and both
+paired-bootstrap probabilities exceeded `0.95`.
+
+The `0.15` counterfactual fraction, one counterfactual epoch, two recovery
+epochs, fixed checkpoint epoch 3, and all promotion thresholds are now frozen.
+Confirmation uses folds 1--4 only. No hyperparameter may be selected from the
+confirmation results.

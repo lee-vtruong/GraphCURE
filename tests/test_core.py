@@ -66,6 +66,9 @@ from scripts.analyze_mocheg_b15_crossfit_value_gate import (
 from scripts.analyze_mocheg_b16_counterfactual_curriculum import (
     screen as screen_b16,
 )
+from scripts.summarize_mocheg_b16_confirmation import (
+    summarize as summarize_b16_confirmation,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2233,6 +2236,42 @@ def test_b16_screen_requires_nei_and_matched_control_gains():
         "macro_f1_delta_vs_control_at_least_0_003"
     ]
     assert result["class_f1_delta"]["nei"] > 0
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b16_confirmation_excludes_fold_zero_and_compares_both_controls():
+    runs = []
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    anchor = np.eye(3)[[0, 1, 0, 0, 1, 1]]
+    control = np.eye(3)[[1, 1, 0, 0, 1, 1]]
+    candidate = np.eye(3)[labels]
+    for fold in (1, 2, 3, 4):
+        runs.append({
+            "fold": fold,
+            "ids": [f"{fold}-{index}" for index in range(len(labels))],
+            "labels": labels,
+            "sources": ["snopes", "politifact"] * 3,
+            "anchor": anchor,
+            "control": control,
+            "candidate": candidate,
+        })
+    result = summarize_b16_confirmation(
+        runs, minimum_mean_anchor_delta=0,
+        minimum_mean_control_delta=0, minimum_positive_folds=0,
+        minimum_aggregate_anchor_delta=0,
+        minimum_aggregate_control_delta=0, minimum_nei_delta=0,
+        maximum_supported_drop=1, maximum_accuracy_drop=1,
+        minimum_source_delta=-1, minimum_bootstrap_probability=0,
+        bootstrap_iterations=20,
+    )
+    assert result["folds"] == [1, 2, 3, 4]
+    assert result["fold0_used_for_confirmation"] is False
+    assert result["aggregate"]["candidate_vs_anchor"]["macro_f1_delta"] > 0
+    assert result["aggregate"][
+        "candidate_vs_matched_control"
+    ]["macro_f1_delta"] > 0
+    assert result["promotion_gate"]["passed"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
 

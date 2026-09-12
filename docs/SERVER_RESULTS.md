@@ -1806,3 +1806,16 @@ compute-neutral and uses no auxiliary inference head. Development uses a new
 duplicate-safe fold assignment (`seed=2039`), a matched verdict-only control,
 and fixed epoch 3. See `docs/MOCHEG_PHASE_B16_COUNTERFACTUAL_VERDICT.md`.
 Official validation and test remain locked.
+
+### B16 fold-0 development outcome
+
+B16 passed every preregistered fold-0 gate. The counterfactual curriculum
+reached Macro-F1 `0.656830`, versus `0.640287` for the fresh standard anchor
+and `0.634884` for the compute-matched direct control. Its deltas were
+`+0.016543` and `+0.021946`, respectively. NEI F1 improved `+0.029730`, while
+supported (`+0.011152`) and refuted (`+0.008747`) also improved. Both sources
+were positive, bootstrap positive probabilities were `0.9828` versus anchor
+and `0.9976` versus control, and the curriculum remained compute-neutral.
+
+The B16 protocol is now frozen for independent confirmation on fresh folds
+1--4. Fold 0, official validation, and test are excluded from confirmation.
