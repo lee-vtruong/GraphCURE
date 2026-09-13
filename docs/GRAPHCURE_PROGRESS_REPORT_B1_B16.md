@@ -314,18 +314,20 @@ Anchor mạnh ở refuted nhưng yếu hơn ở NEI. B12/B13 thường chuyển 
 
 Không có leaderboard MOCHEG duy nhất hoàn toàn đồng nhất: paper khác nhau về official/filtered split, gold/system evidence, text-only/multimodal, retriever, metric averaging và live Web. Bảng dưới chỉ xếp **các dòng P1/system-retrieved gần nhất theo Macro-F1 được báo cáo**, không trộn gold hoặc open-web. Các số cần được đối chiếu lại từ camera-ready table khi nộp bài.
 
-| Hạng tham khảo | Method | Năm | Accuracy | Macro-F1 | Ghi chú protocol |
-|---:|---|---:|---:|---:|---|
-| 1 | AMuFC, stronger workshop report | 2026 | 0.5577 | **0.5560** | Mốc bảo thủ trong ledger; cần trích đúng version cuối |
-| 2 | **GraphCURE-Qwen3 raw ensemble** | 2026 | **0.5680** | **0.5453** | Official n=2442, fixed corpus, text retrieval, no test tuning |
-| 3 | AMuFC arXiv v2 | 2026 | 0.546 | 0.540 | Retrieved multimodal, Analyzer + Verifier[^6] |
-| 4 | M-RAV (Qwen2.5-32B, system evidence) | 2026 | 0.5002 | 0.5014 | Thiết lập system-evidence riêng[^9] |
-| 5 | MEVER retrieved | 2026 | — | ~0.497 | Graph evidence retrieval; preprocessing không hoàn toàn đồng nhất[^7] |
-| 6 | CMSA Top-15 | 2025 | — | 0.4828 | Cross-modal semantic association[^8] |
-| 7 | HGTMFC multimodal | 2025 | 0.4861 | 0.4678 | Retrieved text+image[^5] |
-| 8 | LVLM4FV multimodal | 2024 | 0.451 | 0.450 | LVLM retrieval/reranking/verification[^3] |
-| 9 | HGTMFC text-only | 2025 | 0.4668 | 0.4466 | Retrieved text[^5] |
-| 10 | MOCHEG baseline multimodal | 2023 | 0.4562 | 0.4384 | Original retrieved-evidence baseline[^1] |
+“Rank” trong bảng dùng **CORE 2023** cho hội nghị (A* cao hơn A), và **JCR/SJR quartile** cho tạp chí. Workshop, preprint và công trình chưa nộp không thừa hưởng rank của hội nghị mẹ; chúng được ghi “không xếp hạng”.[^11] Vì hai hệ thống có thể xuất phát từ cùng một paper, đây là bảng **10 kết quả/system rows**, không phải 10 paper độc lập.
+
+| Hạng tham khảo | Method | Năm | Hội nghị/tạp chí | Rank/uy tín venue | Accuracy | Macro-F1 | Ghi chú protocol |
+|---:|---|---:|---|---|---:|---:|---|
+| 1 | AMuFC, stronger workshop report | 2026 | HCAI Workshop @ CIKM 2025 / manuscript version | Workshop, không có CORE rank riêng | 0.5577 | **0.5560** | Mốc bảo thủ trong ledger; cần trích đúng version cuối |
+| 2 | **GraphCURE-Qwen3 raw ensemble** | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | **0.5680** | **0.5453** | Official n=2442, fixed corpus, text retrieval, no test tuning |
+| 3 | AMuFC arXiv v2 | 2026 | arXiv preprint | Preprint, chưa peer review/xếp hạng | 0.546 | 0.540 | Retrieved multimodal, Analyzer + Verifier[^6] |
+| 4 | M-RAV (Qwen2.5-32B, system evidence) | 2026 | Information Processing & Management | **Q1** JCR/SJR[^12] | 0.5002 | 0.5014 | Thiết lập system-evidence riêng[^9] |
+| 5 | MEVER retrieved | 2026 | EACL 2026, long paper | **CORE A** | — | ~0.497 | Graph evidence retrieval; preprocessing không hoàn toàn đồng nhất[^7] |
+| 6 | CMSA Top-15 | 2025 | Journal of Computer Applications (计算机应用) | Tạp chí Trung Quốc; không có CORE, chưa xác minh JCR/SJR | — | 0.4828 | Cross-modal semantic association[^8] |
+| 7 | HGTMFC multimodal | 2025 | AAAI 2025 | **CORE A\*** | 0.4861 | 0.4678 | Retrieved text+image[^5] |
+| 8 | LVLM4FV multimodal | 2024 | CIKM 2024 | **CORE A** | 0.451 | 0.450 | LVLM retrieval/reranking/verification[^3] |
+| 9 | HGTMFC text-only | 2025 | AAAI 2025 | **CORE A\*** | 0.4668 | 0.4466 | Retrieved text[^5] |
+| 10 | MOCHEG baseline multimodal | 2023 | SIGIR 2023 | **CORE A\*** | 0.4562 | 0.4384 | Original retrieved-evidence baseline[^1] |
 
 MetaSumPerceiver báo Accuracy khoảng 0.486 trong retrieved setting, nhưng Macro-F1 không đủ rõ để xếp chính xác cùng bảng; paper tập trung multimodal multi-document summarization và báo cải thiện verification 4,6%.[^2]
 
@@ -437,6 +439,8 @@ Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, Gra
 [^8]: “Multimodal Fact Verification with Cross-modal Semantic Association,” Journal of Computer Applications, 2025. [Journal page](https://www.joca.cn/EN/abstract/abstract27447.shtml).
 [^9]: “M-RAV: Multimodal Retrieval-Augmented Verification,” Information Processing & Management, 2026. [DOI:10.1016/j.ipm.2026.104988](https://doi.org/10.1016/j.ipm.2026.104988).
 [^10]: M. Singhal et al., “How to Train Your Fact Verifier: Knowledge Transfer with Multimodal Open Models,” Findings of EMNLP 2024. [ACL Anthology](https://aclanthology.org/2024.findings-emnlp.764/).
+[^11]: ICORE/CORE, “CORE 2023 Conference Rankings.” AAAI, ACL và SIGIR được xếp A*; CIKM và EACL được xếp A trong hệ quy chiếu sử dụng cho báo cáo này. [ICORE Conference Portal](https://portal.core.edu.au/conf-ranks/?by=all&page=1&search=&sort=arank&source=CORE2023).
+[^12]: Information Processing & Management được ghi nhận ở Q1 theo cả JCR và SJR 2025. [Journal ranking record](https://www.iit.comillas.edu/publicacion/info_revista/en/659/Information_Processing_%26_Management).
 
 ## Nguồn nội bộ tái lập
 
