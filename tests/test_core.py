@@ -69,6 +69,10 @@ from scripts.analyze_mocheg_b16_counterfactual_curriculum import (
 from scripts.summarize_mocheg_b16_confirmation import (
     summarize as summarize_b16_confirmation,
 )
+from scripts.analyze_mocheg_b17_b16_failure_atlas import (
+    build_atlas as build_b17_atlas,
+    validate_matched_control_run,
+)
 from scripts.cache_mocheg_visual_report_features import report_features
 from graphcure.report_fusion import SafeReportFusion, fusion_features
 from scripts.train_mocheg_long_context_verifier import compose_example
@@ -2274,6 +2278,72 @@ def test_b16_confirmation_excludes_fold_zero_and_compares_both_controls():
     assert result["promotion_gate"]["passed"]
     assert not result["official_validation_used"]
     assert not result["test_split_used"]
+
+
+def test_b17_failure_atlas_uses_matched_control_as_primary_baseline():
+    ids = [f"sample-{index}" for index in range(6)]
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    anchor = np.eye(3)[[0, 1, 0, 0, 1, 1]]
+    control = np.eye(3)[[0, 1, 2, 0, 1, 1]]
+    candidate = np.eye(3)[[0, 1, 0, 0, 1, 2]]
+    manifests = {
+        sample_id: {
+            "id": sample_id,
+            "claim": f"claim text {index}",
+            "source": "snopes" if index % 2 else "politifact",
+        }
+        for index, sample_id in enumerate(ids)
+    }
+    retrieval = {
+        sample_id: {
+            "id": sample_id,
+            "retrieval_confidence": .9 - index * .05,
+            "retrieved_scores": [.9, .5],
+            "first_gold_rank": 1 if index % 2 else None,
+        }
+        for index, sample_id in enumerate(ids)
+    }
+    targets = {
+        sample_id: {
+            "id": sample_id,
+            "qrel_available": bool(index % 2),
+            "natural_gold_hit": bool(index % 2),
+            "polarity_target": index % 2 if index % 2 else None,
+        }
+        for index, sample_id in enumerate(ids)
+    }
+    result, cases = build_b17_atlas(
+        ids, np.asarray([1, 1, 2, 2, 3, 4]), labels,
+        {"anchor": anchor, "control": control, "candidate": candidate},
+        manifests, retrieval, targets, [{"fold": 1}],
+        minimum_group_size=1,
+    )
+    assert result["comparisons"][
+        "candidate_vs_matched_control"
+    ]["helpful"] == 1
+    assert result["comparisons"][
+        "candidate_vs_matched_control"
+    ]["harmful"] == 1
+    assert result["b17_decision"]["phase_type"] == "diagnostic_only"
+    assert result["b17_decision"]["b16_closed"]
+    assert len(cases) == len(ids)
+    assert not result["official_validation_used"]
+    assert not result["test_split_used"]
+
+
+def test_b17_rejects_nonmatched_control():
+    summary = {
+        "fold": 1,
+        "training_from_base": True,
+        "fixed_checkpoint_epoch": 3,
+        "selected_hierarchical_weight": 0,
+        "training_task_counts": {"verdict": 100},
+        "counterfactual_verdict_curriculum": False,
+    }
+    validate_matched_control_run(summary, 1)
+    summary["training_task_counts"]["sufficiency"] = 10
+    with pytest.raises(ValueError, match="verdict training only"):
+        validate_matched_control_run(summary, 1)
 
 
 def test_b6_multiseed_summary_requires_ensemble_and_class_gains():

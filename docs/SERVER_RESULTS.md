@@ -1819,3 +1819,24 @@ and `0.9976` versus control, and the curriculum remained compute-neutral.
 
 The B16 protocol is now frozen for independent confirmation on fresh folds
 1--4. Fold 0, official validation, and test are excluded from confirmation.
+
+### B16 independent-confirmation outcome (2026-09-14)
+
+B16 failed confirmation and is closed. Across folds 1--4, its Macro-F1 delta
+was `+0.004607 +/- 0.006467` versus the standard anchor but
+`-0.001154 +/- 0.004688` versus the compute-matched direct control. Aggregate
+Macro-F1 was `0.665174`, compared with `0.660505` for the anchor and
+`0.666210` for the control. The bootstrap probability of a positive delta was
+`0.8898` versus anchor and `0.3814` versus control; both intervals crossed
+zero. Only two of four folds beat the control, and NEI F1 fell rather than
+meeting the registered gain. Official validation and test were not used.
+
+## Registered diagnostic: B17 B16 confirmation failure atlas
+
+B17 performs no training or model selection. It treats the matched direct
+control—not the weaker standard anchor—as the primary causal baseline and
+audits frozen B16 confirmation predictions by transition, fold, class, source,
+qrel/retrieval status, confidence, claim length and counterfactual eligibility.
+It also verifies per-fold curriculum exposure. B16 remains closed regardless
+of the atlas; any subsequent intervention requires a new fold assignment.
+See `docs/MOCHEG_PHASE_B17_B16_FAILURE_ATLAS.md`.

@@ -53,3 +53,17 @@ The `0.15` counterfactual fraction, one counterfactual epoch, two recovery
 epochs, fixed checkpoint epoch 3, and all promotion thresholds are now frozen.
 Confirmation uses folds 1--4 only. No hyperparameter may be selected from the
 confirmation results.
+
+## Independent-confirmation outcome
+
+B16 failed confirmation and is closed. Across folds 1--4, its aggregate
+Macro-F1 was `0.665174`, compared with `0.660505` for the standard anchor and
+`0.666210` for the compute-matched direct control. It therefore improved
+`+0.004669` over the anchor but lost `-0.001036` to the causal control. Mean
+fold delta versus the control was `-0.001154 +/- 0.004688`, only two of four
+folds were positive, and NEI F1 fell `-0.002017` versus the anchor. Neither
+official validation nor test was opened.
+
+B17 is a diagnostic-only failure atlas using the matched control as its
+primary baseline. The confirmation folds must not be used to tune a new
+counterfactual fraction or routing threshold.

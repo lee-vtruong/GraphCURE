@@ -25,9 +25,9 @@ Kết quả tốt nhất đã hợp lệ trên test chính thức hiện tại l
 |---|---|---:|---:|---|
 | GraphCURE-Qwen3 raw 5-seed ensemble | P1, official test, n=2442 | **0.56798** | **0.54531** | Kết quả test đã khóa |
 | GraphCURE-Qwen3 raw 5-seed ensemble | P1, strict test, n=2434 | **0.56902** | **0.54581** | Robustness track |
-| B16 counterfactual curriculum | train-only fold 0, n=2327 | 0.67383 | **0.65683** | Chỉ là development; confirmation đang chờ |
+| B16 counterfactual curriculum | train-only fold 0, n=2327 | 0.67383 | **0.65683** | Development pass nhưng confirmation fail; đã đóng |
 
-So với bảng P1 công khai, GraphCURE test chính thức vượt bản AMuFC arXiv v2 về Accuracy khoảng **+2.20 điểm phần trăm** và Macro-F1 khoảng **+0.53 điểm**. Tuy nhiên, một bản workshop AMuFC mạnh hơn được ghi nhận ở mức khoảng 55.60 Macro-F1; vì vậy kết luận hiện tại là **đã cạnh tranh/vượt nhiều baseline P1 và dẫn về Accuracy trong bảng đã kiểm**, nhưng **chưa được tuyên bố Macro-F1 SOTA một cách bảo thủ**. B16 có tiềm năng vượt rõ rệt, song chưa qua confirmation và chưa mở test.
+So với bảng P1 công khai, GraphCURE test chính thức vượt bản AMuFC arXiv v2 về Accuracy khoảng **+2.20 điểm phần trăm** và Macro-F1 khoảng **+0.53 điểm**. Tuy nhiên, một bản workshop AMuFC mạnh hơn được ghi nhận ở mức khoảng 55.60 Macro-F1; vì vậy kết luận hiện tại là **đã cạnh tranh/vượt nhiều baseline P1 và dẫn về Accuracy trong bảng đã kiểm**, nhưng **chưa được tuyên bố Macro-F1 SOTA một cách bảo thủ**. B16 không tái lập được lợi ích so với matched control trên các fold xác nhận nên đã đóng; official validation/test không được mở.
 
 ## 2. Mục tiêu ban đầu và kiến trúc nghiên cứu
 
@@ -265,7 +265,7 @@ Các nhánh VLM zero-shot, NLI rules, learned top-k aggregation, pair verifier, 
 
 **Fold-0 result.** Candidate đạt Acc 0.67383/MF1 0.65683, so với anchor 0.66094/0.64029 và control 0.65320/0.63488. Delta MF1 là +0.01654 so anchor và +0.02195 so control. Class-F1 đều tăng: supported +0.01115, refuted +0.00875, NEI +0.02973. Politifact +0.01980 và Snopes +0.01212. Bootstrap probability là 0.9828/0.9976; mọi gate pass.
 
-**Trạng thái.** Đây là kết quả development mạnh nhất và là bằng chứng cơ chế tốt nhất đến nay, nhưng **chưa phải kết quả validation/test hay SOTA**. Protocol đã đóng băng; bước bắt buộc là chạy confirmation folds 1–4. Chỉ nếu confirmation pass mới được mở official validation và cuối cùng test một lần.
+**Trạng thái sau confirmation.** B16 không tái lập được fold-0 gain và đã đóng. Trên folds 1–4, candidate đạt MF1 0.66517, so với anchor 0.66051 (+0.00467) nhưng thấp hơn matched control 0.66621 (-0.00104). Mean fold delta là +0.00461 ± 0.00647 so anchor và -0.00115 ± 0.00469 so control; bootstrap probability lần lượt 0.8898 và 0.3814. Chỉ 2/4 folds hơn control và NEI-F1 giảm 0.00202 so anchor. Không mở official validation/test. B17 được đăng ký như một failure atlas diagnostic-only với matched control là causal baseline chính.
 
 ## 6. Bảng tóm tắt B1–B16
 
@@ -286,7 +286,7 @@ Các nhánh VLM zero-shot, NLI rules, learned top-k aggregation, pair verifier, 
 | B13 | Hier blend fold0 +0.00510 | Confirmation -0.00017 | Fail | Audit 5-fold transition |
 | B14 | NEI escape Acc +0.01126 | MF1 +0.00209 | Fail | Học VOI từ observable features |
 | B15 | Gate MF1 +0.00380 | AUROC 0.566 | Fail | Sửa expert, không sửa router |
-| B16 | Fold0 MF1 +0.01654 | +0.02195 vs control | **Screen pass** | Chờ independent confirmation |
+| B16 | Fold0 MF1 +0.01654 | Confirmation -0.00104 vs control | **Confirmation fail; closed** | B17 phân tích cơ chế lỗi |
 
 ## 7. Ablation và bài học kỹ thuật
 
@@ -308,7 +308,7 @@ B9 fold0 +0.01348 nhưng confirmation chỉ +0.00398; B13 blend fold0 +0.00510 n
 
 ### 7.5. NEI là lớp quyết định
 
-Anchor mạnh ở refuted nhưng yếu hơn ở NEI. B12/B13 thường chuyển determinate đúng sang NEI; B14 lại over-escape NEI khi qrel absent. B16 là lần đầu tăng đồng thời supported, refuted và NEI, vì target phản事实 mô phỏng đúng sự thiếu bằng chứng.
+Anchor mạnh ở refuted nhưng yếu hơn ở NEI. B12/B13 thường chuyển determinate đúng sang NEI; B14 lại over-escape NEI khi qrel absent. Trên development fold, B16 là lần đầu tăng đồng thời supported, refuted và NEI; tuy nhiên confirmation cho thấy NEI-F1 lại giảm và candidate không hơn matched control, nên cơ chế này không được xác nhận.
 
 ## 8. Định vị với 10 kết quả công bố liên quan nhất
 
@@ -347,7 +347,7 @@ MetaSumPerceiver báo Accuracy khoảng 0.486 trong retrieved setting, nhưng Ma
 - **Accuracy:** GraphCURE official 0.5680 cao hơn AMuFC-v2 0.546 và mốc workshop 0.5577 trong bảng nội bộ; đây là kết quả rất cạnh tranh.
 - **Macro-F1:** GraphCURE 0.5453 cao hơn AMuFC-v2 0.540 nhưng thấp hơn mốc workshop 0.556 khoảng 1,07 điểm; chưa nên tuyên bố strongest reported MF1.
 - **So với baseline MOCHEG:** +11,18 điểm Accuracy và +10,69 điểm Macro-F1 tuyệt đối.
-- **B16:** nếu confirmation và official test giữ được phần đáng kể của +1,65 điểm development gain, hệ thống có khả năng vượt mốc MF1 0.556. Hiện chưa có quyền kết luận đó.
+- **B16:** development fold tăng +1,65 điểm nhưng confirmation chỉ đạt +0,47 điểm so anchor và **-0,10 điểm so matched control**; nhánh đã đóng và không được dùng để tuyên bố SOTA.
 
 ## 9. Kết quả tốt nhất hiện tại theo từng tầng bằng chứng
 
@@ -357,7 +357,7 @@ MetaSumPerceiver báo Accuracy khoảng 0.486 trong retrieved setting, nhưng Ma
 | Strict test | B1 GraphCURE-Qwen3 ensemble | 0.5690, 0.5458 | Robustness sau dedup |
 | Official validation | B6-A auxiliary ensemble | MF1 0.7080 | Development/ablation, không phải test SOTA |
 | Train-only OOF aggregate | B10 crossfit calibrator | MF1 0.6705 | Negative/diagnostic result vì gate fail |
-| Fresh train-only screen | B16 | Acc 0.6738, MF1 0.6568 | Candidate tốt nhất, chờ confirmation |
+| Fresh train-only screen | B16 fold 0 | Acc 0.6738, MF1 0.6568 | Screen-only; sau đó confirmation fail |
 | Oracle diagnostic | B5 expert selector | MF1 0.7492 | Trần complementarity, không deployable |
 
 ## 10. Trạng thái so với proposal gốc
@@ -367,31 +367,30 @@ MetaSumPerceiver báo Accuracy khoảng 0.486 trong retrieved setting, nhưng Ma
 | Multimodal constraint encoder | Text, image, metadata-like descriptors, sufficiency/polarity tasks, counterfactual absence | Entity/temporal parsers chưa thành expert mạnh end-to-end |
 | Dependency-aware reasoning | Typed graph trên NewsCLIPpings; hierarchical sufficiency/polarity; evidence-set attention | Chưa có graph reasoning vượt flat/Qwen anchor ổn định |
 | Conflict-aware uncertainty | Entropy/confidence/conflict, PCGrad, crossfit value gate, source/group audits | Gate utility AUROC còn thấp; chưa đủ cho production routing |
-| Closed-corpus verdict | Qwen3 retrieval/rerank/LoRA; official test 0.5680/0.5453 | Cần B16 confirmation và một test cuối nếu pass |
+| Closed-corpus verdict | Qwen3 retrieval/rerank/LoRA; official test 0.5680/0.5453 | B16 đã fail; B17 phân tích lỗi trước khi đăng ký intervention mới |
 | Open-web verification | Mới ở mức research/protocol definition | Chưa xây/freeze Phase-C expert |
 | Cost-aware routing | Budget routers và selective routers đã thử | Chưa đo Pareto B-vs-C vì C chưa tồn tại |
 | Explanation | Có structured descriptors/reports và constraint heads | Chưa có final evidence-grounded explanation evaluation |
 
 ## 11. Việc cần làm tiếp
 
-### 11.1. Ngay lập tức: hoàn tất B16 confirmation
+### 11.1. Ngay lập tức: chạy B17 failure atlas
 
-Chạy exact frozen B16 curriculum trên folds 1–4 của seed-2039 assignment. Không đổi 15%, epoch 3, learning rate, prompt, sampling hoặc checkpoint selection. Báo cáo:
+B16 đã fail independent confirmation. B17 không huấn luyện model và không chọn threshold; nó đọc duy nhất held predictions của folds 1–4 để so B16 với **matched control**. Báo cáo:
 
-- paired fold delta so fresh anchor và matched control;
-- ít nhất 3/4 folds dương;
-- mean gain, bootstrap CI/probability;
-- class-wise F1, đặc biệt NEI;
-- source-wise safety;
-- compute audit và helpful/harmful transitions.
+- transition nào tạo helpful/harmful cases so với matched control;
+- lỗi tập trung theo fold, class, source, qrel/retrieval status hay confidence;
+- thay đổi class-F1, đặc biệt NEI;
+- kiểm toán exposure của counterfactual curriculum trên từng fold;
+- các tương tác source×qrel, qrel×label và eligibility×retrieval.
 
-Nếu fail, đóng B16 và dùng failure atlas—không tune lại trên cùng folds. Nếu pass, chạy official validation một lần theo protocol đã khóa. Chỉ sau khi validation đạt gate mới mở official test.
+Các fold này chỉ dùng để chẩn đoán. Không tune omission ratio hoặc router trên cùng dữ liệu. Giả thuyết B18 chỉ được đăng ký sau khi atlas chỉ ra một failure mechanism quan sát được và phải xác nhận trên fold assignment mới.
 
 ### 11.2. Điều kiện đóng băng Phase B
 
 Một tiêu chí hợp lý:
 
-1. B16 confirmation pass trên fresh train folds.
+1. Một intervention hậu-B17 vượt matched control trên fresh train folds mới.
 2. Official validation cải thiện raw Qwen3 ensemble/anchor với bootstrap support và không source regression đáng kể.
 3. Official test được chạy một lần, không test-fitted parameters.
 4. Báo cả official và strict tracks.
@@ -408,13 +407,13 @@ Một tiêu chí hợp lý:
 1. **Protocol contribution:** phân tách P0/P1/P2/gold rõ ràng và deduplicated robustness track.
 2. **Strong closed-corpus pipeline:** modern dense retrieval + reranking + claim-level LoRA verifier.
 3. **Evidence-absence finding:** retrieval recall cao nhưng verifier thất bại chủ yếu ở sufficiency/NEI, không phải top-k coverage.
-4. **Counterfactual verdict curriculum:** biến constraint “evidence missing ⇒ NEI” thành supervision trong cùng verdict space, compute-neutral và không cần auxiliary head khi inference.
+4. **Counterfactual verdict curriculum (negative finding):** biến constraint “evidence missing ⇒ NEI” thành supervision trong cùng verdict space và compute-neutral, nhưng independent confirmation cho thấy nó không hơn matched control; đây là bằng chứng để không tiếp tục tune omission ratio.
 5. **Negative-results discipline:** visual fusion, graph constraints, GroupDRO, PCGrad, calibration và routing được kiểm tra bằng matched controls/fresh confirmations, làm rõ cái gì không tổng quát hóa.
 6. **Cost-aware roadmap:** closed-corpus expert là nhánh rẻ; open-web chỉ dành cho high-risk samples sau khi Phase C/D hoàn tất.
 
 ## 13. Hạn chế
 
-- B16 mới chỉ pass một development fold; effect size có thể co lại khi confirmation/test.
+- B16 chỉ pass development fold và đã co về -0.00104 MF1 so matched control khi confirmation; đây là negative result đã đóng.
 - Main best hiện tại là text-retrieved, chưa hiện thực đầy đủ multimodal promise của proposal.
 - Một số paper dùng filtered splits hoặc evidence setup không đồng nhất; thứ hạng 10 hệ thống là định vị tham khảo, không phải leaderboard chính thức.
 - Các VLM visual reranker có chi phí rất cao (ước tính khoảng 25 GPU-hours cho một full validation configuration) nhưng stance gain thấp.
@@ -423,9 +422,9 @@ Một tiêu chí hợp lý:
 
 ## 14. Kết luận
 
-GraphCURE đã đi từ graph-feature models khoảng MF1 0.42–0.46 đến một Qwen3 P1 system đạt official-test MF1 0.5453 và Accuracy 0.5680. Quan trọng hơn, chuỗi B1–B15 đã thu hẹp bottleneck từ retrieval, visual selection, domain imbalance và calibration xuống **evidence sufficiency/NEI behavior**. B16 là intervention đầu tiên vừa compute-neutral, vừa tăng cả ba class-F1, vừa cải thiện cả hai source và vượt matched control với bootstrap support trên fresh fold 0.
+GraphCURE đã đi từ graph-feature models khoảng MF1 0.42–0.46 đến một Qwen3 P1 system đạt official-test MF1 0.5453 và Accuracy 0.5680. Quan trọng hơn, chuỗi B1–B15 đã thu hẹp bottleneck từ retrieval, visual selection, domain imbalance và calibration xuống **evidence sufficiency/NEI behavior**. B16 cho tín hiệu mạnh ở fold 0 nhưng independent confirmation chứng minh phần lớn gain đến từ matched training trajectory, không phải counterfactual omission.
 
-Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, GraphCURE đã cạnh tranh ở mức SOTA P1 về point estimate nhưng chưa có claim Macro-F1 SOTA bảo thủ; B16 là candidate cần independent confirmation.** Đây là một vị trí tốt hơn nhiều so với chỉ có một score cao: dự án hiện có protocol sạch, anchor mạnh, failure mechanism cụ thể và một can thiệp có thể kiểm chứng.
+Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, GraphCURE đã cạnh tranh ở mức SOTA P1 về point estimate nhưng chưa có claim Macro-F1 SOTA bảo thủ; B16 đã đóng và B17 là diagnostic-only failure atlas.** Điểm mạnh hiện tại là protocol sạch, anchor mạnh, negative result được kiểm chứng và baseline nhân quả đúng để hình thành giả thuyết tiếp theo.
 
 ## Nguồn tham khảo
 
@@ -449,3 +448,4 @@ Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, Gra
 - [Full experiment registry](RESULTS.md)
 - [Protocol-aware SOTA comparison](MOCHEG_SOTA_COMPARISON.md)
 - [B16 frozen protocol](MOCHEG_PHASE_B16_COUNTERFACTUAL_VERDICT.md)
+- [B17 B16-confirmation failure atlas](MOCHEG_PHASE_B17_B16_FAILURE_ATLAS.md)
