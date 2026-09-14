@@ -3,10 +3,13 @@
 ## Status and scientific boundary
 
 The frozen article ensemble remains the Phase-B anchor. Its official MOCHEG
-result is `0.567977` Accuracy and `0.545309` Macro-F1. This exceeds the
-strongest comparison Accuracy but remains `0.010691` below the strongest
-reported Macro-F1. B6 is therefore a validation-only attempt to improve the
-minority/NEI decision without touching official test.
+result is `0.567977` Accuracy and `0.545309` Macro-F1. B6 was originally
+started against an unverified `0.5560` comparison target. The 2026-09-14
+primary-source audit removed that row; the verified AMuFC-v2 P1 result is
+`0.546/0.540`, which GraphCURE exceeds by `+0.021977/+0.005309` as a point
+estimate. B6 should therefore be read as a validation-only attempt to improve
+the minority/NEI decision, not as evidence that the frozen anchor trailed a
+verified P1 result.
 
 The official test split must not be loaded by any B6 development script. The
 trainer accepts only prepared `train` and `val` targets and always records

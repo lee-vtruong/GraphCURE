@@ -8,9 +8,12 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
 
 ## Phase B6 — sufficiency-polarity Qwen3 verifier (seed-42 screen)
 
-- Motivation: the frozen official article ensemble is Accuracy-SOTA but trails
-  the strongest reported Macro-F1 by `0.010691`; the official confusion matrix
-  overpredicts Refuted, especially for NEI.
+- Historical motivation: this experiment was launched against an unverified
+  `0.5560` Macro-F1 target, creating an apparent `0.010691` gap. The
+  2026-09-14 primary-source audit removed that target: the verified AMuFC-v2
+  P1 row is `0.546/0.540`, so the frozen GraphCURE article ensemble is already
+  higher by `+0.021977` Accuracy and `+0.005309` Macro-F1 as a point estimate.
+  The B6 experiment remains useful as a NEI/negative-transfer study.
 - Frozen anchor: the existing five Qwen3 article adapters and their validation
   predictions. No existing official-test score may be used for B6 selection.
 - Method: continue each article LoRA with direct-verdict, evidence-sufficiency,

@@ -310,43 +310,46 @@ B9 fold0 +0.01348 nhưng confirmation chỉ +0.00398; B13 blend fold0 +0.00510 n
 
 Anchor mạnh ở refuted nhưng yếu hơn ở NEI. B12/B13 thường chuyển determinate đúng sang NEI; B14 lại over-escape NEI khi qrel absent. Trên development fold, B16 là lần đầu tăng đồng thời supported, refuted và NEI; tuy nhiên confirmation cho thấy NEI-F1 lại giảm và candidate không hơn matched control, nên cơ chế này không được xác nhận.
 
-## 8. Định vị với 10 kết quả công bố liên quan nhất
+## 8. Định vị với 10 kết quả liên quan nhất
 
-Không có leaderboard MOCHEG duy nhất hoàn toàn đồng nhất: paper khác nhau về official/filtered split, gold/system evidence, text-only/multimodal, retriever, metric averaging và live Web. Bảng dưới chỉ xếp **các dòng P1/system-retrieved gần nhất theo Macro-F1 được báo cáo**, không trộn gold hoặc open-web. Các số cần được đối chiếu lại từ camera-ready table khi nộp bài.
+**Kết luận sau audit nguồn ngày 2026-09-14:** GraphCURE hiện có thể được mô tả là **P1 fixed-corpus/system-retrieved point-estimate SOTA trên official MOCHEG test** trong các kết quả đã xác minh. Đây không phải claim “SOTA trên mọi thiết lập MOCHEG”: gold evidence, claim–image domain generalization, filtered test và dynamic Web là các protocol khác.
+
+Không có leaderboard MOCHEG duy nhất hoàn toàn đồng nhất. Paper khác nhau về official/filtered split, gold/system evidence, text-only/multimodal, retriever và cách gọi F1. Vì vậy bảng dưới là **audit 10 system rows liên quan**, không phải một leaderboard đồng nhất. Cột F1 giữ đúng tên metric của nguồn; chỉ những dòng ghi rõ Macro-F1 mới được dùng cho claim Macro-F1 trực tiếp.
 
 “Rank” trong bảng dùng **CORE 2023** cho hội nghị (A* cao hơn A), và **JCR/SJR quartile** cho tạp chí. Workshop, preprint và công trình chưa nộp không thừa hưởng rank của hội nghị mẹ; chúng được ghi “không xếp hạng”.[^11] Vì hai hệ thống có thể xuất phát từ cùng một paper, đây là bảng **10 kết quả/system rows**, không phải 10 paper độc lập.
 
-| Hạng tham khảo | Method | Năm | Hội nghị/tạp chí | Rank/uy tín venue | Accuracy | Macro-F1 | Ghi chú protocol |
+| Hạng tham khảo | Method | Năm | Hội nghị/tạp chí | Rank/uy tín venue | Accuracy | F1/Macro-F1 | Khả năng so trực tiếp |
 |---:|---|---:|---|---|---:|---:|---|
-| 1 | **GraphCURE-Qwen3 raw ensemble** | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | **0.5680** | **0.5453** | Official n=2442, fixed corpus, text retrieval, no test tuning |
-| 2 | GraphCURE-Qwen3 raw ensemble (strict robustness) | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | 0.5690 | 0.5458 | Strict n=2434; không xếp trực tiếp với official split |
-| 3 | AMuFC arXiv v2 | 2026 | arXiv preprint | Preprint, chưa peer review/xếp hạng | 0.546 | 0.540 | Retrieved multimodal, Analyzer + Verifier[^6] |
-| 4 | M-RAV (Qwen2.5-32B, system evidence) | 2026 | Information Processing & Management | **Q1** JCR/SJR[^12] | 0.5002 | 0.5014 | Thiết lập system-evidence riêng[^9] |
-| 5 | MEVER retrieved | 2026 | EACL 2026, long paper | **CORE A** | — | ~0.497 | Graph evidence retrieval; preprocessing không hoàn toàn đồng nhất[^7] |
-| 6 | CMSA Top-15 | 2025 | Journal of Computer Applications (计算机应用) | Tạp chí Trung Quốc; không có CORE, chưa xác minh JCR/SJR | — | 0.4828 | Cross-modal semantic association[^8] |
-| 7 | HGTMFC multimodal | 2025 | AAAI 2025 | **CORE A\*** | 0.4861 | 0.4678 | Retrieved text+image[^5] |
-| 8 | LVLM4FV multimodal | 2024 | CIKM 2024 | **CORE A** | 0.451 | 0.450 | LVLM retrieval/reranking/verification[^3] |
-| 9 | HGTMFC text-only | 2025 | AAAI 2025 | **CORE A\*** | 0.4668 | 0.4466 | Retrieved text[^5] |
-| 10 | MOCHEG baseline multimodal | 2023 | SIGIR 2023 | **CORE A\*** | 0.4562 | 0.4384 | Original retrieved-evidence baseline[^1] |
+| 1 | **GraphCURE-Qwen3 raw ensemble** | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | **0.5680** | **MF1 0.5453** | **P1 official n=2442; so trực tiếp; no test tuning** |
+| 2 | AMuFC arXiv v2 | 2026 | arXiv preprint | Preprint, chưa peer review/xếp hạng | 0.546 | MF1 0.540 | P1 retrieved multimodal; đối thủ trực tiếp mạnh nhất đã xác minh[^6] |
+| 3 | M-RAV, Qwen2.5-32B | 2026 | Information Processing & Management | **Q1** JCR/SJR[^12] | 0.5002 | MF1 0.5014 | System evidence nhưng test MOCHEG lọc còn n=2001; không xếp trực tiếp[^9] |
+| 4 | MEVER | 2026 | EACL 2026, long paper | **CORE A** | 0.483 ± 0.021 | MF1 0.497 ± 0.012 | Retrieved evidence nhưng paper dùng preprocessing thống nhất riêng; gần P1, không đồng nhất tuyệt đối[^7] |
+| 5 | MetaSumPerceiver | 2024 | ACL 2024, long paper | **CORE A\*** | — | F-score 0.486 | System text+image evidence; nguồn không gọi đây là Macro-F1[^2] |
+| 6 | CMSA Top-15 | 2026 | Journal of Computer Applications (计算机应用) | Tạp chí Trung Quốc; không có CORE, chưa xác minh JCR/SJR | — | F1 0.4828 | Official n=2442, retrieved multimodal Top-15; nguồn không ghi rõ averaging[^8] |
+| 7 | HGTMFC multimodal | 2025 | AAAI 2025 | **CORE A\*** | 0.4861 | F1 0.4678 | Official n=2442, retrieved text+image[^5] |
+| 8 | LVLM4FV multimodal | 2024 | CIKM 2024 | **CORE A** | 0.451 | MF1 ≈0.450 | Paper gốc báo micro-F1 0.451; 0.450 được tính từ ba class-F1 và được AMuFC Table 3 ghi lại[^3] |
+| 9 | MOCHEG paper gốc | 2023 | SIGIR 2023 | **CORE A\*** | — | F-score 0.4406 | System text+image evidence; paper gốc chỉ báo F-score trong Table 4[^1] |
+| 10 | MOCHEG do HGTMFC tái chạy | 2025 | AAAI 2025 | **CORE A\*** | 0.4562 | F1 0.4384 | Không phải số do paper SIGIR gốc tự báo; là baseline trong HGTMFC Table 1[^5] |
 
-MetaSumPerceiver báo Accuracy khoảng 0.486 trong retrieved setting, nhưng Macro-F1 không đủ rõ để xếp chính xác cùng bảng; paper tập trung multimodal multi-document summarization và báo cải thiện verification 4,6%.[^2]
+GraphCURE strict robustness đạt `0.5690/0.5458` trên n=2434 nhưng không được xếp như một hàng cạnh tranh riêng, vì đó là robustness split nội bộ chứ không phải official n=2442.
 
 ### 8.1. Các con số mạnh nhưng không được trộn vào bảng P1
 
 | Method | Reported result | Vì sao không so trực tiếp |
 |---|---:|---|
 | AMuFC gold evidence | Acc 0.612 / MF1 0.600 | Oracle evidence |
+| Entailed Opinion/TBE-3 | MF1 0.57 | Claim–image/text domain-generalization setup, không dùng P1 system retrieval[^13] |
 | HGTMFC gold evidence | 0.5405 / 0.5203 | Oracle evidence |
 | LVLM4FV gold evidence | ~0.534 / ~0.535 | Oracle evidence |
-| MetaSumPerceiver gold/summary setting | Acc ~0.556 / MF1 ~0.482 | Evidence/summarization protocol khác |
+| MetaSumPerceiver gold/summary setting | Acc 0.556 / system-evidence F-score 0.486 | Hai số thuộc hai bảng/setting khác nhau, không được ghép thành một cặp Acc/MF1 |
 | DEFAME | Acc 0.592 | Dynamic open-web P2; không báo cùng MF1[^4] |
 | Knowledge-transfer verifier | MOCHEG F1 tới khoảng 0.65 | Transfer/no-evidence setup và có thảo luận contamination; không phải P1 retrieved-evidence[^10] |
 
 ### 8.2. Kết luận định vị hiện tại
 
 - **Accuracy:** GraphCURE official 0.5680 cao hơn AMuFC-v2 0.546 khoảng 2,20 điểm phần trăm.
-- **Macro-F1:** GraphCURE 0.5453 cao hơn AMuFC-v2 0.540 khoảng 0,53 điểm. Đây là point estimate cao nhất trong bảng đã xác minh, không phải kiểm định statistical superiority.
-- **So với baseline MOCHEG:** +11,18 điểm Accuracy và +10,69 điểm Macro-F1 tuyệt đối.
+- **Macro-F1:** GraphCURE 0.5453 cao hơn AMuFC-v2 0.540 khoảng 0,53 điểm. Đây là point estimate cao nhất trong các hàng P1 đã xác minh, không phải kiểm định statistical superiority.
+- **So với MOCHEG do HGTMFC tái chạy:** +11,18 điểm Accuracy và +10,69 điểm F1 tuyệt đối. Không gọi `0.4562/0.4384` là cặp số từ paper SIGIR gốc.
 - **B16:** development fold tăng +1,65 điểm nhưng confirmation chỉ đạt +0,47 điểm so anchor và **-0,10 điểm so matched control**; nhánh đã đóng và không được dùng để tuyên bố SOTA.
 
 ## 9. Kết quả tốt nhất hiện tại theo từng tầng bằng chứng
@@ -415,7 +418,7 @@ Một tiêu chí hợp lý:
 
 - B16 chỉ pass development fold và đã co về -0.00104 MF1 so matched control khi confirmation; đây là negative result đã đóng.
 - Main best hiện tại là text-retrieved, chưa hiện thực đầy đủ multimodal promise của proposal.
-- Một số paper dùng filtered splits hoặc evidence setup không đồng nhất; thứ hạng 10 hệ thống là định vị tham khảo, không phải leaderboard chính thức.
+- Một số paper dùng filtered splits hoặc evidence setup không đồng nhất; bảng 10 hệ thống là audit định vị, không phải leaderboard chính thức.
 - Các VLM visual reranker có chi phí rất cao (ước tính khoảng 25 GPU-hours cho một full validation configuration) nhưng stance gain thấp.
 - Official MOCHEG có thể chứa cross-split duplicate texts; cần báo song song official và strict, không chọn một track thuận lợi.
 - Các bảng SOTA phải tiếp tục được đối chiếu bằng nguồn sơ cấp; hàng AMuFC workshop `0.5577/0.5560` đã bị xóa vì không có nguồn xác minh.
@@ -424,7 +427,7 @@ Một tiêu chí hợp lý:
 
 GraphCURE đã đi từ graph-feature models khoảng MF1 0.42–0.46 đến một Qwen3 P1 system đạt official-test MF1 0.5453 và Accuracy 0.5680. Quan trọng hơn, chuỗi B1–B15 đã thu hẹp bottleneck từ retrieval, visual selection, domain imbalance và calibration xuống **evidence sufficiency/NEI behavior**. B16 cho tín hiệu mạnh ở fold 0 nhưng independent confirmation chứng minh phần lớn gain đến từ matched training trajectory, không phải counterfactual omission.
 
-Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, GraphCURE đã cạnh tranh ở mức SOTA P1 về point estimate nhưng chưa có claim Macro-F1 SOTA bảo thủ; B16 đã đóng và B17 là diagnostic-only failure atlas.** Điểm mạnh hiện tại là protocol sạch, anchor mạnh, negative result được kiểm chứng và baseline nhân quả đúng để hình thành giả thuyết tiếp theo.
+Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, nhưng kết quả test đã có thể gọi là P1 official-test point-estimate SOTA trong phạm vi các nguồn đã xác minh.** Chưa được viết “SOTA MOCHEG” không điều kiện, chưa có kiểm định paired superiority với AMuFC, và hệ thống chính hiện tại vẫn là text-retrieved. B16 đã đóng và B17 là diagnostic-only failure atlas.
 
 ## Nguồn tham khảo
 
@@ -435,11 +438,12 @@ Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, Gra
 [^5]: H. Pang et al., “Beyond Text: Fine-Grained Multi-Modal Fact Verification with Hypergraph Transformers,” AAAI 2025. [AAAI proceedings](https://ojs.aaai.org/index.php/AAAI/article/view/32684).
 [^6]: “AMuFC: Adaptive Multimodal Fact-Checking,” 2026. [arXiv:2604.04692](https://arxiv.org/abs/2604.04692); [OpenReview](https://openreview.net/forum?id=IPGgVvGPwQ).
 [^7]: “MEVER: Multi-Modal and Explainable Claim Verification with Graph-based Evidence Retrieval,” EACL 2026. [ACL Anthology](https://aclanthology.org/2026.eacl-long.242/).
-[^8]: “Multimodal Fact Verification with Cross-modal Semantic Association,” Journal of Computer Applications, 2025. [Journal page](https://www.joca.cn/EN/abstract/abstract27447.shtml).
+[^8]: “Multimodal Fact Verification with Cross-modal Semantic Association,” Journal of Computer Applications, 2026, 46(4):1069–1076. [Journal page](https://www.joca.cn/EN/abstract/abstract27447.shtml).
 [^9]: “M-RAV: Multimodal Retrieval-Augmented Verification,” Information Processing & Management, 2026. [DOI:10.1016/j.ipm.2026.104988](https://doi.org/10.1016/j.ipm.2026.104988).
 [^10]: M. Singhal et al., “How to Train Your Fact Verifier: Knowledge Transfer with Multimodal Open Models,” Findings of EMNLP 2024. [ACL Anthology](https://aclanthology.org/2024.findings-emnlp.764/).
 [^11]: ICORE/CORE, “CORE 2023 Conference Rankings.” AAAI, ACL và SIGIR được xếp A*; CIKM và EACL được xếp A trong hệ quy chiếu sử dụng cho báo cáo này. [ICORE Conference Portal](https://portal.core.edu.au/conf-ranks/?by=all&page=1&search=&sort=arank&source=CORE2023).
 [^12]: Information Processing & Management được ghi nhận ở Q1 theo cả JCR và SJR 2025. [Journal ranking record](https://www.iit.comillas.edu/publicacion/info_revista/en/659/Information_Processing_%26_Management).
+[^13]: G. Kumar et al., “Entailed Opinion Matters: Improving the Fact-Checking Performance of Language Models by Relying on their Entailment Ability,” arXiv:2505.15050v5, Table 8. [arXiv PDF](https://arxiv.org/pdf/2505.15050).
 
 ## Nguồn nội bộ tái lập
 
