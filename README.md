@@ -23,6 +23,11 @@ must be earned by the experiment protocol in `docs/EXPERIMENTS.md`.
 The modern fixed-corpus retrieval and claim-level evidence-set verifier are
 documented in [`docs/MODERN_CLOSED_CORPUS.md`](docs/MODERN_CLOSED_CORPUS.md).
 
+Phase B is now frozen; its remaining reporting ablations are tracked in
+[`docs/PHASE_B_ABLATION_BACKLOG.md`](docs/PHASE_B_ABLATION_BACKLOG.md). Phase C
+starts with the immutable open-web retrieval snapshot in
+[`docs/MOCHEG_PHASE_C1_OPEN_WEB_RETRIEVAL.md`](docs/MOCHEG_PHASE_C1_OPEN_WEB_RETRIEVAL.md).
+
 ## 1. Server setup
 
 Recommended: Ubuntu, Python 3.11, CUDA 12.x.

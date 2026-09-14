@@ -1,0 +1,46 @@
+{
+  "experiment": "GraphCURE-Qwen3-Phase-B",
+  "protocol": "P1_closed_corpus_retrieved_official_n2442",
+  "status": "frozen_after_official_test",
+  "frozen_on": "2026-09-14",
+  "main_system": {
+    "retrieval": "Qwen/Qwen3-Embedding-4B + TF-IDF + weighted RRF",
+    "reranker": "Qwen/Qwen3-Reranker-4B",
+    "verifier": "Qwen/Qwen3-4B-Instruct-2507 BF16 LoRA",
+    "seeds": [13, 21, 42, 87, 100],
+    "ensemble": "arithmetic mean of raw A/B/C probabilities",
+    "label_codes": {"0": "A", "1": "B", "2": "C"},
+    "labels": {"0": "supported", "1": "refuted", "2": "nei"}
+  },
+  "retrieval": {
+    "candidate_k": 200,
+    "output_k": 50,
+    "dense_weight": 0.75,
+    "lexical_weight": 0.25,
+    "rrf_k": 60.0
+  },
+  "reranking": {"candidate_k": 50, "output_k": 10, "max_length": 1536},
+  "verifier": {
+    "top_k": 5,
+    "max_evidence_chars": 2200,
+    "max_length": 3072,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "epochs": 3
+  },
+  "official_test": {
+    "samples": 2442,
+    "accuracy": 0.5679770679770679,
+    "macro_f1": 0.5453088823438615,
+    "test_fitted_parameters": 0
+  },
+  "strict_test": {
+    "samples": 2434,
+    "accuracy": 0.5690221857025473,
+    "macro_f1": 0.5458064333465386,
+    "test_fitted_parameters": 0
+  },
+  "artifact_note": "Authoritative file hashes remain in the server-side one-shot frozen-test manifests.",
+  "post_freeze_policy": "No MOCHEG test result may select or alter this main system. Missing ablations are reporting-only and cannot replace it."
+}

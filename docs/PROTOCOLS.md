@@ -42,6 +42,14 @@ The command exits non-zero on ID, label, retrieval, or closed-evidence leakage.
 Its authoritative report is
 `data/processed/mocheg_protocols/protocol_audit.json`.
 
+## Current phase boundary
+
+Phase B is frozen at `configs/mocheg_phase_b_qwen3_frozen.json`; remaining
+Phase-B runs are reporting-only and listed in
+`docs/PHASE_B_ABLATION_BACKLOG.md`. Phase C starts with an immutable P2 web
+snapshot. Its implementation and validation-only runbook are documented in
+`docs/MOCHEG_PHASE_C1_OPEN_WEB_RETRIEVAL.md`.
+
 ## Matched protocol embeddings
 
 Use the same MPNet text backbone in all three protocols. Close and
