@@ -15,6 +15,11 @@ Private, loopback, link-local and non-HTTP(S) fetch targets are rejected.
 Official test is locked unless a separate `P2_open_web` freeze manifest has
 status `frozen_after_validation`.
 
+The completed adaptive validation snapshot reached 1,456/1,456 claims with
+1,481 search calls, 94.44% usable evidence, median eight domains per claim and
+25 second-query expansions. The next frozen transformation is documented in
+`docs/MOCHEG_PHASE_C2_EVIDENCE_TABLE.md`.
+
 ## Smoke test with Brave Search
 
 ```bash

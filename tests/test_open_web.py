@@ -8,9 +8,12 @@ from graphcure.open_web import (
     assert_public_url,
     canonicalize_url,
     evidence_quality,
+    extract_entities,
+    extract_temporal_mentions,
     fuse_results,
     html_to_text,
     query_plan,
+    source_family,
 )
 from scripts.run_mocheg_open_web_retrieval import normalize_search
 
@@ -70,6 +73,16 @@ def test_evidence_quality_is_label_free_and_observable():
     assert quality["claim_keyword_coverage"] == 1.0
 
 
+def test_observable_constraint_extractors_and_source_family():
+    assert "Barack Obama" in extract_entities(
+        "Barack Obama spoke in January 2012."
+    )
+    assert extract_temporal_mentions("January 2012") == ["January", "2012"]
+    assert source_family("www.cdc.gov") == "government"
+    assert source_family("subdomain.snopes.com") == "fact_check_or_wire"
+    assert source_family("x.com") == "social"
+
+
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
     manifest_root = tmp_path / "manifests"
     manifest_root.mkdir()
@@ -126,3 +139,26 @@ def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
         "snippet_only": 1,
     }
     assert "val" in snapshot["manifest_hashes"]
+
+    freeze_command = [
+        sys.executable, "-m", "scripts.freeze_mocheg_open_web_snapshot",
+        "--snapshot-root", str(output_root), "--split", "val",
+    ]
+    subprocess.run(freeze_command, check=True, capture_output=True, text=True)
+    table_root = tmp_path / "table"
+    table_command = [
+        sys.executable, "-m", "scripts.build_mocheg_open_evidence_table",
+        "--snapshot-root", str(output_root),
+        "--output-root", str(table_root), "--split", "val",
+    ]
+    subprocess.run(table_command, check=True, capture_output=True, text=True)
+    table_summary = json.loads(
+        (table_root / "summary.json").read_text(encoding="utf-8")
+    )
+    table_rows = [json.loads(line) for line in (
+        table_root / "val.jsonl"
+    ).read_text(encoding="utf-8").splitlines()]
+    assert table_summary["claims"] == 1
+    assert table_summary["label_used"] is False
+    assert table_rows[0]["label_included"] is False
+    assert table_rows[0]["evidence_table"][0]["stance"] == "unscored"

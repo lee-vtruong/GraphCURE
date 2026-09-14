@@ -27,6 +27,8 @@ Phase B is now frozen; its remaining reporting ablations are tracked in
 [`docs/PHASE_B_ABLATION_BACKLOG.md`](docs/PHASE_B_ABLATION_BACKLOG.md). Phase C
 starts with the immutable open-web retrieval snapshot in
 [`docs/MOCHEG_PHASE_C1_OPEN_WEB_RETRIEVAL.md`](docs/MOCHEG_PHASE_C1_OPEN_WEB_RETRIEVAL.md).
+The frozen-snapshot audit and C2 observable evidence table are documented in
+[`docs/MOCHEG_PHASE_C2_EVIDENCE_TABLE.md`](docs/MOCHEG_PHASE_C2_EVIDENCE_TABLE.md).
 
 ## 1. Server setup
 

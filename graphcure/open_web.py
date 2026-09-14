@@ -34,6 +34,15 @@ _STOP = {
 _TRACKING_KEYS = {
     "fbclid", "gclid", "mc_cid", "mc_eid", "ref", "ref_src", "source",
 }
+_FACT_CHECK_DOMAINS = {
+    "factcheck.org", "fullfact.org", "leadstories.com", "politifact.com",
+    "snopes.com", "apnews.com", "reuters.com",
+}
+_SOCIAL_DOMAINS = {
+    "facebook.com", "instagram.com", "linkedin.com", "reddit.com",
+    "tiktok.com", "twitter.com", "x.com", "youtube.com",
+}
+_REFERENCE_DOMAINS = {"britannica.com", "wikipedia.org"}
 
 
 def normalize_space(value: str) -> str:
@@ -92,6 +101,49 @@ def query_plan(claim: str) -> list[dict[str, str]]:
             seen.add(key)
             result.append({"constraint": constraint, "query": query})
     return result
+
+
+def extract_entities(value: str) -> list[str]:
+    """Return deterministic proper-name candidates; this is not an NER model."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for entity in _ENTITY.findall(normalize_space(value)):
+        entity = normalize_space(entity)
+        key = entity.casefold()
+        if len(entity) >= 2 and key not in seen:
+            seen.add(key)
+            result.append(entity)
+    return result
+
+
+def extract_temporal_mentions(value: str) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for mention in _TEMPORAL.findall(normalize_space(value)):
+        mention = normalize_space(mention)
+        key = mention.casefold()
+        if key not in seen:
+            seen.add(key)
+            result.append(mention)
+    return result
+
+
+def source_family(domain: str | None) -> str:
+    """Coarse, auditable source family; it is not a credibility judgment."""
+    host = (domain or "").lower().removeprefix("www.")
+    if not host:
+        return "unknown"
+    if host.endswith(".gov") or host.endswith(".gov.uk"):
+        return "government"
+    if host.endswith(".edu") or host.endswith(".ac.uk"):
+        return "academic"
+    if any(host == item or host.endswith("." + item) for item in _SOCIAL_DOMAINS):
+        return "social"
+    if any(host == item or host.endswith("." + item) for item in _FACT_CHECK_DOMAINS):
+        return "fact_check_or_wire"
+    if any(host == item or host.endswith("." + item) for item in _REFERENCE_DOMAINS):
+        return "reference"
+    return "other_web"
 
 
 def canonicalize_url(url: str) -> str:
