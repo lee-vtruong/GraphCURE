@@ -7,6 +7,7 @@ import pytest
 from graphcure.open_web import (
     assert_public_url,
     canonicalize_url,
+    evidence_quality,
     fuse_results,
     html_to_text,
     query_plan,
@@ -55,6 +56,18 @@ def test_visible_html_and_provider_normalization():
         "link": "https://example.com", "title": "T", "snippet": "S",
     }]})
     assert brave[0]["snippet"] == serper[0]["snippet"] == "S"
+
+
+def test_evidence_quality_is_label_free_and_observable():
+    quality = evidence_quality("Obama unemployment 2012", [{
+        "domain": "example.com",
+        "title": "Obama unemployment report for 2012",
+        "snippet": "The report discusses unemployment figures during 2012 in detail.",
+    }])
+    assert quality["results"] == 1
+    assert quality["usable_snippets"] == 1
+    assert quality["domains"] == 1
+    assert quality["claim_keyword_coverage"] == 1.0
 
 
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):

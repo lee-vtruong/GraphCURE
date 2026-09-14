@@ -74,3 +74,27 @@ PY
 
 After this gate, C2 will assign provenance, temporal, entity, stance and
 sufficiency fields to the frozen evidence rather than performing new searches.
+
+## Label-free adaptive-query audit
+
+Before spending calls on a full snapshot, simulate whether the second query is
+needed using only the first query's title, snippet and domain. This analysis
+never reads labels, qrels, gold evidence, validation outcomes or test data.
+
+```bash
+python -m scripts.analyze_mocheg_open_web_adaptive \
+  --snapshot-root outputs/mocheg_c1_serper_2026_09_14_pilot_v2 \
+  --split val \
+  --output outputs/mocheg_c1_adaptive_pilot.json \
+  --audit-output outputs/mocheg_c1_adaptive_pilot_audit.jsonl \
+  --min-results 8 \
+  --min-usable-snippets 5 \
+  --min-domains 5 \
+  --min-keyword-coverage 0.35
+```
+
+The policy is eligible for an online C1.2 snapshot only if mean queries per
+claim is at most 1.5 while the selected evidence retains at least five usable
+snippets, three domains and 0.35 keyword coverage for nearly all audited
+claims. Manual relevance review remains mandatory because these diagnostics
+measure availability and lexical grounding, not factual entailment.

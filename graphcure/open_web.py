@@ -178,6 +178,39 @@ def fuse_results(
     )
 
 
+def evidence_quality(claim: str, rows: list[dict]) -> dict[str, float | int]:
+    """Compute label-free retrieval diagnostics from titles and snippets."""
+    claim_terms = {
+        token.lower() for token in _TOKEN.findall(normalize_space(claim))
+        if token.lower() not in _STOP
+    }
+    evidence_terms: set[str] = set()
+    usable_snippets = 0
+    domains = set()
+    for row in rows:
+        visible = normalize_space(
+            f"{row.get('title', '')} {row.get('snippet', '')}"
+        )
+        if len(visible) >= 80:
+            usable_snippets += 1
+        evidence_terms.update(
+            token.lower() for token in _TOKEN.findall(visible)
+            if token.lower() not in _STOP
+        )
+        if row.get("domain"):
+            domains.add(row["domain"])
+    coverage = (
+        len(claim_terms & evidence_terms) / len(claim_terms)
+        if claim_terms else 0.0
+    )
+    return {
+        "results": len(rows),
+        "usable_snippets": usable_snippets,
+        "domains": len(domains),
+        "claim_keyword_coverage": coverage,
+    }
+
+
 class VisibleTextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
