@@ -27,7 +27,7 @@ Kết quả tốt nhất đã hợp lệ trên test chính thức hiện tại l
 | GraphCURE-Qwen3 raw 5-seed ensemble | P1, strict test, n=2434 | **0.56902** | **0.54581** | Robustness track |
 | B16 counterfactual curriculum | train-only fold 0, n=2327 | 0.67383 | **0.65683** | Development pass nhưng confirmation fail; đã đóng |
 
-So với bảng P1 công khai, GraphCURE test chính thức vượt bản AMuFC arXiv v2 về Accuracy khoảng **+2.20 điểm phần trăm** và Macro-F1 khoảng **+0.53 điểm**. Tuy nhiên, một bản workshop AMuFC mạnh hơn được ghi nhận ở mức khoảng 55.60 Macro-F1; vì vậy kết luận hiện tại là **đã cạnh tranh/vượt nhiều baseline P1 và dẫn về Accuracy trong bảng đã kiểm**, nhưng **chưa được tuyên bố Macro-F1 SOTA một cách bảo thủ**. B16 không tái lập được lợi ích so với matched control trên các fold xác nhận nên đã đóng; official validation/test không được mở.
+So với Table 3 của AMuFC arXiv v2, GraphCURE test chính thức cao hơn khoảng **+2.20 điểm phần trăm Accuracy** và **+0.53 điểm Macro-F1**. Hai số `0.5577/0.5560` từng được ghi là “workshop report” không xuất hiện trong paper và không tìm được nguồn sơ cấp, nên đã bị loại. Kết luận hiện tại là **GraphCURE có point estimate P1 cao nhất trong các hàng đã xác minh**, nhưng chưa chứng minh statistical superiority vì không có paired predictions của AMuFC và khoảng bootstrap GraphCURE vẫn bao phủ point estimate đó. B16 không tái lập được lợi ích so với matched control nên đã đóng; official validation/test không được mở.
 
 ## 2. Mục tiêu ban đầu và kiến trúc nghiên cứu
 
@@ -119,7 +119,7 @@ Các nhánh VLM zero-shot, NLI rules, learned top-k aggregation, pair verifier, 
 
 **Verifier.** Cached set verifier chỉ đạt test MF1 0.4711 ± 0.0118. Qwen3 LoRA tạo bước nhảy lớn: validation 5-seed MF1 0.6748 ± 0.0085, raw ensemble 0.6920. Trên strict test, raw ensemble đạt Acc 0.5690/MF1 0.5458; trên official test đạt 0.5680/0.5453.
 
-**So SOTA và quyết định.** B1 vượt HGTMFC 0.4861/0.4678 và AMuFC arXiv v2 0.546/0.540 theo point estimate P1, nhưng thấp hơn mục tiêu bảo thủ MF1 0.556 của bản AMuFC workshop. Retrieval text đã gần bão hòa, nên B2 kiểm tra visual evidence và structured verification.
+**So SOTA và quyết định.** B1 vượt HGTMFC 0.4861/0.4678 và AMuFC arXiv v2 0.546/0.540 theo point estimate P1. Mốc AMuFC `0.5577/0.5560` trước đây là không có nguồn và đã bị loại. Retrieval text đã gần bão hòa, nên B2 kiểm tra visual evidence và structured verification.
 
 ### B2 — Visual retrieval, multimodal expert và sufficiency verification
 
@@ -318,8 +318,8 @@ Không có leaderboard MOCHEG duy nhất hoàn toàn đồng nhất: paper khác
 
 | Hạng tham khảo | Method | Năm | Hội nghị/tạp chí | Rank/uy tín venue | Accuracy | Macro-F1 | Ghi chú protocol |
 |---:|---|---:|---|---|---:|---:|---|
-| 1 | AMuFC, stronger workshop report | 2026 | HCAI Workshop @ CIKM 2025 / manuscript version | Workshop, không có CORE rank riêng | 0.5577 | **0.5560** | Mốc bảo thủ trong ledger; cần trích đúng version cuối |
-| 2 | **GraphCURE-Qwen3 raw ensemble** | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | **0.5680** | **0.5453** | Official n=2442, fixed corpus, text retrieval, no test tuning |
+| 1 | **GraphCURE-Qwen3 raw ensemble** | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | **0.5680** | **0.5453** | Official n=2442, fixed corpus, text retrieval, no test tuning |
+| 2 | GraphCURE-Qwen3 raw ensemble (strict robustness) | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | 0.5690 | 0.5458 | Strict n=2434; không xếp trực tiếp với official split |
 | 3 | AMuFC arXiv v2 | 2026 | arXiv preprint | Preprint, chưa peer review/xếp hạng | 0.546 | 0.540 | Retrieved multimodal, Analyzer + Verifier[^6] |
 | 4 | M-RAV (Qwen2.5-32B, system evidence) | 2026 | Information Processing & Management | **Q1** JCR/SJR[^12] | 0.5002 | 0.5014 | Thiết lập system-evidence riêng[^9] |
 | 5 | MEVER retrieved | 2026 | EACL 2026, long paper | **CORE A** | — | ~0.497 | Graph evidence retrieval; preprocessing không hoàn toàn đồng nhất[^7] |
@@ -344,8 +344,8 @@ MetaSumPerceiver báo Accuracy khoảng 0.486 trong retrieved setting, nhưng Ma
 
 ### 8.2. Kết luận định vị hiện tại
 
-- **Accuracy:** GraphCURE official 0.5680 cao hơn AMuFC-v2 0.546 và mốc workshop 0.5577 trong bảng nội bộ; đây là kết quả rất cạnh tranh.
-- **Macro-F1:** GraphCURE 0.5453 cao hơn AMuFC-v2 0.540 nhưng thấp hơn mốc workshop 0.556 khoảng 1,07 điểm; chưa nên tuyên bố strongest reported MF1.
+- **Accuracy:** GraphCURE official 0.5680 cao hơn AMuFC-v2 0.546 khoảng 2,20 điểm phần trăm.
+- **Macro-F1:** GraphCURE 0.5453 cao hơn AMuFC-v2 0.540 khoảng 0,53 điểm. Đây là point estimate cao nhất trong bảng đã xác minh, không phải kiểm định statistical superiority.
 - **So với baseline MOCHEG:** +11,18 điểm Accuracy và +10,69 điểm Macro-F1 tuyệt đối.
 - **B16:** development fold tăng +1,65 điểm nhưng confirmation chỉ đạt +0,47 điểm so anchor và **-0,10 điểm so matched control**; nhánh đã đóng và không được dùng để tuyên bố SOTA.
 
@@ -418,7 +418,7 @@ Một tiêu chí hợp lý:
 - Một số paper dùng filtered splits hoặc evidence setup không đồng nhất; thứ hạng 10 hệ thống là định vị tham khảo, không phải leaderboard chính thức.
 - Các VLM visual reranker có chi phí rất cao (ước tính khoảng 25 GPU-hours cho một full validation configuration) nhưng stance gain thấp.
 - Official MOCHEG có thể chứa cross-split duplicate texts; cần báo song song official và strict, không chọn một track thuận lợi.
-- Mốc AMuFC workshop 0.556 trong ledger phải được thay bằng citation/version camera-ready chính xác trước khi submission.
+- Các bảng SOTA phải tiếp tục được đối chiếu bằng nguồn sơ cấp; hàng AMuFC workshop `0.5577/0.5560` đã bị xóa vì không có nguồn xác minh.
 
 ## 14. Kết luận
 

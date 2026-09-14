@@ -836,9 +836,9 @@ The corrected one-shot strict test produced `0.569022` Accuracy and `0.545806`
 Macro-F1 for the primary raw ensemble (`n=2434`, zero test-fitted parameters),
 with a Macro-F1 bootstrap interval of `[0.525431, 0.564776]`. The unchanged
 official `n=2442` evaluation produced `0.567977` Accuracy and `0.545309`
-Macro-F1, with interval `[0.525794, 0.565170]`. These improve Accuracy over the
-strongest AMuFC retrieved point (`0.5577`) but remain `0.010691` below its
-reported `0.5560` Macro-F1. Preserve both frozen results; Phase B is no longer
+Macro-F1, with interval `[0.525794, 0.565170]`. These official results exceed
+the verified AMuFC arXiv-v2 retrieved point (`0.546/0.540`) by `0.021977`
+Accuracy and `0.005309` Macro-F1. Preserve both frozen results; Phase B is no longer
 eligible for post-test architecture or hyperparameter selection.
 
 ### Frozen official-split comparability track

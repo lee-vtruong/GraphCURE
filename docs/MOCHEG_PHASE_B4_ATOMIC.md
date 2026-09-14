@@ -2,8 +2,8 @@
 
 ## Motivation and hypothesis
 
-The frozen official GraphCURE verifier reaches `54.53` Macro-F1, below the
-reported fixed-corpus target `55.60`.  Train-only audits show that scalar
+The frozen official GraphCURE verifier reaches `54.53` Macro-F1, above the
+verified AMuFC arXiv-v2 retrieved point `54.00`. Train-only audits show that scalar
 reweighting is not the bottleneck: source-DRO changes overall OOF Macro-F1 by
 only `+0.0005`, while source/evidence-availability GroupDRO trades one subgroup
 for another.  This branch therefore changes evidence representation rather

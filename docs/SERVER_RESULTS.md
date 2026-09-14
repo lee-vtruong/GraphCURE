@@ -430,10 +430,10 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `[0.549302, 0.587921]`; Macro-F1 `[0.525431, 0.564776]`.
 - Inference latency: approximately `40.25 ms/sample/model` on the server RTX
   5090 (range `39.89` to `40.64` across seeds), before ensemble amortization.
-- Conservative comparison with the strongest reported AMuFC retrieved point
-  (`0.5577` Accuracy, `0.5560` Macro-F1): `+0.011322` Accuracy but
-  `-0.010194` Macro-F1.
-- Status: strong strict-split result, but **not Macro-F1 SOTA**.
+- The previously listed AMuFC `0.5577/0.5560` workshop row has no verified
+  primary source and was removed on 2026-09-14. Strict-split results are a
+  robustness track and are not ranked directly against official-test rows.
+- Status: strong strict-split result; official comparison is reported below.
 
 ### R2V-TEXT-TEST-20 — frozen Qwen3 LoRA official test
 
@@ -450,14 +450,13 @@ PyTorch: `2.13.0+cu130`; CUDA runtime: `13.0`
   `[[379, 287, 151], [13, 752, 60], [98, 453, 249]]`.
 - Raw-ensemble 95% bootstrap intervals (5000 resamples): accuracy
   `[0.549140, 0.587633]`; Macro-F1 `[0.525794, 0.565170]`.
-- Against the strongest reported AMuFC retrieved result (`0.5577` Accuracy,
-  `0.5560` Macro-F1), GraphCURE is `+0.010277` Accuracy but `-0.010691`
-  Macro-F1. Against the lower arXiv-v2 AMuFC row (`0.546/0.540`), GraphCURE
-  is `+0.021977/+0.005309`; both versions must be disclosed rather than
-  selecting the favorable comparison.
-- Status: official fixed-corpus retrieved **accuracy improvement**, but not the
-  strongest reported Macro-F1 SOTA. Phase B is frozen; no post-test tuning is
-  allowed on this protocol.
+- Against the verified AMuFC arXiv-v2 Table-3 row (`0.546/0.540`), GraphCURE
+  is `+0.021977/+0.005309`. No primary source was found for the previously
+  listed `0.5577/0.5560` workshop row, so it must not be cited.
+- Status: highest verified official fixed-corpus retrieved point estimate in
+  the current ledger. This is not a claim of statistical superiority because
+  AMuFC paired predictions are unavailable. Phase B is frozen; no post-test
+  tuning is allowed on this protocol.
 
 ## GraphCURE-R2V validation ledger (2026-08-17)
 

@@ -1,8 +1,9 @@
 # Phase B-v2: GraphCURE-SV
 
-Phase B remains open because the frozen official result (`56.80` accuracy,
-`54.53` Macro-F1 for the raw ensemble) does not exceed the strongest reported
-fixed-corpus Macro-F1 target (`55.60`).  No Phase C or D claim is made yet.
+Phase B remains open despite the frozen official result (`56.80` accuracy,
+`54.53` Macro-F1 for the raw ensemble) exceeding the verified AMuFC arXiv-v2
+fixed-corpus point (`54.60/54.00`). Statistical superiority and a stable method
+gain are not yet established. No Phase C or D claim is made yet.
 
 GraphCURE-SV targets the observed error structure rather than increasing model
 size.  It decomposes verification into (1) evidence sufficiency: sufficient vs
