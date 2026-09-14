@@ -84,7 +84,11 @@ def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
     fixture = {
         item["query"]: [{
             "url": "https://example.com/evidence?utm_source=test",
-            "title": "Evidence", "snippet": "Relevant public evidence.",
+            "title": "Evidence",
+            "snippet": (
+                "Relevant public evidence with enough observable snippet text "
+                "to pass the configured technical quality threshold."
+            ),
         }]
         for item in query_plan(claim)
     }
@@ -98,6 +102,9 @@ def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
         "--provider", "fixture", "--fixture", str(fixture_path),
         "--splits", "val", "--results-per-query", "5", "--output-k", "3",
         "--query-budget", "2", "--fetch-top-k", "1", "--fetch-workers", "1",
+        "--adaptive-querying", "--adaptive-min-results", "1",
+        "--adaptive-min-usable-snippets", "1", "--adaptive-min-domains", "1",
+        "--adaptive-min-keyword-coverage", "0",
     ]
     subprocess.run(command, check=True, capture_output=True, text=True)
     subprocess.run(command, check=True, capture_output=True, text=True)
@@ -111,6 +118,8 @@ def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
     ).read_text(encoding="utf-8"))
     assert len(rows) == 1
     assert rows[0]["gold_evidence_used"] is False
+    assert rows[0]["search_calls"] == 1
+    assert len(rows[0]["executed_queries"]) == 1
     assert len(rows[0]["evidence"]) == 1
     assert summary["splits"]["val"]["complete"] is True
     assert summary["splits"]["val"]["fetch_status_counts"] == {

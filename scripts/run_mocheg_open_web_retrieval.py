@@ -20,6 +20,7 @@ from tqdm import tqdm
 from graphcure.open_web import (
     QUERY_POLICY_VERSION,
     assert_public_url,
+    evidence_quality,
     fuse_results,
     html_to_text,
     load_jsonl,
@@ -200,6 +201,12 @@ def main() -> None:
     parser.add_argument("--output-k", type=int, default=20)
     parser.add_argument("--query-budget", type=int, default=0,
                         help="Maximum constraint queries per claim; 0 uses all")
+    parser.add_argument("--adaptive-querying", action="store_true",
+                        help="Stop after a query once label-free evidence gates pass")
+    parser.add_argument("--adaptive-min-results", type=int, default=8)
+    parser.add_argument("--adaptive-min-usable-snippets", type=int, default=5)
+    parser.add_argument("--adaptive-min-domains", type=int, default=5)
+    parser.add_argument("--adaptive-min-keyword-coverage", type=float, default=0.35)
     parser.add_argument("--fetch-pages", action="store_true")
     parser.add_argument("--fetch-top-k", type=int, default=0,
                         help="Fetch only the first k results; 0 fetches output-k")
@@ -216,6 +223,13 @@ def main() -> None:
         parser.error("retrieval cutoffs must be positive")
     if args.query_budget < 0 or args.fetch_top_k < 0 or args.fetch_workers <= 0:
         parser.error("query/fetch limits must be non-negative and workers positive")
+    if (
+        args.adaptive_min_results < 1
+        or args.adaptive_min_usable_snippets < 1
+        or args.adaptive_min_domains < 1
+        or not 0.0 <= args.adaptive_min_keyword_coverage <= 1.0
+    ):
+        parser.error("adaptive evidence thresholds are invalid")
     if "test" in args.splits:
         try:
             validate_test_unlock(args.phase_c_freeze_manifest)
@@ -243,6 +257,13 @@ def main() -> None:
         "provider": args.provider, "results_per_query": args.results_per_query,
         "output_k": args.output_k, "fetch_pages": args.fetch_pages,
         "query_budget": args.query_budget,
+        "adaptive_querying": args.adaptive_querying,
+        "adaptive_thresholds": {
+            "min_results": args.adaptive_min_results,
+            "min_usable_snippets": args.adaptive_min_usable_snippets,
+            "min_domains": args.adaptive_min_domains,
+            "min_keyword_coverage": args.adaptive_min_keyword_coverage,
+        },
         "fetch_top_k": args.fetch_top_k,
         "fetch_workers": args.fetch_workers,
         "max_page_bytes": args.max_page_bytes,
@@ -280,14 +301,34 @@ def main() -> None:
                 if args.query_budget:
                     plan = plan[:args.query_budget]
                 query_results = []
-                for item in plan:
+                query_diagnostics = []
+                for query_index, item in enumerate(plan):
                     rows = cached_search(
                         args.output_root, args.provider, item["query"],
                         args.results_per_query, api_key, args.timeout, fixture,
                     )
                     query_results.append((item["constraint"], rows))
+                    current_quality = evidence_quality(
+                        claim.get("claim", ""), fuse_results(query_results)
+                    )
+                    sufficient = (
+                        current_quality["results"] >= args.adaptive_min_results
+                        and current_quality["usable_snippets"]
+                        >= args.adaptive_min_usable_snippets
+                        and current_quality["domains"] >= args.adaptive_min_domains
+                        and current_quality["claim_keyword_coverage"]
+                        >= args.adaptive_min_keyword_coverage
+                    )
+                    query_diagnostics.append({
+                        "query_index": query_index,
+                        "constraint": item["constraint"],
+                        "quality": current_quality,
+                        "sufficient": sufficient,
+                    })
                     if args.delay and args.provider != "fixture":
                         time.sleep(args.delay)
+                    if args.adaptive_querying and sufficient:
+                        break
                 evidence = fuse_results(query_results)[:args.output_k]
                 fetch_count = (
                     min(args.fetch_top_k or len(evidence), len(evidence))
@@ -319,7 +360,9 @@ def main() -> None:
                     "id": claim["id"], "claim_id": claim.get("claim_id"),
                     "label": claim.get("label"), "claim": claim.get("claim", ""),
                     "queries": plan, "evidence": evidence,
-                    "search_calls": len(plan),
+                    "executed_queries": plan[:len(query_results)],
+                    "query_diagnostics": query_diagnostics,
+                    "search_calls": len(query_results),
                     "elapsed_seconds": time.perf_counter() - started,
                     "snapshot_signature": signature,
                     "gold_evidence_used": False,
@@ -351,6 +394,17 @@ def main() -> None:
             "manifest": str(manifest_path),
             "manifest_sha256": manifest_hashes[split],
             "search_calls": sum(row["search_calls"] for row in relevant),
+            "mean_queries_per_claim": (
+                sum(row["search_calls"] for row in relevant) / len(relevant)
+                if relevant else 0.0
+            ),
+            "expanded_claims": sum(
+                int(row["search_calls"] > 1) for row in relevant
+            ),
+            "expansion_rate": (
+                sum(int(row["search_calls"] > 1) for row in relevant) / len(relevant)
+                if relevant else 0.0
+            ),
             "evidence_rows": len(fetched),
             "unique_domains": len({row.get("domain") for row in fetched if row.get("domain")}),
             "median_domains_per_claim": (

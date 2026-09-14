@@ -98,3 +98,31 @@ claim is at most 1.5 while the selected evidence retains at least five usable
 snippets, three domains and 0.35 keyword coverage for nearly all audited
 claims. Manual relevance review remains mandatory because these diagnostics
 measure availability and lexical grounding, not factual entailment.
+
+## Online C1.2 pilot
+
+Once the counterfactual audit passes, run a fresh 100-claim snapshot. The
+second query is issued only when the first-query evidence fails one of the
+frozen label-free thresholds. Do not change these thresholds after observing
+labels or downstream verdict metrics.
+
+```bash
+python -m scripts.run_mocheg_open_web_retrieval \
+  --manifest-root data/processed/mocheg_manifest_strict \
+  --output-root outputs/mocheg_c1_serper_adaptive100_2026_09_14 \
+  --provider serper \
+  --api-key-env SERPER_API_KEY \
+  --splits val \
+  --results-per-query 10 \
+  --output-k 20 \
+  --query-budget 2 \
+  --adaptive-querying \
+  --adaptive-min-results 8 \
+  --adaptive-min-usable-snippets 5 \
+  --adaptive-min-domains 5 \
+  --adaptive-min-keyword-coverage 0.35 \
+  --fetch-pages \
+  --fetch-top-k 5 \
+  --fetch-workers 5 \
+  --limit 100
+```
