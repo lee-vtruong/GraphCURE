@@ -267,7 +267,24 @@ Các nhánh VLM zero-shot, NLI rules, learned top-k aggregation, pair verifier, 
 
 **Trạng thái sau confirmation.** B16 không tái lập được fold-0 gain và đã đóng. Trên folds 1–4, candidate đạt MF1 0.66517, so với anchor 0.66051 (+0.00467) nhưng thấp hơn matched control 0.66621 (-0.00104). Mean fold delta là +0.00461 ± 0.00647 so anchor và -0.00115 ± 0.00469 so control; bootstrap probability lần lượt 0.8898 và 0.3814. Chỉ 2/4 folds hơn control và NEI-F1 giảm 0.00202 so anchor. Không mở official validation/test. B17 được đăng ký như một failure atlas diagnostic-only với matched control là causal baseline chính.
 
-## 6. Bảng tóm tắt B1–B16
+### B17 — B16 confirmation failure atlas
+
+**Mục tiêu.** Xác định B16 thất bại ở đâu bằng held predictions của folds 1–4,
+với matched direct control là causal baseline; không huấn luyện, không chọn
+threshold và không đọc validation/test.
+
+**Kết quả.** Candidate/control đạt MF1 0.66517/0.66621, tức -0.00104; có
+550/561 helpful/harmful corrections. Class-F1 so với control thay đổi
++0.00140 supported, -0.00029 refuted và -0.00422 NEI. Harm mạnh nhất ở retrieval
+confidence/margin q1 (-0.01193), control confidence 0.70–0.90 (-0.01060) và
+gold rank 2–5 (-0.00992). Cả Politifact (-0.00057) lẫn Snopes (-0.00046) đều
+âm nhẹ.
+
+**Kết luận.** Các chuyển đổi supported↔NEI gần đối xứng, không chứng minh model
+học được sufficiency. Không có subgroup ổn định đủ mạnh để đăng ký B18; B16/B17
+đóng và B1 Qwen3 five-seed ensemble được giữ làm frozen Phase-B expert.
+
+## 6. Bảng tóm tắt B1–B17
 
 | Phase | Best signal | So với anchor/control | Kết luận | Lý do sang phase kế |
 |---|---|---|---|---|
@@ -287,6 +304,7 @@ Các nhánh VLM zero-shot, NLI rules, learned top-k aggregation, pair verifier, 
 | B14 | NEI escape Acc +0.01126 | MF1 +0.00209 | Fail | Học VOI từ observable features |
 | B15 | Gate MF1 +0.00380 | AUROC 0.566 | Fail | Sửa expert, không sửa router |
 | B16 | Fold0 MF1 +0.01654 | Confirmation -0.00104 vs control | **Confirmation fail; closed** | B17 phân tích cơ chế lỗi |
+| B17 | Candidate/control 0.66517/0.66621 | NEI -0.00422; help/harm 550/561 | **Diagnostic complete; closed** | Đóng băng B1; chuyển Phase C |
 
 ## 7. Ablation và bài học kỹ thuật
 
@@ -370,14 +388,14 @@ GraphCURE strict robustness đạt `0.5690/0.5458` trên n=2434 nhưng không đ
 | Multimodal constraint encoder | Text, image, metadata-like descriptors, sufficiency/polarity tasks, counterfactual absence | Entity/temporal parsers chưa thành expert mạnh end-to-end |
 | Dependency-aware reasoning | Typed graph trên NewsCLIPpings; hierarchical sufficiency/polarity; evidence-set attention | Chưa có graph reasoning vượt flat/Qwen anchor ổn định |
 | Conflict-aware uncertainty | Entropy/confidence/conflict, PCGrad, crossfit value gate, source/group audits | Gate utility AUROC còn thấp; chưa đủ cho production routing |
-| Closed-corpus verdict | Qwen3 retrieval/rerank/LoRA; official test 0.5680/0.5453 | B16 đã fail; B17 phân tích lỗi trước khi đăng ký intervention mới |
+| Closed-corpus verdict | Qwen3 retrieval/rerank/LoRA; official test 0.5680/0.5453 | **Phase-B expert đã đóng băng; B16/B17 là negative ablation** |
 | Open-web verification | Mới ở mức research/protocol definition | Chưa xây/freeze Phase-C expert |
 | Cost-aware routing | Budget routers và selective routers đã thử | Chưa đo Pareto B-vs-C vì C chưa tồn tại |
 | Explanation | Có structured descriptors/reports và constraint heads | Chưa có final evidence-grounded explanation evaluation |
 
 ## 11. Việc cần làm tiếp
 
-### 11.1. Ngay lập tức: chạy B17 failure atlas
+### 11.1. B17 đã hoàn tất: không mở B18 trên các fold đã xem
 
 B16 đã fail independent confirmation. B17 không huấn luyện model và không chọn threshold; nó đọc duy nhất held predictions của folds 1–4 để so B16 với **matched control**. Báo cáo:
 
@@ -387,17 +405,18 @@ B16 đã fail independent confirmation. B17 không huấn luyện model và khô
 - kiểm toán exposure của counterfactual curriculum trên từng fold;
 - các tương tác source×qrel, qrel×label và eligibility×retrieval.
 
-Các fold này chỉ dùng để chẩn đoán. Không tune omission ratio hoặc router trên cùng dữ liệu. Giả thuyết B18 chỉ được đăng ký sau khi atlas chỉ ra một failure mechanism quan sát được và phải xác nhận trên fold assignment mới.
+Atlas cho thấy B16 thấp hơn matched control 0.00104 MF1, NEI-F1 giảm 0.00422,
+và cả hai nguồn đều âm nhẹ. Harm tập trung ở retrieval confidence/margin thấp,
+nhưng các chuyển đổi supported↔NEI gần đối xứng và không tạo ra một treatment
+subgroup ổn định. Vì vậy không tune omission ratio/router trên cùng dữ liệu và
+không đăng ký B18 chỉ để tiếp tục tìm kiếm architecture.
 
-### 11.2. Điều kiện đóng băng Phase B
+### 11.2. Đóng băng Phase B
 
-Một tiêu chí hợp lý:
-
-1. Một intervention hậu-B17 vượt matched control trên fresh train folds mới.
-2. Official validation cải thiện raw Qwen3 ensemble/anchor với bootstrap support và không source regression đáng kể.
-3. Official test được chạy một lần, không test-fitted parameters.
-4. Báo cả official và strict tracks.
-5. So sánh cùng protocol với AMuFC, HGTMFC, LVLM4FV, MOCHEG; tách DEFAME/gold evidence.
+Phase B được đóng băng ở Qwen3 five-seed P1 ensemble đã chạy official test một
+lần, không test-fitted parameters: Acc 0.5680/MF1 0.5453 official và
+0.5690/0.5458 strict. Đây là point-estimate SOTA trong các hàng P1 đã xác minh.
+B16/B17 được giữ làm negative ablation, không thay thế frozen expert.
 
 ### 11.3. Sau Phase B
 
@@ -427,7 +446,11 @@ Một tiêu chí hợp lý:
 
 GraphCURE đã đi từ graph-feature models khoảng MF1 0.42–0.46 đến một Qwen3 P1 system đạt official-test MF1 0.5453 và Accuracy 0.5680. Quan trọng hơn, chuỗi B1–B15 đã thu hẹp bottleneck từ retrieval, visual selection, domain imbalance và calibration xuống **evidence sufficiency/NEI behavior**. B16 cho tín hiệu mạnh ở fold 0 nhưng independent confirmation chứng minh phần lớn gain đến từ matched training trajectory, không phải counterfactual omission.
 
-Vì vậy trạng thái khoa học đúng là: **Phase B chưa đóng băng, nhưng kết quả test đã có thể gọi là P1 official-test point-estimate SOTA trong phạm vi các nguồn đã xác minh.** Chưa được viết “SOTA MOCHEG” không điều kiện, chưa có kiểm định paired superiority với AMuFC, và hệ thống chính hiện tại vẫn là text-retrieved. B16 đã đóng và B17 là diagnostic-only failure atlas.
+Vì vậy trạng thái khoa học đúng là: **Phase B đã đóng băng ở B1 Qwen3
+five-seed ensemble và có P1 official-test point estimate cao nhất trong các
+nguồn đã xác minh.** Chưa được viết “SOTA MOCHEG” không điều kiện và chưa có
+kiểm định paired superiority với AMuFC. B16/B17 đã đóng như một negative
+ablation; bước chính tiếp theo là Phase C open-web, sau đó Phase D routing.
 
 ## Nguồn tham khảo
 

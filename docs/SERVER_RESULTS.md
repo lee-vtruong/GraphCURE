@@ -1842,3 +1842,16 @@ qrel/retrieval status, confidence, claim length and counterfactual eligibility.
 It also verifies per-fold curriculum exposure. B16 remains closed regardless
 of the atlas; any subsequent intervention requires a new fold assignment.
 See `docs/MOCHEG_PHASE_B17_B16_FAILURE_ATLAS.md`.
+
+### B17 frozen outcome (2026-09-14)
+
+B17 confirms that B16 did not beat its compute-matched causal control.
+Candidate/control Macro-F1 was `0.665174/0.666210` (delta `-0.001036`), with
+`550/561` helpful/harmful corrections.  Candidate class-F1 deltas versus the
+control were `+0.001403` supported, `-0.000287` refuted and `-0.004224` NEI.
+The largest harm occurred at retrieval confidence/margin q1 (`-0.011932`),
+control confidence `0.70--0.90` (`-0.010598`) and gold rank 2--5
+(`-0.009919`).  Both Politifact and Snopes were slightly negative.  B16/B17
+are closed, no B18 is authorized from these inspected folds, and the frozen
+Phase-B expert remains the official Qwen3 five-seed P1 ensemble.  Official
+validation and test were not read by B17.

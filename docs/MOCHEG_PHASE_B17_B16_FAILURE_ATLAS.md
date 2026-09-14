@@ -100,3 +100,32 @@ PY
   matched control as the main baseline, and receive a new duplicate-safe fold
   assignment.
 - Official validation and test remain locked.
+
+## Frozen outcome (2026-09-14)
+
+B17 confirms that the B16 gain over the weaker standard anchor was not a
+counterfactual-treatment effect.  Across confirmation folds 1--4, the B16
+candidate reached Macro-F1 `0.665174`, below the compute-matched direct
+control at `0.666210` (`-0.001036`).  It made `550` helpful and `561` harmful
+corrections.  Class-F1 changed by `+0.001403` for supported, `-0.000287` for
+refuted and `-0.004224` for NEI relative to the matched control.
+
+The largest stable harm slices were low retrieval confidence/margin q1
+(`-0.011932` Macro-F1), control confidence `0.70--0.90` (`-0.010598`) and
+gold evidence ranked 2--5 (`-0.009919`).  Counterfactual-ineligible examples
+also regressed (`-0.002519`).  The effect was slightly negative for both
+Politifact (`-0.000567`) and Snopes (`-0.000462`), so there is no
+source-specific recovery that could justify promotion.
+
+The transition audit exposes a nearly symmetric and unstable boundary shift:
+`176` supported examples moved helpfully from NEI to supported, but `167`
+correct supported examples moved harmfully to NEI; similarly, `142` NEI
+examples were recovered from supported while `152` correct NEI examples were
+lost to supported.  This is not evidence that the model learned a reliable
+evidence-sufficiency intervention.
+
+**Decision:** B16 and B17 are closed.  No omission-ratio, threshold or router
+search is permitted on these folds.  B17 does not support a B18 training
+hypothesis strong enough to justify more Phase-B compute.  The frozen Phase-B
+expert remains the official Qwen3 five-seed P1 ensemble; work moves to the
+separately evaluated Phase-C open-web expert.
