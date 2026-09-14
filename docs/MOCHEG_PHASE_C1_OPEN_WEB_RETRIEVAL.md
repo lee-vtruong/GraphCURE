@@ -32,7 +32,10 @@ python -m scripts.run_mocheg_open_web_retrieval \
   --splits val \
   --results-per-query 10 \
   --output-k 20 \
+  --query-budget 2 \
   --fetch-pages \
+  --fetch-top-k 5 \
+  --fetch-workers 5 \
   --limit 20 \
   2>&1 | tee outputs/mocheg-c1-brave-smoke.log
 
@@ -63,7 +66,8 @@ PY
 
 - all requested claims complete with no duplicate IDs;
 - API keys absent from every cached artifact;
-- at least 90% page-fetch success after excluding unsupported content types;
+- at least 90% usable evidence (full text or a snippet of 80+ characters);
+- page-fetch success and 401/403/429/timeout counts are reported separately;
 - median at least three unique domains per claim;
 - manual audit of 20 claims finds no gold/qrel leakage;
 - snapshot ID/date, provider, query policy and hashes are recorded.

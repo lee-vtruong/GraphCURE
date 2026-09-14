@@ -84,6 +84,7 @@ def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
         "--output-root", str(output_root),
         "--provider", "fixture", "--fixture", str(fixture_path),
         "--splits", "val", "--results-per-query", "5", "--output-k", "3",
+        "--query-budget", "2", "--fetch-top-k", "1", "--fetch-workers", "1",
     ]
     subprocess.run(command, check=True, capture_output=True, text=True)
     subprocess.run(command, check=True, capture_output=True, text=True)
@@ -99,4 +100,7 @@ def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
     assert rows[0]["gold_evidence_used"] is False
     assert len(rows[0]["evidence"]) == 1
     assert summary["splits"]["val"]["complete"] is True
+    assert summary["splits"]["val"]["fetch_status_counts"] == {
+        "snippet_only": 1,
+    }
     assert "val" in snapshot["manifest_hashes"]
