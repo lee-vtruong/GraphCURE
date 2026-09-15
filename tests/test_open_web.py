@@ -32,6 +32,7 @@ from scripts.analyze_mocheg_c2c_failure_atlas import (
     normalized_entropy,
     quartile_groups,
 )
+from scripts.prepare_mocheg_c3_evidence_selection import select_constraint_safe
 
 
 def test_query_plan_is_deterministic_and_constraint_typed():
@@ -187,6 +188,35 @@ def test_c2c_failure_atlas_features_are_deterministic():
     assert quartile_groups(np.arange(8)).tolist() == [
         "q1", "q1", "q2", "q2", "q3", "q3", "q4", "q4",
     ]
+
+
+def test_c3_selector_prefers_safe_decisive_evidence_without_labels():
+    evidence = [
+        {
+            "evidence_id": name, "shortlist_rank": rank,
+            "text": f"distinct evidence {name}",
+        }
+        for rank, name in enumerate(("bad", "safe", "partial"), 1)
+    ]
+
+    def tasks(stance, sufficiency, entity="A", temporal="A"):
+        return {
+            "stance": {"prediction": stance},
+            "sufficiency": {"prediction": sufficiency},
+            "entity": {"prediction": entity},
+            "temporal": {"prediction": temporal},
+        }
+
+    scores = {
+        "bad": tasks("C", "C"),
+        "safe": tasks("A", "A"),
+        "partial": tasks("B", "B", entity="B"),
+    }
+    selected = select_constraint_safe(evidence, scores, top_k=2)
+    assert [row["evidence_id"] for row in selected] == ["safe", "partial"]
+    assert selected[0]["c3_selection_stage"] == "safe_decisive"
+    assert selected[1]["c3_selection_stage"] == "decisive_relevant"
+    assert all("label" not in row and "gold" not in row for row in selected)
 
 
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):

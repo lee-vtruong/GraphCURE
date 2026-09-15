@@ -151,6 +151,29 @@ python -m scripts.analyze_mocheg_c2c_failure_atlas \
   --output outputs/mocheg_c2c_failure_atlas.json
 ```
 
+## C3 preregistered hypothesis
+
+The C2c atlas showed high anchor/open oracle complementarity but unsafe open
+replacement, dominated by correct supported/refuted predictions moving to
+NEI. C3 therefore tests evidence selection rather than validation-fitted
+routing. It restores the Phase-B verifier's training format (top five items,
+up to 2200 characters each) and removes inline constraint annotations. The
+matched control keeps the original top five. The treatment uses a fixed,
+label-free cascade: safe decisive, decisive relevant, decisive,
+non-irrelevant, rank fallback, then duplicate relaxation. Within every stage,
+original search rank is preserved.
+
+Generate and audit both evidence sets before any verdict inference:
+
+```bash
+python -m scripts.prepare_mocheg_c3_evidence_selection \
+  --shortlist data/processed/mocheg_open_web_c2b_shortlist/val.jsonl \
+  --audit outputs/mocheg_c2a_audit.json \
+  --constraint-root outputs/mocheg_c2b_constraints_val \
+  --output-root data/processed/mocheg_open_web_c3_selection \
+  --top-k 5
+```
+
 ## C2a failure audit and C2b shortlist
 
 Before judge inference, measure weak claims, social-source concentration,
