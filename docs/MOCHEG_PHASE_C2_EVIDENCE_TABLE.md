@@ -62,3 +62,24 @@ C2b will then run a frozen claim-evidence judge for stance, sufficiency,
 entity consistency and temporal consistency. C2b must include a direct-verdict
 control and will be selected only on validation; it must not silently treat
 the C2a heuristics as ground-truth constraint labels.
+
+## C2a failure audit and C2b shortlist
+
+Before judge inference, measure weak claims, social-source concentration,
+conditional temporal coverage and duplicated text. Construct a top-8 shortlist
+that preserves search rank while preferring usable text, limiting one result
+per domain and at most two social results. The fallback stages are recorded;
+no source is assigned a learned or hand-written credibility score.
+
+```bash
+python -m scripts.analyze_mocheg_open_evidence_table \
+  --table-root data/processed/mocheg_open_web_c2a \
+  --split val \
+  --output outputs/mocheg_c2a_audit.json \
+  --shortlist-output data/processed/mocheg_open_web_c2b_shortlist/val.jsonl \
+  --top-k 8 \
+  --minimum-text-chars 80 \
+  --max-per-domain 1 \
+  --max-social 2 \
+  2>&1 | tee outputs/mocheg-c2a-audit.log
+```

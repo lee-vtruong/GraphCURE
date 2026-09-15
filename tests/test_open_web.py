@@ -16,6 +16,7 @@ from graphcure.open_web import (
     source_family,
 )
 from scripts.run_mocheg_open_web_retrieval import normalize_search
+from scripts.analyze_mocheg_open_evidence_table import select_diverse
 
 
 def test_query_plan_is_deterministic_and_constraint_typed():
@@ -81,6 +82,27 @@ def test_observable_constraint_extractors_and_source_family():
     assert source_family("www.cdc.gov") == "government"
     assert source_family("subdomain.snopes.com") == "fact_check_or_wire"
     assert source_family("x.com") == "social"
+
+
+def test_source_diverse_shortlist_caps_social_and_domains():
+    rows = [
+        {
+            "evidence_id": str(index), "rank": index,
+            "domain": domain, "source_family": family,
+            "text": "x" * 100,
+        }
+        for index, (domain, family) in enumerate([
+            ("x.com", "social"), ("x.com", "social"),
+            ("facebook.com", "social"), ("news.example", "other_web"),
+            ("agency.gov", "government"), ("university.edu", "academic"),
+        ], start=1)
+    ]
+    selected = select_diverse(
+        rows, top_k=4, minimum_chars=80, max_per_domain=1, max_social=1
+    )
+    assert len(selected) == 4
+    assert len({row["domain"] for row in selected}) == 4
+    assert sum(row["source_family"] == "social" for row in selected) == 1
 
 
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
