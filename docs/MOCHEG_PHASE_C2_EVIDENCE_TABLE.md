@@ -199,6 +199,19 @@ python -m scripts.analyze_mocheg_c3_evidence_selection \
   --predictions-output outputs/mocheg_c3_selection_predictions.jsonl
 ```
 
+After the seed-42 screen passes, repeat the frozen matched evaluation for
+seeds 13, 21, 42, 87 and 100 under
+`outputs/mocheg_c3_confirm/seed_<seed>/{scores,analysis.json,predictions.jsonl}`.
+Summarize only after all five runs exist:
+
+```bash
+python -m scripts.summarize_mocheg_c3_confirmation \
+  --root outputs/mocheg_c3_confirm \
+  --manifest data/processed/mocheg_manifest_strict/val.jsonl \
+  --output outputs/mocheg_c3_confirmation.json \
+  --markdown outputs/mocheg_c3_confirmation.md
+```
+
 ## C2a failure audit and C2b shortlist
 
 Before judge inference, measure weak claims, social-source concentration,
