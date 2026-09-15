@@ -17,6 +17,12 @@ from graphcure.open_web import (
 )
 from scripts.run_mocheg_open_web_retrieval import normalize_search
 from scripts.analyze_mocheg_open_evidence_table import select_diverse
+from scripts.score_mocheg_open_constraints import (
+    as_token_ids,
+    build_examples,
+    compose_prompt,
+    head_tail_truncate,
+)
 
 
 def test_query_plan_is_deterministic_and_constraint_typed():
@@ -103,6 +109,37 @@ def test_source_diverse_shortlist_caps_social_and_domains():
     assert len(selected) == 4
     assert len({row["domain"] for row in selected}) == 4
     assert sum(row["source_family"] == "social" for row in selected) == 1
+
+
+def test_c2b_constraint_examples_have_no_labels_or_gold():
+    evidence = {
+        "evidence_id": "e1", "shortlist_rank": 1,
+        "domain": "example.com", "source_family": "other_web",
+        "title": "Report", "published_at": "2020",
+        "text": "A report about the claim.",
+    }
+    prompt = compose_prompt("The claim", evidence, "stance", 100)
+    assert "A: the evidence supports" in prompt
+    rows = [{
+        "id": "c1", "claim_id": "1", "claim": "The claim",
+        "evidence_shortlist": [evidence],
+    }]
+    examples = build_examples(rows, ["stance", "sufficiency"], 1, 100)
+    assert len(examples) == 2
+    assert all("label" not in row and "gold" not in row for row in examples)
+
+
+def test_c2b_token_normalization_and_head_tail_truncation():
+    class Encoding:
+        ids = [1, 2, 3]
+
+    assert as_token_ids(Encoding()) == [1, 2, 3]
+    assert as_token_ids({"input_ids": [[4, 5]]}) == [4, 5]
+    values = list(range(20))
+    truncated = head_tail_truncate(values, 9)
+    assert len(truncated) == 9
+    assert truncated[:3] == [0, 1, 2]
+    assert truncated[-3:] == [17, 18, 19]
 
 
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):

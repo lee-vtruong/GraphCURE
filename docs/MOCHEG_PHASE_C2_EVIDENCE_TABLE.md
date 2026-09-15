@@ -63,6 +63,33 @@ entity consistency and temporal consistency. C2b must include a direct-verdict
 control and will be selected only on validation; it must not silently treat
 the C2a heuristics as ground-truth constraint labels.
 
+## C2b frozen constraint scorer
+
+C2b uses a frozen instruction model and next-token A/B/C probabilities. Each
+claim/evidence pair is scored independently for stance, sufficiency, entity
+consistency and temporal consistency. The output contains no benchmark label
+or gold evidence. Run a 32-claim smoke test before full validation:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.score_mocheg_open_constraints \
+  --shortlist data/processed/mocheg_open_web_c2b_shortlist/val.jsonl \
+  --audit outputs/mocheg_c2a_audit.json \
+  --output-root outputs/mocheg_c2b_constraints_smoke \
+  --model Qwen/Qwen3-4B-Instruct-2507 \
+  --tasks stance sufficiency entity temporal \
+  --top-k 8 \
+  --max-evidence-chars 1800 \
+  --max-length 2304 \
+  --batch-size 4 \
+  --device cuda \
+  --limit 32 \
+  2>&1 | tee outputs/mocheg-c2b-constraints-smoke.log
+```
+
+Smoke promotion requires complete output, 32 claims, four balanced task
+counts, finite three-way probabilities summing to one, no label/gold/test use,
+and throughput measured before scheduling the full 46k pair-task workload.
+
 ## C2a failure audit and C2b shortlist
 
 Before judge inference, measure weak claims, social-source concentration,
