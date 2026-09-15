@@ -174,6 +174,31 @@ python -m scripts.prepare_mocheg_c3_evidence_selection \
   --top-k 5
 ```
 
+Score a 32-claim matched smoke test with the frozen Phase-B adapter:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.score_mocheg_c3_evidence_selection \
+  --selection-root data/processed/mocheg_open_web_c3_selection \
+  --output-root outputs/mocheg_c3_selection_smoke \
+  --adapter outputs/mocheg_qwen3_lora_seed42_v16/best_adapter \
+  --max-evidence-chars 2200 --max-length 4096 \
+  --batch-size 2 --device cuda --limit 32
+```
+
+For the full frozen run, remove `--limit 32` and use output root
+`outputs/mocheg_c3_selection_val`. Evaluation is performed only after both
+conditions are complete:
+
+```bash
+python -m scripts.analyze_mocheg_c3_evidence_selection \
+  --manifest data/processed/mocheg_manifest_strict/val.jsonl \
+  --score-root outputs/mocheg_c3_selection_val \
+  --anchor-predictions \
+    outputs/mocheg_qwen3_lora_seed42_v16/val_predictions.jsonl \
+  --output outputs/mocheg_c3_selection_analysis.json \
+  --predictions-output outputs/mocheg_c3_selection_predictions.jsonl
+```
+
 ## C2a failure audit and C2b shortlist
 
 Before judge inference, measure weak claims, social-source concentration,

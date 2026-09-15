@@ -33,6 +33,9 @@ from scripts.analyze_mocheg_c2c_failure_atlas import (
     quartile_groups,
 )
 from scripts.prepare_mocheg_c3_evidence_selection import select_constraint_safe
+from scripts.score_mocheg_c3_evidence_selection import (
+    build_examples as build_c3_score_examples,
+)
 
 
 def test_query_plan_is_deterministic_and_constraint_typed():
@@ -217,6 +220,24 @@ def test_c3_selector_prefers_safe_decisive_evidence_without_labels():
     assert selected[0]["c3_selection_stage"] == "safe_decisive"
     assert selected[1]["c3_selection_stage"] == "decisive_relevant"
     assert all("label" not in row and "gold" not in row for row in selected)
+
+
+def test_c3_matched_score_prompts_differ_only_by_evidence_policy():
+    row = {
+        "id": "c1", "claim": "Claim",
+        "rank_control_evidence": [{"evidence_id": "rank", "text": "ranked"}],
+        "constraint_selected_evidence": [{
+            "evidence_id": "safe", "text": "selected"
+        }],
+    }
+    examples = build_c3_score_examples([row], max_evidence_chars=2200)
+    assert [item["mode"] for item in examples] == [
+        "rank_control", "constraint_selector",
+    ]
+    assert "ranked" in examples[0]["prompt"]
+    assert "selected" in examples[1]["prompt"]
+    assert all("Frozen diagnostics" not in item["prompt"] for item in examples)
+    assert all("label" not in item and "gold" not in item for item in examples)
 
 
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):
