@@ -3,6 +3,7 @@ import subprocess
 import sys
 
 import pytest
+import numpy as np
 
 from graphcure.open_web import (
     assert_public_url,
@@ -26,6 +27,10 @@ from scripts.score_mocheg_open_constraints import (
 from scripts.score_mocheg_open_verdicts import (
     build_examples as build_verdict_examples,
     constraint_text,
+)
+from scripts.analyze_mocheg_c2c_failure_atlas import (
+    normalized_entropy,
+    quartile_groups,
 )
 
 
@@ -172,6 +177,16 @@ def test_c2c_matched_prompts_use_constraints_only_in_treatment():
     assert "Frozen diagnostics" not in examples[0]["prompt"]
     assert "Frozen diagnostics" in examples[1]["prompt"]
     assert all("label" not in row and "gold" not in row for row in examples)
+
+
+def test_c2c_failure_atlas_features_are_deterministic():
+    probability = np.asarray([[1.0, 0.0, 0.0], [1 / 3, 1 / 3, 1 / 3]])
+    entropy = normalized_entropy(probability)
+    assert entropy[0] == pytest.approx(0.0, abs=1e-9)
+    assert entropy[1] == pytest.approx(1.0)
+    assert quartile_groups(np.arange(8)).tolist() == [
+        "q1", "q1", "q2", "q2", "q3", "q3", "q4", "q4",
+    ]
 
 
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):

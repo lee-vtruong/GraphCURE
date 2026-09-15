@@ -133,6 +133,24 @@ python -m scripts.analyze_mocheg_open_verdicts \
   --predictions-output outputs/mocheg_c2c_predictions.jsonl
 ```
 
+If the treatment fails promotion, generate the post-hoc failure atlas before
+defining C3. It measures oracle complementarity, help/harm transitions and
+quartiles of observable evidence/constraint signals. It is diagnostic only;
+it must not be used to claim a validation result or tune a router on the same
+examples.
+
+```bash
+python -m scripts.analyze_mocheg_c2c_failure_atlas \
+  --manifest data/processed/mocheg_manifest_strict/val.jsonl \
+  --anchor-predictions \
+    outputs/mocheg_qwen3_lora_seed42_v16/val_predictions.jsonl \
+  --c2c-predictions outputs/mocheg_c2c_predictions.jsonl \
+  --shortlist data/processed/mocheg_open_web_c2b_shortlist/val.jsonl \
+  --constraint-scores \
+    outputs/mocheg_c2b_constraints_val/constraint_scores.jsonl \
+  --output outputs/mocheg_c2c_failure_atlas.json
+```
+
 ## C2a failure audit and C2b shortlist
 
 Before judge inference, measure weak claims, social-source concentration,
