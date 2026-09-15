@@ -23,6 +23,10 @@ from scripts.score_mocheg_open_constraints import (
     compose_prompt,
     head_tail_truncate,
 )
+from scripts.score_mocheg_open_verdicts import (
+    build_examples as build_verdict_examples,
+    constraint_text,
+)
 
 
 def test_query_plan_is_deterministic_and_constraint_typed():
@@ -140,6 +144,34 @@ def test_c2b_token_normalization_and_head_tail_truncation():
     assert len(truncated) == 9
     assert truncated[:3] == [0, 1, 2]
     assert truncated[-3:] == [17, 18, 19]
+
+
+def test_c2c_matched_prompts_use_constraints_only_in_treatment():
+    evidence = {
+        "evidence_id": "e1", "shortlist_rank": 1,
+        "domain": "example.com", "source_family": "other_web",
+        "published_at": "2020", "text": "Evidence text.",
+    }
+    scores = {
+        task: {
+            "prediction": "A",
+            "probabilities": {"A": .8, "B": .1, "C": .1},
+        }
+        for task in ("stance", "sufficiency", "entity", "temporal")
+    }
+    assert "stance=support" in constraint_text(scores)
+    examples = build_verdict_examples(
+        [{
+            "id": "c1", "claim": "Claim", "evidence_shortlist": [evidence],
+        }],
+        {"c1": {("e1", "1"): scores}},
+        top_k=1,
+        max_evidence_chars=100,
+    )
+    assert [row["mode"] for row in examples] == ["direct", "constraint"]
+    assert "Frozen diagnostics" not in examples[0]["prompt"]
+    assert "Frozen diagnostics" in examples[1]["prompt"]
+    assert all("label" not in row and "gold" not in row for row in examples)
 
 
 def test_fixture_cli_creates_complete_resumable_snapshot(tmp_path):

@@ -90,6 +90,49 @@ Smoke promotion requires complete output, 32 claims, four balanced task
 counts, finite three-way probabilities summing to one, no label/gold/test use,
 and throughput measured before scheduling the full 46k pair-task workload.
 
+## C2c matched-verifier causal screen
+
+C2c freezes the Phase-B seed-42 LoRA verifier and evaluates two matched
+inference conditions. The direct control sees the claim and the same top-eight
+web evidence. The treatment additionally sees C2b stance, sufficiency, entity
+and temporal distributions. Both conditions use the same model, adapter, raw
+evidence budget, label tokens and decoding. The scorer never loads validation
+labels. A separate analysis command loads labels only after both prediction
+files are frozen.
+
+The primary comparison is constraint-aware versus direct. A 50/50 probability
+ensemble is declared in advance and reported as a diagnostic; its weight must
+not be tuned on validation. Promotion requires Macro-F1 delta >= 0.003,
+bootstrap probability of positive delta >= 0.95, more helpful than harmful
+changes, no negative source group, and non-inferiority to the frozen closed
+anchor when that anchor is supplied.
+
+Run the 32-claim scorer smoke test with the frozen Phase-B seed-42 adapter:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m scripts.score_mocheg_open_verdicts \
+  --shortlist data/processed/mocheg_open_web_c2b_shortlist/val.jsonl \
+  --audit outputs/mocheg_c2a_audit.json \
+  --constraint-root outputs/mocheg_c2b_constraints_val \
+  --output-root outputs/mocheg_c2c_verdicts_smoke \
+  --adapter outputs/mocheg_qwen3_lora_seed42_v16/best_adapter \
+  --top-k 8 --max-evidence-chars 1000 --max-length 4096 \
+  --batch-size 2 --device cuda --limit 32
+```
+
+Remove `--limit 32` and use output root `outputs/mocheg_c2c_verdicts_val`
+for the frozen full run. Then evaluate both conditions:
+
+```bash
+python -m scripts.analyze_mocheg_open_verdicts \
+  --manifest data/processed/mocheg_manifest_strict/val.jsonl \
+  --verdict-root outputs/mocheg_c2c_verdicts_val \
+  --anchor-predictions \
+    outputs/mocheg_qwen3_lora_seed42_v16/val_predictions.jsonl \
+  --output outputs/mocheg_c2c_analysis.json \
+  --predictions-output outputs/mocheg_c2c_predictions.jsonl
+```
+
 ## C2a failure audit and C2b shortlist
 
 Before judge inference, measure weak claims, social-source concentration,
