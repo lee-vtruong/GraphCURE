@@ -84,24 +84,29 @@ def generate_with_model(
     device: str = "cuda",
     max_new_tokens: int = 512,
 ) -> str:
+    import torch
+
     messages = [
         {"role": "system", "content": TEACHER_SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
     ]
-    inputs = tokenizer.apply_chat_template(
-        messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
-    ).to(device)
-    import torch
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    model_inputs = tokenizer([text], return_tensors="pt").to(device)
+    pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+
     with torch.no_grad():
         outputs = model.generate(
-            inputs,
+            **model_inputs,
             max_new_tokens=max_new_tokens,
             do_sample=False,
             temperature=None,
             top_p=None,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=pad_id,
         )
-    response_tokens = outputs[0][inputs.shape[-1]:]
+    prompt_len = model_inputs["input_ids"].shape[-1]
+    response_tokens = outputs[0][prompt_len:]
     return tokenizer.decode(response_tokens, skip_special_tokens=True).strip()
 
 
@@ -150,6 +155,8 @@ def main() -> None:
         from transformers import AutoModelForCausalLM, AutoTokenizer
         logging.info("Loading teacher model: %s", args.model)
         tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
         model = AutoModelForCausalLM.from_pretrained(
             args.model,
             torch_dtype=torch.bfloat16 if torch.cuda.is_available() and "cuda" in args.device else torch.float32,
