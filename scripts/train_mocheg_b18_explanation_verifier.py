@@ -344,6 +344,12 @@ def main() -> None:
         torch_dtype=torch.bfloat16 if device.type == "cuda" else torch.float32,
         trust_remote_code=True,
     )
+    model.config.use_cache = False
+    if hasattr(model, "gradient_checkpointing_enable") and device.type == "cuda":
+        model.gradient_checkpointing_enable()
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+
     lora_config = LoraConfig(
         r=16,
         lora_alpha=32,
@@ -393,18 +399,18 @@ def main() -> None:
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda"):
                 outputs = model(input_ids=v_inputs, attention_mask=v_attention, labels=v_labels)
                 verdict_loss = outputs.loss
+            (verdict_loss / args.grad_accum).backward()
+            train_loss_sum += float(verdict_loss.detach())
 
-                total_loss = verdict_loss
-                if batch["has_explanation"]:
-                    e_inputs = batch["exp_input_ids"].to(device)
-                    e_attention = batch["exp_attention_mask"].to(device)
-                    e_labels = batch["exp_labels"].to(device)
+            if batch["has_explanation"]:
+                e_inputs = batch["exp_input_ids"].to(device)
+                e_attention = batch["exp_attention_mask"].to(device)
+                e_labels = batch["exp_labels"].to(device)
+                with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda"):
                     e_outputs = model(input_ids=e_inputs, attention_mask=e_attention, labels=e_labels)
-                    total_loss = total_loss + (args.lambda_exp * e_outputs.loss)
-
-            scaled_loss = total_loss / args.grad_accum
-            scaled_loss.backward()
-            train_loss_sum += float(total_loss.detach())
+                    exp_loss = e_outputs.loss
+                ((args.lambda_exp * exp_loss) / args.grad_accum).backward()
+                train_loss_sum += float((args.lambda_exp * exp_loss).detach())
 
             if (step + 1) % args.grad_accum == 0 or (step + 1) == len(train_loader):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
