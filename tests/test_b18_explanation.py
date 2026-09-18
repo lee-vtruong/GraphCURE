@@ -171,3 +171,21 @@ def test_resolve_corpus_path_finds_nested_file(tmp_path):
         resolve_corpus_path(Path("nonexistent_top_level_folder_xyz_123") / "corpus.csv")
 
 
+def test_multi_seed_summarize(tmp_path):
+    from scripts.summarize_mocheg_b18_seeds import compute_metrics, load_seed_predictions
+    import numpy as np
+
+    cand_dir = tmp_path / "cand"
+    cand_dir.mkdir()
+    preds = [{"id": str(i), "label": i % 3, "prediction": i % 3, "probabilities": [0.8, 0.1, 0.1]} for i in range(10)]
+    (cand_dir / "val_predictions.jsonl").write_text("\n".join(json.dumps(p) for p in preds) + "\n")
+
+    loaded = load_seed_predictions(cand_dir)
+    assert len(loaded) == 10
+
+    m = compute_metrics(np.array([0, 1, 2]), np.array([0, 1, 2]))
+    assert m["accuracy"] == 1.0
+    assert m["macro_f1"] == 1.0
+
+
+
