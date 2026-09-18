@@ -113,10 +113,13 @@ def analyze_b18_run(
                 "delta_vs_anchor": anc_cand_metrics["macro_f1"] - anc_metrics["macro_f1"],
             }
 
+    p_pos = float(boot.get("probability_delta_positive", boot.get("probability_positive", 0.0)))
+    ci = boot.get("ci_95_percentile", [boot.get("ci_lower", 0.0), boot.get("ci_upper", 0.0)])
+
     # Preregistered gate check
     gate_checks = {
         "delta_macro_f1_ge_005": delta_macro_f1 >= 0.005,
-        "bootstrap_positive_ge_095": float(boot.get("probability_positive", 0.0)) >= 0.95,
+        "bootstrap_positive_ge_095": p_pos >= 0.95,
         "supported_f1_ge_minus_005": delta_supp >= -0.005,
         "accuracy_ge_minus_002": delta_acc >= -0.002,
         "helpful_exceeds_harmful": helpful > harmful,
@@ -158,6 +161,10 @@ def generate_markdown_report(result: dict[str, Any]) -> str:
 
     status_str = "**PASSED (Ready for 5-fold / 5-seed confirmation)**" if passed else "**FAILED (Does not pass promotion gate)**"
 
+    p_pos = float(boot.get("probability_delta_positive", boot.get("probability_positive", 0.0)))
+    ci = boot.get("ci_95_percentile", [boot.get("ci_lower", 0.0), boot.get("ci_upper", 0.0)])
+    ci_lower, ci_upper = ci[0], ci[1]
+
     lines = [
         "# Phase B18-A: Grounded Explanation Distillation Analysis",
         "",
@@ -179,15 +186,15 @@ def generate_markdown_report(result: dict[str, Any]) -> str:
         f"- **Helpful Corrections (Ctrl wrong -> Cand right):** {paired['helpful']}",
         f"- **Harmful Regressions (Ctrl right -> Cand wrong):** {paired['harmful']}",
         f"- **Exact McNemar p-value:** {paired['exact_mcnemar_p']:.5f}",
-        f"- **Paired Bootstrap P(Delta > 0):** **{boot.get('probability_positive', 0.0):.4f}** (Required >= 0.95)",
-        f"- **95% Bootstrap CI:** `[{boot.get('ci_lower', 0.0):.5f}, {boot.get('ci_upper', 0.0):.5f}]`",
+        f"- **Paired Bootstrap P(Delta > 0):** **{p_pos:.4f}** (Required >= 0.95)",
+        f"- **95% Bootstrap CI:** `[{ci_lower:+.5f}, {ci_upper:+.5f}]`",
         "",
         "## 3. Preregistered Promotion Gate Checks",
         "",
         "| Gate Criterion | Required Threshold | Observed | Result |",
         "|---|---|---|---|",
         f"| Delta Macro-F1 | >= +0.005 | {delta['macro_f1']:+.5f} | {'PASS' if gate['delta_macro_f1_ge_005'] else 'FAIL'} |",
-        f"| Bootstrap P(Delta > 0) | >= 0.95 | {boot.get('probability_positive', 0.0):.4f} | {'PASS' if gate['bootstrap_positive_ge_095'] else 'FAIL'} |",
+        f"| Bootstrap P(Delta > 0) | >= 0.95 | {p_pos:.4f} | {'PASS' if gate['bootstrap_positive_ge_095'] else 'FAIL'} |",
         f"| Supported F1 Preservation | >= -0.005 | {delta['f1_supported']:+.5f} | {'PASS' if gate['supported_f1_ge_minus_005'] else 'FAIL'} |",
         f"| Accuracy Preservation | >= -0.002 | {delta['accuracy']:+.5f} | {'PASS' if gate['accuracy_ge_minus_002'] else 'FAIL'} |",
         f"| Helpful > Harmful | Helpful > Harmful | {paired['helpful']} vs {paired['harmful']} | {'PASS' if gate['helpful_exceeds_harmful'] else 'FAIL'} |",
