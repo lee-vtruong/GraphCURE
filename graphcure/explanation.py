@@ -10,7 +10,29 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
+
+
+def resolve_corpus_path(path: Path | str) -> Path:
+    """Robustly resolve MOCHEG Corpus2.csv path if given directory or slightly wrong filename."""
+    p = Path(path)
+    if p.is_file():
+        return p
+    candidates = [
+        p / "Corpus2.csv",
+        p / "train" / "Corpus2.csv",
+        p.parent / "Corpus2.csv",
+        p.parent / "train" / "Corpus2.csv",
+        p.parent / "extracted" / "mocheg" / "train" / "Corpus2.csv",
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+    raise FileNotFoundError(
+        f"Corpus file not found at '{path}'. Expected 'Corpus2.csv' (e.g. data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv)."
+    )
+
 
 
 VALID_VERDICTS = {"SUPPORTED", "REFUTED", "NEI"}

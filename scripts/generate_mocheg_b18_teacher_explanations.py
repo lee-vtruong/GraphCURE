@@ -22,6 +22,7 @@ from graphcure.explanation import (
     LETTER_TO_VERDICT,
     TEACHER_SYSTEM_PROMPT,
     compose_teacher_prompt,
+    resolve_corpus_path,
     validate_explanation,
 )
 from scripts.run_mocheg_visual_retrieval import read_jsonl
@@ -139,7 +140,8 @@ def main() -> None:
 
     logging.info("Processing %d claims", len(claims))
     retrieval_by_id = {str(row["id"]): row for row in read_jsonl(args.retrieval)}
-    documents = read_documents(args.corpus)
+    corpus_path = resolve_corpus_path(args.corpus)
+    documents = read_documents(corpus_path)
 
     model = None
     tokenizer = None

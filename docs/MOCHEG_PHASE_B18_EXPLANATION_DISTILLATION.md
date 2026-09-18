@@ -138,7 +138,7 @@ mkdir -p outputs/mocheg_b18_explanations
 CUDA_VISIBLE_DEVICES=0 python -m scripts.generate_mocheg_b18_teacher_explanations \
   --manifest data/processed/mocheg_manifest_strict/train.jsonl \
   --retrieval outputs/retrieval_mocheg_dense_top50/train.jsonl \
-  --corpus data/raw/mocheg_dataset/extracted/mocheg/evidence.csv \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
   --folds data/processed/mocheg_b18_folds.json \
   --fold 0 \
   --model Qwen/Qwen2.5-7B-Instruct \
@@ -153,7 +153,7 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_b18_explanation_verifier \
   --mode matched_control \
   --manifest data/processed/mocheg_manifest_strict/train.jsonl \
   --retrieval outputs/retrieval_mocheg_dense_top50/train.jsonl \
-  --corpus data/raw/mocheg_dataset/extracted/mocheg/evidence.csv \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
   --folds data/processed/mocheg_b18_folds.json \
   --fold 0 \
   --model Qwen/Qwen3-4B-Instruct-2507 \
@@ -170,7 +170,7 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_b18_explanation_verifier \
   --mode explanation_candidate \
   --manifest data/processed/mocheg_manifest_strict/train.jsonl \
   --retrieval outputs/retrieval_mocheg_dense_top50/train.jsonl \
-  --corpus data/raw/mocheg_dataset/extracted/mocheg/evidence.csv \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
   --folds data/processed/mocheg_b18_folds.json \
   --fold 0 \
   --explanations data/processed/mocheg_b18_explanations/train_fold0_explanations.jsonl \

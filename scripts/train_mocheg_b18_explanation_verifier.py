@@ -36,6 +36,7 @@ from graphcure.explanation import (
     STUDENT_VERDICT_SYSTEM_PROMPT,
     compose_student_explanation_prompt,
     compose_student_verdict_prompt,
+    resolve_corpus_path,
 )
 from scripts.prepare_mocheg_sv_folds import sha256
 from scripts.run_mocheg_visual_retrieval import read_jsonl
@@ -317,7 +318,8 @@ def main() -> None:
         val_claims = val_claims[:args.limit]
 
     retrieval_by_id = {str(r["id"]): r for r in read_jsonl(args.retrieval)}
-    documents = read_documents(args.corpus)
+    corpus_path = resolve_corpus_path(args.corpus)
+    documents = read_documents(corpus_path)
 
     explanations_by_id = {}
     if args.mode == "explanation_candidate":

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import pytest
 
 from graphcure.explanation import (
@@ -9,6 +10,7 @@ from graphcure.explanation import (
     compose_student_explanation_prompt,
     compose_student_verdict_prompt,
     compose_teacher_prompt,
+    resolve_corpus_path,
     validate_explanation,
 )
 from scripts.analyze_mocheg_b18_explanation_verifier import analyze_b18_run
@@ -149,3 +151,23 @@ def test_analyze_b18_run_computes_deltas_and_gates():
     assert result["paired_analysis"]["helpful"] > 0
     assert result["paired_analysis"]["harmful"] == 0
     assert result["gate_checks"]["helpful_exceeds_harmful"] is True
+
+
+def test_resolve_corpus_path_finds_nested_file(tmp_path):
+    train_dir = tmp_path / "train"
+    train_dir.mkdir(parents=True)
+    corpus_file = train_dir / "Corpus2.csv"
+    corpus_file.write_text("header\n1", encoding="utf-8")
+
+    # Pass directory directly
+    resolved = resolve_corpus_path(tmp_path)
+    assert resolved == corpus_file
+
+    # Pass file directly
+    assert resolve_corpus_path(corpus_file) == corpus_file
+
+    # Non-existent raises
+    with pytest.raises(FileNotFoundError):
+        resolve_corpus_path(Path("nonexistent_top_level_folder_xyz_123") / "corpus.csv")
+
+
