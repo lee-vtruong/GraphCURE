@@ -79,6 +79,7 @@ class B18VerifierDataset(Dataset):
         top_k: int,
         max_evidence_chars: int,
         training: bool,
+        inject_train_gold: bool = False,
     ) -> None:
         self.training = training
         self.rows = []
@@ -93,6 +94,9 @@ class B18VerifierDataset(Dataset):
                 eid for eid in retrieved.get("retrieved_evidence_ids", [])[:top_k]
                 if eid in documents
             ]
+            if training and inject_train_gold:
+                from scripts.cache_mocheg_reasoning_features import inject_gold_candidate
+                candidates, _ = inject_gold_candidate(claim, candidates, documents, top_k)
             evidence_texts = [documents[eid] for eid in candidates]
             verdict_user_prompt = compose_student_verdict_prompt(
                 claim_text, evidence_texts, max_evidence_chars=max_evidence_chars
@@ -280,8 +284,12 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, required=True, help="Strict manifest (train.jsonl)")
     parser.add_argument("--retrieval", type=Path, required=True, help="Retrieved evidence manifest")
     parser.add_argument("--corpus", type=Path, required=True, help="Evidence corpus CSV")
-    parser.add_argument("--folds", type=Path, required=True, help="B18 folds JSON")
+    parser.add_argument("--folds", type=Path, default=None, help="B18 folds JSON (optional if --val-manifest is provided)")
     parser.add_argument("--fold", type=int, default=0, help="Fold index for evaluation (train on rest)")
+    parser.add_argument("--val-manifest", type=Path, default=None, help="Official validation manifest for full training")
+    parser.add_argument("--val-retrieval", type=Path, default=None, help="Official validation retrieval for full training")
+    parser.add_argument("--val-corpus", type=Path, default=None, help="Official validation corpus CSV")
+    parser.add_argument("--inject-train-gold", action="store_true", help="Inject gold candidate during training like B1")
     parser.add_argument("--explanations", type=Path, default=None, help="Teacher explanations JSONL (for candidate)")
     parser.add_argument("--output", type=Path, required=True, help="Output directory")
     parser.add_argument("--model", type=str, default="Qwen/Qwen3-4B-Instruct-2507")
@@ -302,24 +310,37 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device if torch.cuda.is_available() and "cuda" in args.device else "cpu")
 
-    # Load fold specification
-    fold_data = json.loads(args.folds.read_text(encoding="utf-8"))
-    fold_entry = next(f for f in fold_data["folds"] if f["fold"] == args.fold)
-    train_ids = set(fold_entry["train_ids"])
-    val_ids = set(fold_entry["val_ids"])
-    logging.info("Fold %d: %d train claims, %d held-out val claims", args.fold, len(train_ids), len(val_ids))
-
     all_claims = read_jsonl(args.manifest)
-    train_claims = [c for c in all_claims if str(c["id"]) in train_ids]
-    val_claims = [c for c in all_claims if str(c["id"]) in val_ids]
+    if args.folds is not None and args.folds.is_file():
+        fold_data = json.loads(args.folds.read_text(encoding="utf-8"))
+        fold_entry = next(f for f in fold_data["folds"] if f["fold"] == args.fold)
+        train_ids = set(fold_entry["train_ids"])
+        val_ids = set(fold_entry["val_ids"])
+        logging.info("Fold %d: %d train claims, %d held-out val claims", args.fold, len(train_ids), len(val_ids))
+        train_claims = [c for c in all_claims if str(c["id"]) in train_ids]
+        val_claims = [c for c in all_claims if str(c["id"]) in val_ids]
+    elif args.val_manifest is not None and args.val_manifest.is_file():
+        train_claims = all_claims
+        val_claims = read_jsonl(args.val_manifest)
+        logging.info("Full training mode: %d train claims, %d official val claims", len(train_claims), len(val_claims))
+    else:
+        raise ValueError("Either --folds or --val-manifest must be provided.")
 
     if args.limit > 0:
         train_claims = train_claims[:args.limit]
         val_claims = val_claims[:args.limit]
 
     retrieval_by_id = {str(r["id"]): r for r in read_jsonl(args.retrieval)}
+    if args.val_retrieval and args.val_retrieval.is_file():
+        for r in read_jsonl(args.val_retrieval):
+            retrieval_by_id[str(r["id"])] = r
+
     corpus_path = resolve_corpus_path(args.corpus)
     documents = read_documents(corpus_path)
+    if args.val_corpus and args.val_corpus.is_file():
+        val_corpus_path = resolve_corpus_path(args.val_corpus)
+        val_docs = read_documents(val_corpus_path)
+        documents.update(val_docs)
 
     explanations_by_id = {}
     if args.mode == "explanation_candidate":
@@ -364,11 +385,13 @@ def main() -> None:
 
     train_ds = B18VerifierDataset(
         train_claims, retrieval_by_id, documents, explanations_by_id,
-        args.top_k, args.max_evidence_chars, training=True
+        args.top_k, args.max_evidence_chars, training=True,
+        inject_train_gold=args.inject_train_gold,
     )
     val_ds = B18VerifierDataset(
         val_claims, retrieval_by_id, documents, None,
-        args.top_k, args.max_evidence_chars, training=False
+        args.top_k, args.max_evidence_chars, training=False,
+        inject_train_gold=False,
     )
 
     train_collate = make_b18_collate(tokenizer, args.max_length, training=True, mode=args.mode)
