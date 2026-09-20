@@ -70,6 +70,8 @@ def evaluate_single_run(
     top_k: int = 5,
     max_evidence_chars: int = 2200,
     max_length: int = 2500,
+    tag: str = "",
+    force: bool = False,
 ) -> dict[str, Any]:
     adapter_dir = model_dir / "best_adapter"
     if not adapter_dir.is_dir():
@@ -79,11 +81,11 @@ def evaluate_single_run(
         else:
             raise FileNotFoundError(f"Adapter directory missing: {adapter_dir}")
 
-    pred_out_path = model_dir / "test_predictions.jsonl"
-    summary_out_path = model_dir / "test_summary.json"
+    pred_out_path = model_dir / (f"test_predictions_{tag}.jsonl" if tag else "test_predictions.jsonl")
+    summary_out_path = model_dir / (f"test_summary_{tag}.json" if tag else "test_summary.json")
 
-    # If predictions already exist, reload them
-    if pred_out_path.is_file() and summary_out_path.is_file():
+    # If predictions already exist and not force, reload them
+    if not force and pred_out_path.is_file() and summary_out_path.is_file():
         logging.info("Found cached test predictions in %s, reloading...", model_dir)
         pred_rows = read_jsonl(pred_out_path)
         summary = json.loads(summary_out_path.read_text(encoding="utf-8"))
@@ -160,7 +162,9 @@ def main() -> None:
     parser.add_argument("--retrieval-top3", type=Path, default=Path("outputs/mocheg_b18b_top3_retrieval/test.jsonl"))
     parser.add_argument("--corpus", type=Path, default=Path("data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv"))
     parser.add_argument("--base-model", type=str, default="Qwen/Qwen3-4B-Instruct-2507")
+    parser.add_argument("--tag", type=str, default="", help="Tag suffix for output prediction files")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/mocheg_b18_official_test"))
+    parser.add_argument("--force", action="store_true", help="Force re-evaluation even if predictions already exist")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--bootstrap-iterations", type=int, default=10000)
@@ -200,6 +204,8 @@ def main() -> None:
             answer_ids=answer_ids,
             device=device,
             batch_size=args.batch_size,
+            tag=args.tag,
+            force=args.force,
         )
         individual_summaries.append(res)
         p_dict = {str(r["id"]): r for r in res["predictions"]}
