@@ -22,10 +22,14 @@ from scripts.train_mocheg_cached_verifier import expected_calibration_error
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def load_run_predictions(run_dir: Path) -> dict[str, dict]:
-    pred_path = run_dir / "val_predictions.jsonl"
+def load_run_predictions(run_dir: Path, filename: str = "val_predictions.jsonl") -> dict[str, dict]:
+    pred_path = run_dir / filename
     if not pred_path.is_file():
-        raise FileNotFoundError(f"Predictions file missing: {pred_path}")
+        alt_name = "test_predictions.jsonl" if filename == "val_predictions.jsonl" else "val_predictions.jsonl"
+        if (run_dir / alt_name).is_file():
+            pred_path = run_dir / alt_name
+        else:
+            raise FileNotFoundError(f"Predictions file missing: {pred_path}")
     rows = read_jsonl(pred_path)
     return {str(r["id"]): r for r in rows}
 
@@ -63,6 +67,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Heterogeneous Ensembling for GraphCURE Verifier Runs")
     parser.add_argument("--runs", type=Path, nargs="+", required=True, help="List of run directories to ensemble")
     parser.add_argument("--baseline-runs", type=Path, nargs="*", default=None, help="Optional baseline run directories to compare against")
+    parser.add_argument("--pred-file", type=str, default="val_predictions.jsonl", help="Prediction filename (e.g. test_predictions.jsonl)")
     parser.add_argument("--output", type=Path, default=None, help="Output JSON path")
     parser.add_argument("--markdown", type=Path, default=None, help="Output Markdown path")
     parser.add_argument("--iterations", type=int, default=10000)
@@ -70,10 +75,10 @@ def main() -> None:
     args = parser.parse_args()
 
     run_names = [p.name for p in args.runs]
-    logging.info("Loading %d runs: %s", len(args.runs), run_names)
-    loaded_runs = [load_run_predictions(p) for p in args.runs]
+    logging.info("Loading %d runs: %s (filename=%s)", len(args.runs), run_names, args.pred_file)
+    loaded_runs = [load_run_predictions(p, args.pred_file) for p in args.runs]
 
-    baseline_runs = [load_run_predictions(p) for p in args.baseline_runs] if args.baseline_runs else []
+    baseline_runs = [load_run_predictions(p, args.pred_file) for p in args.baseline_runs] if args.baseline_runs else []
 
     # Find common IDs
     all_dicts = loaded_runs + baseline_runs
