@@ -63,6 +63,8 @@ def evaluate_single_run(
     manifest_path: Path,
     retrieval_path: Path,
     corpus_docs: dict[str, str],
+    tokenizer: Any,
+    answer_ids: list[int],
     device: torch.device,
     batch_size: int = 4,
     top_k: int = 5,
@@ -90,13 +92,7 @@ def evaluate_single_run(
 
     logging.info("Evaluating model: %s on %s", model_dir.name, retrieval_path.name)
     from peft import PeftModel
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir), trust_remote_code=True)
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "right"
-    answer_ids = label_token_ids(tokenizer)
+    from transformers import AutoModelForCausalLM
 
     claims = read_jsonl(manifest_path)
     retrieval_by_id = {str(r["id"]): r for r in read_jsonl(retrieval_path)}
@@ -176,6 +172,14 @@ def main() -> None:
     corpus_docs = read_documents(corpus_path)
     logging.info("Loaded %d documents from test corpus", len(corpus_docs))
 
+    from transformers import AutoTokenizer
+    logging.info("Loading tokenizer from base model: %s", args.base_model)
+    tokenizer = AutoTokenizer.from_pretrained(args.base_model, trust_remote_code=True)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+    answer_ids = label_token_ids(tokenizer)
+
     individual_summaries = []
     runs_predictions: list[dict[str, dict]] = []
 
@@ -192,6 +196,8 @@ def main() -> None:
             manifest_path=args.manifest,
             retrieval_path=retrieval_path,
             corpus_docs=corpus_docs,
+            tokenizer=tokenizer,
+            answer_ids=answer_ids,
             device=device,
             batch_size=args.batch_size,
         )
