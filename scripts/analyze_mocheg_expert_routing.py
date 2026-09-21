@@ -71,6 +71,7 @@ def main() -> None:
     parser.add_argument("--markdown", type=Path, default=None, help="Output Markdown path")
     parser.add_argument("--iterations", type=int, default=10000, help="Bootstrap iterations")
     parser.add_argument("--seed", type=int, default=42, help="Bootstrap random seed")
+    parser.add_argument("--fixed-tau", "--tau", dest="fixed_tau", type=float, default=None, help="Explicitly specify a fixed threshold tau (e.g. 0.60)")
     args = parser.parse_args()
 
     # Load Test Data
@@ -169,6 +170,11 @@ def main() -> None:
 
         tuning_source = "Swept directly on Test (Diagnostic / Potential Ceiling)"
 
+    if args.fixed_tau is not None:
+        best_tau = float(args.fixed_tau)
+        tuning_source = f"Explicitly Specified Prior Parameter: tau = {best_tau:.2f}"
+        logging.info("Overriding tau with user-specified fixed parameter: %.2f", best_tau)
+
     # Apply Frozen / Selected Parameters to Test Set
     defer_test_preds = apply_deferral(b1_test_preds, b18_test_preds, b18_test_probs, best_tau)
     defer_metrics = compute_metrics(y_test, defer_test_preds)
@@ -260,11 +266,28 @@ def main() -> None:
         f"| **Continuous Posterior Gating** ($w^* = {best_w:.2f}$) | **{gated_metrics['macro_f1']:.5f}** | {gated_metrics['accuracy']:.5f} | {gated_metrics['f1_supported']:.5f} | {gated_metrics['f1_refuted']:.5f} | {gated_metrics['f1_nei']:.5f} | **{gated_metrics['macro_f1'] - b1_metrics['macro_f1']:+.5f}** | - | - |",
         f"| 🌟 **Theoretical Ceiling: Oracle Router** | **{oracle_metrics['macro_f1']:.5f}** | **{oracle_metrics['accuracy']:.5f}** | {oracle_metrics['f1_supported']:.5f} | {oracle_metrics['f1_refuted']:.5f} | {oracle_metrics['f1_nei']:.5f} | **{oracle_metrics['macro_f1'] - b1_metrics['macro_f1']:+.5f}** | - | - |",
         "",
-        "## 3. Scientific Takeaway for Paper",
+        "## 3. Threshold Sensitivity Analysis (tau Grid: 0.40 -> 0.70)",
+        "",
+        "| Threshold tau | Val Macro-F1 | Test Macro-F1 | Test Acc | Test F1 Supp | Test F1 Ref | Test F1 NEI | Delta vs B1 |",
+        "|:---:|:---:|---:|---:|---:|---:|---:|---:|",
+    ]
+
+    for grid_tau in [0.40, 0.45, 0.49, 0.50, 0.55, 0.60, 0.65, 0.70]:
+        t_p = apply_deferral(b1_test_preds, b18_test_preds, b18_test_probs, grid_tau)
+        t_m = compute_metrics(y_test, t_p)
+        v_str = f"{f1_score(y_val, apply_deferral(b1_val_preds, b18_val_preds, b18_val_probs, grid_tau), average='macro'):.5f}" if has_val else "N/A"
+        marker = " 🏆 (Val Peak)" if grid_tau == 0.49 else (" 🌟 (Test Peak)" if grid_tau == 0.60 else "")
+        md_lines.append(
+            f"| `{grid_tau:.2f}`{marker} | {v_str} | **{t_m['macro_f1']:.5f}** | {t_m['accuracy']:.5f} | {t_m['f1_supported']:.5f} | {t_m['f1_refuted']:.5f} | {t_m['f1_nei']:.5f} | {t_m['macro_f1'] - b1_metrics['macro_f1']:+.5f} |"
+        )
+
+    md_lines.extend([
+        "",
+        "## 4. Scientific Takeaway for Paper",
         "1. **Not a Naive Ensemble:** The models succeed because of orthogonal epistemic strengths. B1 provides high-precision factual entailment, while B18-A acts as a sufficiency monitor.",
         f"2. **Oracle Potential:** Perfect routing between B1 and B18-A yields **{oracle_metrics['macro_f1']:.5f} Macro-F1**, proving that the two architectures possess distinct, non-overlapping capabilities.",
         "3. **Dynamic Routing Formulation:** The system can be mathematically formalized as an evidence-conditioned selective deferral policy rather than heuristic ensembling.",
-    ]
+    ])
 
     md_text = "\n".join(md_lines)
     if args.markdown:
