@@ -233,7 +233,67 @@ CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_b18_explanation_verifier \
   2>&1 | tee outputs/mocheg_b18b/candidate_seed87/train.log
 
 # -----------------------------------------------------------------------------
-# Bước 5: Kiểm định Thống kê & So sánh Ensemble vs Matched Control
+# Bước 4b (Tùy chọn): Chuẩn bị Matched Controls trên Fold 0 (Retrieval Thô Chưa Lọc)
+# Dùng để so sánh đối đầu trực tiếp (A/B testing)
+# -----------------------------------------------------------------------------
+# Trường hợp 1: Nếu đã chạy B18-A control_fold0 trước đó (mặc định seed 42):
+if [ -d "outputs/mocheg_b18/control_fold0" ] && [ ! -d "outputs/mocheg_b18/control_seed42" ]; then
+  echo "Linking existing control_fold0 as control_seed42..."
+  cp -r outputs/mocheg_b18/control_fold0 outputs/mocheg_b18/control_seed42
+fi
+
+# Trường hợp 2: Huấn luyện Control Seed 42 nếu chưa có (với retrieval thô Qwen3 Reranked)
+if [ ! -f "outputs/mocheg_b18/control_seed42/val_predictions.jsonl" ]; then
+  mkdir -p outputs/mocheg_b18/control_seed42
+  CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_b18_explanation_verifier \
+    --mode matched_control \
+    --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+    --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+    --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+    --folds data/processed/mocheg_b18_folds.json \
+    --fold 0 \
+    --model Qwen/Qwen3-4B-Instruct-2507 \
+    --output outputs/mocheg_b18/control_seed42 \
+    --seed 42 \
+    --epochs 3 \
+    --batch-size 2 \
+    --grad-accum 4 \
+    --device cuda \
+    2>&1 | tee outputs/mocheg_b18/control_seed42/train.log
+fi
+
+# Huấn luyện Control Seed 87 nếu chưa có:
+if [ ! -f "outputs/mocheg_b18/control_seed87/val_predictions.jsonl" ]; then
+  mkdir -p outputs/mocheg_b18/control_seed87
+  CUDA_VISIBLE_DEVICES=0 python -m scripts.train_mocheg_b18_explanation_verifier \
+    --mode matched_control \
+    --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+    --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+    --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+    --folds data/processed/mocheg_b18_folds.json \
+    --fold 0 \
+    --model Qwen/Qwen3-4B-Instruct-2507 \
+    --output outputs/mocheg_b18/control_seed87 \
+    --seed 87 \
+    --epochs 3 \
+    --batch-size 2 \
+    --grad-accum 4 \
+    --device cuda \
+    2>&1 | tee outputs/mocheg_b18/control_seed87/train.log
+fi
+
+# -----------------------------------------------------------------------------
+# Bước 5A: Đánh giá Nhanh Hiệu năng Candidate & Ensemble (Không cần Control)
+# Xem ngay Macro-F1 của Seed 42, Seed 87 và Ensemble trên bằng chứng sạch!
+# -----------------------------------------------------------------------------
+python -m scripts.summarize_mocheg_b18_seeds \
+  --candidate-roots outputs/mocheg_b18b/candidate_seed42 outputs/mocheg_b18b/candidate_seed87 \
+  --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+  --output outputs/mocheg_b18b/summary_candidates_only.json \
+  --markdown outputs/mocheg_b18b/summary_candidates_only.md
+
+# -----------------------------------------------------------------------------
+# Bước 5B: Kiểm định Đối chiếu Đầy đủ với Matched Controls (Đo Delta & Bootstrap)
 # -----------------------------------------------------------------------------
 python -m scripts.summarize_mocheg_b18_seeds \
   --candidate-roots outputs/mocheg_b18b/candidate_seed42 outputs/mocheg_b18b/candidate_seed87 \
