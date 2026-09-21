@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import numpy as np
 
 from graphcure.selector import (
     AdaptiveSelectorPolicy,
@@ -19,6 +20,7 @@ from scripts.calibrate_mocheg_b18b_selector_policy import (
     attribution_metrics,
     choose_policy,
 )
+from scripts.analyze_mocheg_b18b_fold0 import compare
 from scripts.train_mocheg_b18b_sentence_selector import split_pairs_by_claim
 
 
@@ -187,6 +189,16 @@ def test_calibration_prefers_recall_safe_policy() -> None:
     assert satisfied is True
     assert chosen["micro_teacher_key_recall"] == 1.0
     assert chosen["mean_selected_k"] == 2.0
+
+
+def test_b18b_fold0_comparison_counts_help_and_harm() -> None:
+    labels = np.asarray([0, 1, 2, 0, 1, 2])
+    anchor = np.asarray([1, 1, 2, 0, 0, 2])
+    candidate = np.asarray([0, 1, 2, 1, 1, 2])
+    result = compare(labels, anchor, candidate, iterations=100, seed=42)
+    assert result["helpful"] == 2
+    assert result["harmful"] == 1
+    assert result["accuracy_delta"] > 0.0
 
 
 def test_end_to_end_train_mock_selector_cli(tmp_path: Path) -> None:
