@@ -22,14 +22,17 @@ from scripts.train_mocheg_cached_verifier import expected_calibration_error
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def load_run_predictions(run_dir: Path, filename: str = "val_predictions.jsonl") -> dict[str, dict]:
-    pred_path = run_dir / filename
-    if not pred_path.is_file():
-        alt_name = "test_predictions.jsonl" if filename == "val_predictions.jsonl" else "val_predictions.jsonl"
-        if (run_dir / alt_name).is_file():
-            pred_path = run_dir / alt_name
-        else:
-            raise FileNotFoundError(f"Predictions file missing: {pred_path}")
+def load_run_predictions(run_path: Path, filename: str = "val_predictions.jsonl") -> dict[str, dict]:
+    if run_path.is_file():
+        pred_path = run_path
+    else:
+        pred_path = run_path / filename
+        if not pred_path.is_file():
+            alt_name = "test_predictions.jsonl" if filename == "val_predictions.jsonl" else "val_predictions.jsonl"
+            if (run_path / alt_name).is_file():
+                pred_path = run_path / alt_name
+            else:
+                raise FileNotFoundError(f"Predictions file missing: {pred_path}")
     rows = read_jsonl(pred_path)
     return {str(r["id"]): r for r in rows}
 
@@ -88,13 +91,18 @@ def main() -> None:
     ordered_ids = sorted(common_ids)
     logging.info("Found %d common evaluation samples", len(ordered_ids))
 
-    y_true = np.asarray([int(all_dicts[0][cid]["label"]) for cid in ordered_ids])
+    first_sample = all_dicts[0][ordered_ids[0]]
+    label_key = "gold" if "gold" in first_sample else "label"
+    y_true = np.asarray([int(all_dicts[0][cid][label_key]) for cid in ordered_ids])
 
     # Per-run individual metrics
     individual_reports = []
     for p, r_dict in zip(args.runs, loaded_runs):
-        preds = np.asarray([int(r_dict[cid]["prediction"]) for cid in ordered_ids])
         probs = np.asarray([r_dict[cid]["probabilities"] for cid in ordered_ids])
+        if "prediction" in r_dict[ordered_ids[0]]:
+            preds = np.asarray([int(r_dict[cid]["prediction"]) for cid in ordered_ids])
+        else:
+            preds = probs.argmax(axis=-1)
         m = compute_metrics(y_true, preds, probs)
         individual_reports.append({"name": p.name, "path": str(p), **m})
 
