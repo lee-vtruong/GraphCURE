@@ -7,6 +7,7 @@ Outputs standard retrieval manifests compatible with the downstream verifier.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 from collections import Counter
@@ -25,9 +26,48 @@ from scripts.train_mocheg_qwen3_lora_verifier import read_documents
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
+POLICY_ALIASES = {
+    "adaptive": "distilled_ce_adaptive",
+    "fixed_top_1": "retrieval_top_1",
+    "fixed_top_3": "retrieval_top_3",
+    "original_top_5": "retrieval_top_5",
+    "oracle_teacher": "teacher_oracle",
+}
+RETRIEVAL_POLICIES = {
+    "retrieval_top_1": 1,
+    "retrieval_top_3": 3,
+    "retrieval_top_5": 5,
+}
+CROSS_ENCODER_POLICIES = {"generic_ce_adaptive", "distilled_ce_adaptive"}
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def canonical_policy_mode(mode: str) -> str:
+    return POLICY_ALIASES.get(mode, mode)
+
+
+def select_retrieval_top_k(
+    candidates: list[str], scores: list[float], top_k: int
+) -> tuple[list[str], list[float]]:
+    """Select the first K upstream candidates without reranking them."""
+    return candidates[:top_k], scores[:top_k]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare adaptively filtered evidence manifest for B18-B")
-    parser.add_argument("--selector", type=Path, required=True, help="Trained CrossEncoder directory or model name")
+    parser.add_argument(
+        "--selector",
+        type=Path,
+        default=None,
+        help="CrossEncoder directory/model name; required only for generic/distilled CE policies",
+    )
     parser.add_argument("--retrieval", type=Path, required=True, help="Input retrieval manifest (.jsonl)")
     parser.add_argument("--manifest", type=Path, required=True, help="Claims manifest (.jsonl)")
     parser.add_argument("--corpus", type=Path, required=True, help="Corpus2.csv path")
@@ -41,9 +81,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--policy-mode",
         type=str,
-        choices=["adaptive", "fixed_top_1", "fixed_top_3", "original_top_5", "oracle_teacher"],
-        default="adaptive",
+        choices=[
+            "retrieval_top_1",
+            "retrieval_top_3",
+            "retrieval_top_5",
+            "generic_ce_adaptive",
+            "distilled_ce_adaptive",
+            "teacher_oracle",
+            *POLICY_ALIASES,
+        ],
+        default="distilled_ce_adaptive",
         help="Evidence selection policy mode for ablations",
+    )
+    parser.add_argument(
+        "--split",
+        choices=["train", "val", "test"],
+        default="train",
+        help="Split provenance recorded in the audit summary",
     )
     parser.add_argument(
         "--teacher-explanations",
@@ -60,6 +114,17 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    policy_mode = canonical_policy_mode(args.policy_mode)
+    if policy_mode != args.policy_mode:
+        logging.warning(
+            "Legacy policy name %s maps to %s; use the canonical name in new experiments",
+            args.policy_mode,
+            policy_mode,
+        )
+    if policy_mode in CROSS_ENCODER_POLICIES and args.selector is None:
+        raise ValueError(f"--selector is required for policy mode {policy_mode}")
+    if policy_mode == "teacher_oracle" and args.teacher_explanations is None:
+        raise ValueError("--teacher-explanations is required for teacher_oracle")
 
     logging.info("Reading claims manifest: %s", args.manifest)
     claims = {str(c["id"]): c.get("claim", "") for c in read_jsonl(args.manifest)}
@@ -82,18 +147,12 @@ def main() -> None:
         teacher_explanations = {str(r["id"]): r for r in read_jsonl(args.teacher_explanations)}
         logging.info("Loaded %d teacher explanation records for attribution evaluation", len(teacher_explanations))
 
-    # Configure policy parameters based on policy_mode
+    # Configure only the adaptive CrossEncoder policy. Retrieval controls bypass
+    # it completely so their order is exactly the upstream retrieval order.
     min_k = args.min_k
     max_k = args.max_k
     score_threshold = args.score_threshold
     adaptive_margin = args.adaptive_margin
-
-    if args.policy_mode == "fixed_top_1":
-        min_k, max_k = 1, 1
-    elif args.policy_mode == "fixed_top_3":
-        min_k, max_k = 3, 3
-    elif args.policy_mode == "original_top_5":
-        min_k, max_k = args.top_k_candidates, args.top_k_candidates
 
     policy = AdaptiveSelectorPolicy(
         min_k=min_k,
@@ -103,12 +162,17 @@ def main() -> None:
     )
 
     is_mock = args.mock
-    if not is_mock and (args.selector / "mock_selector_config.json").is_file():
+    if (
+        policy_mode in CROSS_ENCODER_POLICIES
+        and not is_mock
+        and args.selector is not None
+        and (args.selector / "mock_selector_config.json").is_file()
+    ):
         logging.warning("Detected mock selector config in %s, falling back to mock scoring", args.selector)
         is_mock = True
 
     model = None
-    if not is_mock:
+    if policy_mode in CROSS_ENCODER_POLICIES and not is_mock:
         from sentence_transformers import CrossEncoder
         logging.info("Loading CrossEncoder selector: %s (device=%s)", args.selector, args.device)
         model = CrossEncoder(str(args.selector), device=args.device)
@@ -129,7 +193,17 @@ def main() -> None:
         cid = str(row["id"])
         claim_text = claims.get(cid, "")
         raw_candidates = row.get("retrieved_evidence_ids", [])[:args.top_k_candidates]
-        valid_candidates = [eid for eid in raw_candidates if eid in documents]
+        upstream_scores = row.get("retrieved_scores", [])[:args.top_k_candidates]
+        valid_candidates: list[str] = []
+        valid_upstream_scores: list[float] = []
+        for rank, eid in enumerate(raw_candidates):
+            if eid not in documents:
+                continue
+            valid_candidates.append(eid)
+            if rank < len(upstream_scores):
+                valid_upstream_scores.append(float(upstream_scores[rank]))
+            else:
+                valid_upstream_scores.append(1.0 / float(rank + 1))
 
         if not valid_candidates or not claim_text:
             filtered_rows.append({
@@ -143,12 +217,14 @@ def main() -> None:
             k_distribution[0] += 1
             continue
 
-        pairs = [(claim_text, documents[eid]) for eid in valid_candidates]
-        if is_mock:
-            raw_scores = mock_score_claim_evidence_pairs(pairs)
-        else:
-            preds = model.predict(pairs, batch_size=args.batch_size, show_progress_bar=False)
-            raw_scores = [float(s) for s in preds]
+        raw_scores = valid_upstream_scores
+        if policy_mode in CROSS_ENCODER_POLICIES:
+            pairs = [(claim_text, documents[eid]) for eid in valid_candidates]
+            if is_mock:
+                raw_scores = mock_score_claim_evidence_pairs(pairs)
+            else:
+                preds = model.predict(pairs, batch_size=args.batch_size, show_progress_bar=False)
+                raw_scores = [float(s) for s in preds]
 
         # Check for Oracle Teacher selection mode
         t_row = teacher_explanations.get(cid)
@@ -160,12 +236,22 @@ def main() -> None:
                 if 1 <= idx <= len(retrieved_eids_in_exp):
                     key_eids.add(retrieved_eids_in_exp[idx - 1])
 
-        if args.policy_mode == "oracle_teacher" and key_eids:
+        if policy_mode in RETRIEVAL_POLICIES:
+            selected_ids, selected_scores = select_retrieval_top_k(
+                valid_candidates,
+                valid_upstream_scores,
+                RETRIEVAL_POLICIES[policy_mode],
+            )
+        elif policy_mode == "teacher_oracle" and key_eids:
             oracle_ids = [eid for eid in valid_candidates if eid in key_eids]
             if not oracle_ids:
                 oracle_ids = [valid_candidates[0]]
             selected_ids = oracle_ids[:args.max_k]
-            selected_scores = [raw_scores[valid_candidates.index(eid)] for eid in selected_ids]
+            selected_scores = [valid_upstream_scores[valid_candidates.index(eid)] for eid in selected_ids]
+        elif policy_mode == "teacher_oracle":
+            selected_ids, selected_scores = select_retrieval_top_k(
+                valid_candidates, valid_upstream_scores, 1
+            )
         else:
             selected_ids, selected_scores = policy.select(valid_candidates, raw_scores)
 
@@ -235,8 +321,11 @@ def main() -> None:
     summary_payload = {
         "phase": "B18-B",
         "task": "adaptive_evidence_filtering",
-        "selector": str(args.selector),
-        "policy_mode": args.policy_mode,
+        "protocol": "B18B_retrieval_control_or_claim_conditioned_selector_v2",
+        "split": args.split,
+        "selector": str(args.selector) if args.selector is not None else None,
+        "requested_policy_mode": args.policy_mode,
+        "policy_mode": policy_mode,
         "total_claims": len(filtered_rows),
         "policy": {
             "min_k": min_k,
@@ -250,6 +339,23 @@ def main() -> None:
         "k_distribution_percent": k_dist_pct,
         "gold_recall_at_selected": gold_recall,
         "teacher_attribution": attribution_metrics,
+        "audit": {
+            "manifest_sha256": sha256_file(args.manifest),
+            "retrieval_sha256": sha256_file(args.retrieval),
+            "corpus_sha256": sha256_file(corpus_path),
+            "teacher_explanations_sha256": (
+                sha256_file(args.teacher_explanations) if args.teacher_explanations else None
+            ),
+            "output_sha256": sha256_file(args.output),
+            "preserves_upstream_order": policy_mode in RETRIEVAL_POLICIES,
+            "selector_scores_used": policy_mode in CROSS_ENCODER_POLICIES,
+            "teacher_rationale_supervision": policy_mode == "distilled_ce_adaptive",
+            "teacher_oracle_selection": policy_mode == "teacher_oracle",
+            "label_used_for_selection": False,
+            "gold_evidence_used_for_selection": False,
+            "gold_evidence_used_for_diagnostic_only": bool(gold_hits),
+            "test_split_used": args.split == "test",
+        },
     }
 
     args.summary.parent.mkdir(parents=True, exist_ok=True)

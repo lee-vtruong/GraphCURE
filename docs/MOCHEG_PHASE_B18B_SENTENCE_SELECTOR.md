@@ -143,6 +143,93 @@ Sau khi evidence đã được thanh lọc qua Selector, mô hình verifier (`Qw
 
 Chạy tuần tự các khối lệnh sau trên GPU server `hvtham-server`:
 
+### 9.1. Protocol v2 bắt buộc (cập nhật 2026-09-21)
+
+Các tên policy canonical từ phiên bản này là:
+
+- `retrieval_top_1`, `retrieval_top_3`, `retrieval_top_5`: control retrieval thật, giữ nguyên thứ tự và score upstream, không tải CrossEncoder.
+- `generic_ce_adaptive`: CrossEncoder MS-MARCO chưa distill.
+- `distilled_ce_adaptive`: CrossEncoder được huấn luyện bằng pseudo-label từ teacher rationale.
+- `teacher_oracle`: upper bound chẩn đoán, không phải kết quả chính.
+
+Tên cũ vẫn được ánh xạ để tương thích, nhưng không dùng trong run mới. Selector được chia train/dev theo **claim ID**, vì chia ngẫu nhiên ở cấp pair sẽ làm cùng một claim lọt vào cả hai phía. `training_summary.json` và summary của từng manifest lưu SHA-256, nguồn supervision và các cờ label/gold/test để kiểm toán.
+
+Chạy smoke trước khi tốn GPU cho toàn bộ fold:
+
+```bash
+mkdir -p outputs/mocheg_b18b_v2/smoke_selector
+python -m scripts.train_mocheg_b18b_sentence_selector \
+  --explanations data/processed/mocheg_b18_explanations/train_fold0_explanations.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --output outputs/mocheg_b18b_v2/smoke_selector \
+  --base-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --dev-fraction 0.10 --limit 256 --epochs 1 --batch-size 32 --device cuda \
+  2>&1 | tee outputs/mocheg_b18b_v2/smoke_selector/train.log
+
+python -m scripts.prepare_mocheg_b18b_selected_evidence \
+  --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+  --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --output outputs/mocheg_b18b_v2/smoke_top3.jsonl \
+  --summary outputs/mocheg_b18b_v2/smoke_top3_summary.json \
+  --policy-mode retrieval_top_3 --split train --limit 32
+
+python -m scripts.prepare_mocheg_b18b_selected_evidence \
+  --selector outputs/mocheg_b18b_v2/smoke_selector \
+  --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+  --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --output outputs/mocheg_b18b_v2/smoke_distilled.jsonl \
+  --summary outputs/mocheg_b18b_v2/smoke_distilled_summary.json \
+  --policy-mode distilled_ce_adaptive --split train --limit 32 --device cuda
+```
+
+Nếu smoke hoàn tất, chạy selector đầy đủ và tạo ma trận manifest ablation:
+
+```bash
+mkdir -p outputs/mocheg_b18b_v2/selector outputs/mocheg_b18b_v2/retrieval
+python -m scripts.train_mocheg_b18b_sentence_selector \
+  --explanations data/processed/mocheg_b18_explanations/train_fold0_explanations.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --output outputs/mocheg_b18b_v2/selector \
+  --base-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --dev-fraction 0.10 --epochs 3 --batch-size 32 --device cuda \
+  2>&1 | tee outputs/mocheg_b18b_v2/selector/train.log
+
+for K in 1 3 5; do
+  python -m scripts.prepare_mocheg_b18b_selected_evidence \
+    --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+    --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+    --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+    --output "outputs/mocheg_b18b_v2/retrieval/retrieval_top_${K}.jsonl" \
+    --summary "outputs/mocheg_b18b_v2/retrieval/retrieval_top_${K}_summary.json" \
+    --policy-mode "retrieval_top_${K}" --split train
+done
+
+python -m scripts.prepare_mocheg_b18b_selected_evidence \
+  --selector cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+  --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --output outputs/mocheg_b18b_v2/retrieval/generic_ce_adaptive.jsonl \
+  --summary outputs/mocheg_b18b_v2/retrieval/generic_ce_adaptive_summary.json \
+  --policy-mode generic_ce_adaptive --split train --device cuda
+
+python -m scripts.prepare_mocheg_b18b_selected_evidence \
+  --selector outputs/mocheg_b18b_v2/selector \
+  --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+  --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --teacher-explanations data/processed/mocheg_b18_explanations/train_fold0_explanations.jsonl \
+  --output outputs/mocheg_b18b_v2/retrieval/distilled_ce_adaptive.jsonl \
+  --summary outputs/mocheg_b18b_v2/retrieval/distilled_ce_adaptive_summary.json \
+  --policy-mode distilled_ce_adaptive --split train --device cuda
+```
+
+Chỉ khi các manifest trên có `audit.gold_evidence_used_for_selection=false`, `audit.label_used_for_selection=false` và selector có `claim_split_overlap=0`, mới chạy verifier. Thứ tự ưu tiên tiết kiệm GPU là: `retrieval_top_5` → `generic_ce_adaptive` → `distilled_ce_adaptive`, đều seed 42 trên fold 0; chỉ mở seed 87 và các fold xác nhận nếu candidate distilled vượt matched control.
+
+> Khối runbook cũ bên dưới được giữ để tái lập các run lịch sử. Với run mới, thay `--policy-mode adaptive` bằng `--policy-mode distilled_ce_adaptive` và luôn thêm `--dev-fraction 0.10` khi train selector.
+
 ```bash
 # -----------------------------------------------------------------------------
 # Bước 0: Cập nhật mã nguồn và môi trường
@@ -168,6 +255,7 @@ python -m scripts.train_mocheg_b18b_sentence_selector \
   --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
   --output outputs/mocheg_b18b_selector \
   --base-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --dev-fraction 0.10 \
   --epochs 3 \
   --batch-size 32 \
   --device cuda \
@@ -185,7 +273,8 @@ python -m scripts.prepare_mocheg_b18b_selected_evidence \
   --teacher-explanations data/processed/mocheg_b18_explanations/train_fold0_explanations.jsonl \
   --output outputs/mocheg_b18b_filtered_retrieval/train.jsonl \
   --summary outputs/mocheg_b18b_filtered_retrieval/summary.json \
-  --policy-mode adaptive \
+  --policy-mode distilled_ce_adaptive \
+  --split train \
   --min-k 1 \
   --max-k 3 \
   --adaptive-margin 1.5 \

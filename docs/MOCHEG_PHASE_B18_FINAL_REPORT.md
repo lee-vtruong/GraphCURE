@@ -5,6 +5,8 @@
 **Trạng thái:** Hoàn thành & Đạt chuẩn kiểm định thống kê (Passed Promotion Gate)  
 **Git Branch:** `feature/mocheg-phase-b18-explanation-distillation`  
 
+> **Nhánh thực nghiệm kế tiếp:** B18-B không thay thế kết quả confirmatory của B18-A. Đây là ablation kiến trúc riêng nhằm kiểm tra liệu teacher rationale có cải thiện verifier thông qua evidence selection thay vì explanation loss. Protocol v2 bắt buộc dùng retrieval Top-K controls giữ nguyên upstream order, generic CrossEncoder control, distilled CrossEncoder candidate và claim-disjoint selector dev split; xem `MOCHEG_PHASE_B18B_SENTENCE_SELECTOR.md`.
+
 ---
 
 ## 1. Quy chuẩn đặt tên Protocol (Protocol Naming & Split Rigor)

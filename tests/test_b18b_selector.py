@@ -14,6 +14,8 @@ from graphcure.selector import (
     extract_selector_pairs,
     mock_score_claim_evidence_pairs,
 )
+from scripts.prepare_mocheg_b18b_selected_evidence import select_retrieval_top_k
+from scripts.train_mocheg_b18b_sentence_selector import split_pairs_by_claim
 
 
 def test_adaptive_selector_policy_min_max_k() -> None:
@@ -128,6 +130,28 @@ def test_mock_score_claim_evidence_pairs() -> None:
     assert scores[1] == 0.0
 
 
+def test_selector_dev_split_is_claim_disjoint() -> None:
+    pairs = [
+        {"claim_id": f"c{claim}", "label": float(index % 2)}
+        for claim in range(10)
+        for index in range(3)
+    ]
+    train_pairs, dev_pairs = split_pairs_by_claim(pairs, dev_fraction=0.2, seed=42)
+    train_claims = {row["claim_id"] for row in train_pairs}
+    dev_claims = {row["claim_id"] for row in dev_pairs}
+    assert train_claims.isdisjoint(dev_claims)
+    assert len(dev_claims) == 2
+    assert len(train_pairs) + len(dev_pairs) == len(pairs)
+
+
+def test_retrieval_top_k_preserves_upstream_order_and_scores() -> None:
+    candidates = ["doc_c", "doc_a", "doc_b"]
+    scores = [0.91, 0.72, 0.61]
+    selected_ids, selected_scores = select_retrieval_top_k(candidates, scores, 2)
+    assert selected_ids == ["doc_c", "doc_a"]
+    assert selected_scores == [0.91, 0.72]
+
+
 def test_end_to_end_train_mock_selector_cli(tmp_path: Path) -> None:
     corpus_csv = tmp_path / "Corpus2.csv"
     with corpus_csv.open("w", newline="", encoding="utf-8") as f:
@@ -174,6 +198,8 @@ def test_end_to_end_train_mock_selector_cli(tmp_path: Path) -> None:
     summary = json.loads((out_dir / "training_summary.json").read_text())
     assert summary["positives"] == 1
     assert summary["negatives"] == 2
+    assert summary["claim_split_overlap"] == 0
+    assert summary["audit"]["validation_labels_used"] is False
 
 
 def test_end_to_end_prepare_selected_evidence_cli(tmp_path: Path) -> None:
@@ -249,6 +275,48 @@ def test_end_to_end_prepare_selected_evidence_cli(tmp_path: Path) -> None:
     assert summary["avg_selected_passages"] >= 1.0
 
 
+def test_retrieval_control_cli_needs_no_selector_and_preserves_order(tmp_path: Path) -> None:
+    corpus_csv = tmp_path / "Corpus2.csv"
+    with corpus_csv.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["evidence_id", "Evidence"])
+        writer.writerow(["ev_1", "Low lexical overlap."])
+        writer.writerow(["ev_2", "Claim words appear here strongly."])
+        writer.writerow(["ev_3", "Another passage."])
+
+    manifest = tmp_path / "claims.jsonl"
+    manifest.write_text(json.dumps({"id": "c1", "claim": "Claim words"}) + "\n")
+    retrieval = tmp_path / "retrieval.jsonl"
+    retrieval.write_text(
+        json.dumps({
+            "id": "c1",
+            "retrieved_evidence_ids": ["ev_1", "ev_2", "ev_3"],
+            "retrieved_scores": [0.9, 0.8, 0.7],
+        }) + "\n"
+    )
+    output = tmp_path / "top2.jsonl"
+    summary = tmp_path / "summary.json"
+    cmd = [
+        sys.executable,
+        "-m",
+        "scripts.prepare_mocheg_b18b_selected_evidence",
+        "--retrieval", str(retrieval),
+        "--manifest", str(manifest),
+        "--corpus", str(corpus_csv),
+        "--output", str(output),
+        "--summary", str(summary),
+        "--policy-mode", "retrieval_top_3",
+        "--top-k-candidates", "3",
+    ]
+    subprocess.run(cmd, capture_output=True, text=True, check=True)
+    row = json.loads(output.read_text().strip())
+    assert row["retrieved_evidence_ids"] == ["ev_1", "ev_2", "ev_3"]
+    assert row["retrieved_scores"] == [0.9, 0.8, 0.7]
+    audit = json.loads(summary.read_text())["audit"]
+    assert audit["preserves_upstream_order"] is True
+    assert audit["selector_scores_used"] is False
+
+
 def test_prepare_selected_evidence_with_teacher_attribution(tmp_path: Path) -> None:
     corpus_csv = tmp_path / "Corpus2.csv"
     with corpus_csv.open("w", newline="", encoding="utf-8") as f:
@@ -314,10 +382,10 @@ def test_prepare_selected_evidence_with_teacher_attribution(tmp_path: Path) -> N
     subprocess.run(cmd, capture_output=True, text=True, check=True)
 
     summary = json.loads(out_summary.read_text())
-    assert summary["policy_mode"] == "adaptive"
+    assert summary["requested_policy_mode"] == "adaptive"
+    assert summary["policy_mode"] == "distilled_ce_adaptive"
     assert "teacher_attribution" in summary
     attr = summary["teacher_attribution"]
     assert attr["grounded_claims_evaluated"] == 1
     assert attr["teacher_key_coverage_mean"] == 1.0
     assert attr["pseudo_recall_at_1"] == 1.0
-
