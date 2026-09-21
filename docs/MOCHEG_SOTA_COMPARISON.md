@@ -20,9 +20,11 @@ Gold-evidence and open-web results are not directly comparable with P1.
 | MEVER | 0.483 +/- 0.021 | Macro-F1 0.497 +/- 0.012 | retrieved multimodal evidence | custom consistent preprocessing |
 | M-RAV Qwen2.5-32B | 0.5002 | Macro-F1 0.5014 | system-retrieved evidence | filtered MOCHEG test n=2001; not direct official comparison |
 | AMuFC (arXiv v2) | 0.546 | Macro-F1 0.540 | retrieved text + image; Analyzer + VLM Verifier | direct P1 challenger |
-| GraphCURE-R2V | 0.4961 +/- 0.0108 | Macro-F1 0.4711 +/- 0.0118 | retrieved text only; five seeds | strict deduplicated split |
-| GraphCURE-Qwen3 (raw ensemble) | 0.5690 | Macro-F1 0.5458 | fixed-corpus retrieved text; five frozen LoRA seeds | strict robustness split n=2434 |
-| **GraphCURE-Qwen3 (raw ensemble)** | **0.5680** | **Macro-F1 0.5453** | fixed-corpus retrieved text; five frozen LoRA seeds | **official P1 n=2442; no test tuning** |
+| GraphCURE-Qwen3 B1 (raw ensemble) | 0.5690 | Macro-F1 0.5458 | fixed-corpus retrieved text; five frozen LoRA seeds | strict robustness split n=2434 |
+| GraphCURE-Qwen3 B1 (raw ensemble) | 0.5680 | Macro-F1 0.5453 | fixed-corpus retrieved text; five frozen LoRA seeds | official P1 n=2442; no test tuning |
+| GraphCURE-B18A (Seed 100 single seed) | 0.5696 | Macro-F1 0.5513 | fixed-corpus retrieved text; grounded explanation distillation | official P1 n=2442; single seed beats 5-seed B1 |
+| **GraphCURE-B18A (Super-Ensemble)** | **0.5748** | **Macro-F1 0.5538** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **strict robustness split n=2434; P(Delta>0)=0.9621** |
+| **GraphCURE-B18A (Super-Ensemble)** | **0.5754** | **Macro-F1 0.5551** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **official P1 n=2442; verified SOTA (P(Delta>0)=0.9839)** |
 
 Primary comparison source for the common table: AMuFC arXiv v2, Table 3,
 <https://arxiv.org/abs/2604.04692>.

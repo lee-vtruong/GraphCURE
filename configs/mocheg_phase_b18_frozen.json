@@ -1,68 +1,80 @@
 {
   "phase": "B18-A",
   "name": "mocheg_b18a_explanation_distillation_frozen",
-  "description": "Evidence-grounded explanation distillation verifier on MOCHEG P1 strict test set",
+  "description": "Evidence-grounded explanation distillation verifier on MOCHEG official and strict test sets",
   "date_frozen": "2026-09-21",
   "git_branch": "feature/mocheg-phase-b18-explanation-distillation",
-  "protocol": "P1_strict_test_n2434",
-  "protocol_full_name": "P1 fixed-corpus retrieved evidence (strict deduplicated robustness track, n=2434)",
-  "comparability_protocol": "P1_official_test_n2442",
   "base_model": "Qwen/Qwen3-4B-Instruct-2507",
   "teacher_model": "Qwen/Qwen2.5-7B-Instruct",
   "loss_formulation": "L_verdict + 0.25 * L_explanation",
   "evaluation": {
-    "test_samples": 2434,
-    "b1_baseline_strict_test": {
-      "macro_f1": 0.5458064333465386,
-      "accuracy": 0.5690221857025473,
-      "f1_supported": 0.58610,
-      "f1_refuted": 0.65134,
-      "f1_nei": 0.40000
-    },
-    "b1_baseline_official_test_reference": {
+    "p1_official_test_n2442": {
       "samples": 2442,
-      "macro_f1": 0.5453088823438615,
-      "accuracy": 0.5679770679770679
-    },
-    "single_seed_sota": {
-      "model": "candidate_seed100",
-      "macro_f1": 0.54960,
-      "accuracy": 0.56820,
-      "f1_supported": 0.53815,
-      "f1_refuted": 0.66243,
-      "f1_nei": 0.44820,
-      "delta_macro_f1_vs_b1": 0.00379
-    },
-    "val_selected_heterogeneous_ensemble": {
-      "selection_policy": "Top-3 candidates ranked on validation split (seeds 100, 87, 42) + 5 frozen B1 seeds",
-      "models": [
-        "outputs/mocheg_qwen3_lora_frozen_test/seed_13_predictions.jsonl",
-        "outputs/mocheg_qwen3_lora_frozen_test/seed_21_predictions.jsonl",
-        "outputs/mocheg_qwen3_lora_frozen_test/seed_42_predictions.jsonl",
-        "outputs/mocheg_qwen3_lora_frozen_test/seed_87_predictions.jsonl",
-        "outputs/mocheg_qwen3_lora_frozen_test/seed_100_predictions.jsonl",
-        "outputs/mocheg_b18a_full/candidate_seed100/test_predictions.jsonl",
-        "outputs/mocheg_b18a_full/candidate_seed87/test_predictions.jsonl",
-        "outputs/mocheg_b18a_full/candidate_seed42/test_predictions.jsonl"
-      ],
-      "macro_f1": 0.55383,
-      "accuracy": 0.57477,
-      "f1_supported": 0.57991,
-      "f1_refuted": 0.65793,
-      "f1_nei": 0.42364,
-      "delta_macro_f1_vs_b1": 0.00803,
-      "delta_accuracy_vs_b1": 0.00575,
-      "bootstrap_parameters": {
-        "iterations": 10000,
-        "seed": 42,
-        "method": "paired_percentile_claim_level",
-        "p_positive": 0.9621,
-        "ci_95": [0.00084, 0.01526]
+      "protocol": "P1 official test (raw official benchmark track, n=2442)",
+      "b1_baseline": {
+        "macro_f1": 0.5453088823438615,
+        "accuracy": 0.5679770679770679,
+        "f1_supported": 0.58626,
+        "f1_refuted": 0.64935,
+        "f1_nei": 0.40032
       },
-      "mcnemar_audit": {
+      "single_seed_sota": {
+        "model": "candidate_seed100",
+        "macro_f1": 0.55128,
+        "accuracy": 0.56962,
+        "f1_supported": 0.53846,
+        "f1_refuted": 0.66364,
+        "f1_nei": 0.45175,
+        "delta_macro_f1_vs_b1": 0.00597,
+        "delta_accuracy_vs_b1": 0.00164
+      },
+      "val_selected_heterogeneous_ensemble_8_models": {
+        "macro_f1": 0.55507,
+        "accuracy": 0.57535,
+        "f1_supported": 0.58014,
+        "f1_refuted": 0.65735,
+        "f1_nei": 0.42770,
+        "delta_macro_f1_vs_b1": 0.00976,
+        "delta_accuracy_vs_b1": 0.00737,
+        "bootstrap_p_positive": 0.9839,
+        "bootstrap_ci_95": [0.00097, 0.01850],
+        "helpful_corrections": 54,
+        "harmful_regressions": 36,
+        "exact_mcnemar_p": 0.07255
+      }
+    },
+    "p1_strict_test_n2434": {
+      "samples": 2434,
+      "protocol": "P1 strict test (leakage-controlled deduplicated track, n=2434)",
+      "b1_baseline": {
+        "macro_f1": 0.5458064333465386,
+        "accuracy": 0.5690221857025473,
+        "f1_supported": 0.58610,
+        "f1_refuted": 0.65134,
+        "f1_nei": 0.40000
+      },
+      "single_seed_sota": {
+        "model": "candidate_seed100",
+        "macro_f1": 0.54960,
+        "accuracy": 0.56820,
+        "f1_supported": 0.53815,
+        "f1_refuted": 0.66243,
+        "f1_nei": 0.44820,
+        "delta_macro_f1_vs_b1": 0.00379
+      },
+      "val_selected_heterogeneous_ensemble_8_models": {
+        "macro_f1": 0.55383,
+        "accuracy": 0.57477,
+        "f1_supported": 0.57991,
+        "f1_refuted": 0.65793,
+        "f1_nei": 0.42364,
+        "delta_macro_f1_vs_b1": 0.00803,
+        "delta_accuracy_vs_b1": 0.00575,
+        "bootstrap_p_positive": 0.9621,
+        "bootstrap_ci_95": [0.00084, 0.01526],
         "helpful_corrections": 51,
         "harmful_regressions": 37,
-        "p_value": 0.1378
+        "exact_mcnemar_p": 0.1378
       }
     }
   },

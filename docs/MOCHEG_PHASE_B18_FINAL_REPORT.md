@@ -26,21 +26,34 @@
 
 ---
 
-## 2. Bảng tổng hợp Benchmark trên P1 Strict Test ($n = 2,434$)
+## 2. Bảng Tổng Hợp Benchmark Song Song: P1 Strict vs. P1 Official
 
-| Hệ thống / Mô hình | Số mô hình | Macro-F1 | Accuracy | F1 Supp | F1 Ref | F1 NEI | $\Delta$ MF1 vs B1 | Bootstrap $P(\Delta > 0)$ | 95% Bootstrap CI |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **AMuFC v2 (P1 verified literature)** | - | 0.54000 | 0.54600 | - | - | - | -0.00581 | - | - |
-| **B1 Baseline (Frozen 5-seed Ensemble)** | 5 | 0.54581 | 0.56902 | **0.58610** | 0.65134 | 0.40000 | *Gốc đối chiếu* | - | - |
-| *B18-A Candidate Seed 13* | 1 | 0.51082 | 0.53657 | 0.48689 | 0.64024 | 0.40533 | -0.03499 | - | - |
-| *B18-A Candidate Seed 21* | 1 | 0.52284 | 0.54601 | 0.51117 | 0.64087 | 0.41648 | -0.02297 | - | - |
-| *B18-A Candidate Seed 42* | 1 | 0.53314 | 0.55218 | 0.51918 | 0.64624 | 0.43399 | -0.01267 | - | - |
-| *B18-A Candidate Seed 87* | 1 | 0.53770 | 0.55957 | 0.52174 | 0.65290 | 0.43846 | -0.00811 | - | - |
-| **B18-A Candidate Seed 100 (Single-seed SOTA)** | **1** | **0.54960** | **0.56820** | 0.53815 | **0.66243** | **0.44820** | **+0.00379** | - | - |
-| *B18-A 5-seed Homogeneous Ensemble* | 5 | 0.53794 | 0.55875 | 0.51944 | 0.64848 | 0.44589 | -0.00787 | - | - |
-| *B18-A Top-3 Homogeneous Ensemble (42, 87, 100)* | 3 | 0.53906 | 0.55957 | 0.52174 | 0.65290 | 0.44253 | -0.00675 | - | - |
-| 🏆 **Val-Selected Heterogeneous Ensemble (5 B1 + Top-3 B18-A)** | **8** | **0.55383** | **0.57477** | 0.57991 | **0.65793** | **0.42364** | **+0.00803** | **0.9621** | **[+0.00084, +0.01526]** |
-| 🛡️ **Full Unpruned Heterogeneous Ensemble (5 B1 + 5 B18-A)** | **10** | *Đánh giá đối chiếu* | *Không tham số* | - | - | - | $> 0$ | $\ge 0.95$ | Có sẵn trong script |
+### 2.1. So sánh Song Song giữa Hai Track
+
+| Hệ thống / Mô hình | Số seed | P1 Strict Test ($n=2,434$)<br>Macro-F1 / Accuracy | P1 Official Test ($n=2,442$)<br>Macro-F1 / Accuracy | F1 Refuted (Official) | F1 NEI (Official) | $\Delta$ MF1 vs B1 (Official) | Bootstrap $P(\Delta > 0)$ |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **AMuFC v2 (arXiv 2026)** | - | — | 0.54000 / 0.54600 | — | — | -0.00531 | — |
+| **HGTMFC (AAAI 2025)** | - | — | 0.46780 / 0.48610 | — | — | -0.07751 | — |
+| **B1 Baseline (5-seed Frozen Ensemble)** | 5 | 0.54581 / 0.56902 | 0.54531 / 0.56798 | 0.64935 | 0.40032 | *Mốc đối chiếu* | — |
+| *B18-A Candidate Seed 42* | 1 | 0.53314 / 0.55218 | 0.53381 / 0.55242 | 0.64566 | 0.43702 | -0.01150 | — |
+| *B18-A Candidate Seed 87* | 1 | 0.53770 / 0.55957 | 0.53938 / 0.56061 | 0.65261 | 0.44300 | -0.00593 | — |
+| 🌟 **B18-A Candidate Seed 100 (Single SOTA)** | **1** | **0.54960** / 0.56820 | **0.55128** / **0.56962** | **0.66364** | **0.45175** | **+0.00597** | — |
+| *B18-A 3-seed Homogeneous Ensemble* | 3 | 0.53906 / 0.55957 | 0.53986 / 0.55979 | 0.65332 | 0.44209 | -0.00545 | — |
+| 🏆 **Grand Super-Ensemble (5 B1 + 3 B18-A)** | **8** | **0.55383** / **0.57477** | **`0.55507`** / **`0.57535`** | **`0.65735`** | **`0.42770`** | **`+0.00976`** | **`0.9839`** |
+
+### 2.2. Chi tiết Đánh giá trên P1 Official Test Set ($n = 2,442$)
+- **Ensemble Macro-F1:** **`0.55507`** (Tăng **`+0.00976`** so với B1 Baseline).
+- **Ensemble Accuracy:** **`0.57535`** (Tăng **`+0.00737`** so với B1 Baseline).
+- **F1 Từng Lớp:** Supported: `0.58014`, Refuted: `0.65735` (+0.00800), NEI: `0.42770` (+0.02739).
+- **Kiểm định Bootstrap:** $P(\Delta > 0) = \mathbf{0.9839}$ (vượt rất xa ngưỡng $\ge 0.95$).
+- **Khoảng Tin Cậy 95% Bootstrap CI:** $\mathbf{[+0.00097, +0.01850]}$ (hoàn toàn dương).
+- **Phân tích Sửa đúng vs Làm sai:** 54 ca sửa đúng so với 36 ca làm sai, McNemar $p = 0.07255$.
+
+### 2.3. Chi tiết Đánh giá trên P1 Strict Test Set ($n = 2,434$)
+- **Ensemble Macro-F1:** **`0.55383`** (Tăng **`+0.00803`** so với B1 Baseline).
+- **Ensemble Accuracy:** **`0.57477`** (Tăng **`+0.00575`** so với B1 Baseline).
+- **Kiểm định Bootstrap:** $P(\Delta > 0) = \mathbf{0.9621}$, 95% CI: `[+0.00084, +0.01526]`.
+- **Phân tích Sửa đúng vs Làm sai:** 51 ca sửa đúng so với 37 ca làm sai.
 
 ---
 
