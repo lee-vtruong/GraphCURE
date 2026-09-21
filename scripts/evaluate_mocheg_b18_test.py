@@ -268,17 +268,28 @@ def main() -> None:
     final_summary_path = args.output_dir / "test_summary.json"
     final_summary_path.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
 
-    # Generate Official Test Markdown Report
+    # Generate Test Markdown Report with accurate protocol title
+    n_samples = len(all_cids)
+    if n_samples == 2434:
+        protocol_title = "P1 Strict Test Set Benchmark Report (Strict Deduplicated Track)"
+        protocol_name = "P1 strict test (leakage-controlled deduplicated track, n=2434)"
+    elif n_samples == 2442:
+        protocol_title = "P1 Official Test Set Benchmark Report (Raw Official Benchmark Track)"
+        protocol_name = "P1 official test (raw official benchmark track, n=2442)"
+    else:
+        protocol_title = "MOCHEG Test Set Benchmark Report"
+        protocol_name = f"Locked Test Evaluation (n={n_samples} claims)"
+
     lines = [
-        "# Official MOCHEG Test Set Benchmark Report",
+        f"# {protocol_title}",
         "",
-        f"- **Protocol:** Locked Official Test Evaluation ($n={len(all_cids)}$ claims)",
+        f"- **Protocol:** {protocol_name}",
         f"- **Git Commit:** `{git_commit()}`",
         f"- **Total Ensemble Models:** {len(args.runs)}",
         "",
-        "## 1. Official Test Set Ensemble Performance",
+        f"## 1. Test Set Ensemble Performance ({protocol_name})",
         "",
-        "| Metric | Official Test Ensemble Score |",
+        "| Metric | Ensemble Score |",
         "|---|---:|",
         f"| **Macro-F1** | **{ens_metrics['macro_f1']:.5f}** |",
         f"| **Accuracy** | **{ens_metrics['accuracy']:.5f}** |",
