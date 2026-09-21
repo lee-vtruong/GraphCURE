@@ -393,6 +393,19 @@ def test_prepare_selected_evidence_with_teacher_attribution(tmp_path: Path) -> N
 
     out_retrieval = tmp_path / "filtered.jsonl"
     out_summary = tmp_path / "summary.json"
+    calibration = tmp_path / "calibration.json"
+    calibration.write_text(json.dumps({
+        "protocol": "train_side_claim_disjoint_teacher_attribution_calibration_v1",
+        "policy_name": "distilled_ce_adaptive",
+        "selected_policy": {
+            "score_threshold": -5.0,
+            "adaptive_margin": 4.0,
+        },
+        "audit": {
+            "official_validation_used": False,
+            "test_split_used": False,
+        },
+    }))
 
     cmd = [
         sys.executable,
@@ -412,6 +425,8 @@ def test_prepare_selected_evidence_with_teacher_attribution(tmp_path: Path) -> N
         str(out_summary),
         "--teacher-explanations",
         str(teacher_exp_jsonl),
+        "--policy-calibration",
+        str(calibration),
         "--policy-mode",
         "adaptive",
         "--mock",
@@ -421,6 +436,10 @@ def test_prepare_selected_evidence_with_teacher_attribution(tmp_path: Path) -> N
     summary = json.loads(out_summary.read_text())
     assert summary["requested_policy_mode"] == "adaptive"
     assert summary["policy_mode"] == "distilled_ce_adaptive"
+    assert summary["policy"]["score_threshold"] == -5.0
+    assert summary["policy"]["adaptive_margin"] == 4.0
+    assert summary["audit"]["policy_calibration_sha256"] is not None
+    assert summary["audit"]["policy_calibration_uses_test"] is False
     assert "teacher_attribution" in summary
     attr = summary["teacher_attribution"]
     assert attr["grounded_claims_evaluated"] == 1

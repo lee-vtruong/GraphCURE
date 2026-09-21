@@ -105,6 +105,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional teacher explanations JSONL to evaluate teacher-key coverage & attribution metrics",
     )
+    parser.add_argument(
+        "--policy-calibration",
+        type=Path,
+        default=None,
+        help="Frozen train-side calibration JSON; selected threshold/margin override CLI values",
+    )
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--limit", type=int, default=0)
@@ -125,6 +131,26 @@ def main() -> None:
         raise ValueError(f"--selector is required for policy mode {policy_mode}")
     if policy_mode == "teacher_oracle" and args.teacher_explanations is None:
         raise ValueError("--teacher-explanations is required for teacher_oracle")
+
+    policy_calibration = None
+    if args.policy_calibration is not None:
+        if policy_mode not in CROSS_ENCODER_POLICIES:
+            raise ValueError("--policy-calibration is valid only for CrossEncoder policies")
+        policy_calibration = json.loads(args.policy_calibration.read_text(encoding="utf-8"))
+        calibrated_name = policy_calibration.get("policy_name")
+        if calibrated_name != policy_mode:
+            raise ValueError(
+                f"calibration policy mismatch: expected {policy_mode}, found {calibrated_name}"
+            )
+        selected_policy = policy_calibration["selected_policy"]
+        args.score_threshold = float(selected_policy["score_threshold"])
+        args.adaptive_margin = float(selected_policy["adaptive_margin"])
+        logging.info(
+            "Loaded frozen calibration %s: threshold=%s margin=%s",
+            args.policy_calibration,
+            args.score_threshold,
+            args.adaptive_margin,
+        )
 
     selector_training_summary = None
     selector_training_summary_path = None
@@ -353,6 +379,22 @@ def main() -> None:
             "corpus_sha256": sha256_file(corpus_path),
             "teacher_explanations_sha256": (
                 sha256_file(args.teacher_explanations) if args.teacher_explanations else None
+            ),
+            "policy_calibration_sha256": (
+                sha256_file(args.policy_calibration) if args.policy_calibration else None
+            ),
+            "policy_calibration_protocol": (
+                policy_calibration.get("protocol") if policy_calibration is not None else None
+            ),
+            "policy_calibration_uses_official_validation": (
+                policy_calibration.get("audit", {}).get("official_validation_used")
+                if policy_calibration is not None
+                else None
+            ),
+            "policy_calibration_uses_test": (
+                policy_calibration.get("audit", {}).get("test_split_used")
+                if policy_calibration is not None
+                else None
             ),
             "selector_training_summary_sha256": (
                 sha256_file(selector_training_summary_path)
