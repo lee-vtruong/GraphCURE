@@ -7,6 +7,7 @@ import pytest
 from scripts.analyze_mocheg_expert_routing import (
     apply_confidence_routing,
     apply_deferral,
+    fixed_tau_protocol,
 )
 
 
@@ -44,3 +45,17 @@ def test_apply_confidence_routing_defers_when_b1_uncertain():
     routed = apply_confidence_routing(b1_preds, b18_preds, b1_probs, gamma=0.65)
     expected = np.array([1, 1, 0])
     assert np.array_equal(routed, expected)
+
+
+def test_fixed_tau_defaults_to_exploratory_claim_status():
+    description, test_selected, eligible = fixed_tau_protocol(0.60, "exploratory")
+    assert "Exploratory" in description
+    assert test_selected is True
+    assert eligible is False
+
+
+def test_preregistered_fixed_tau_is_primary_claim_eligible():
+    description, test_selected, eligible = fixed_tau_protocol(0.60, "preregistered")
+    assert "Preregistered" in description
+    assert test_selected is False
+    assert eligible is True

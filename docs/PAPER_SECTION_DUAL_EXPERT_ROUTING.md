@@ -75,12 +75,12 @@ Continuous Posterior Gating ($w^* = 0.50$) & 0.55587 & 0.57494 & 0.57321 & 0.658
 Confidence Gating ($\text{Conf}_{\text{B1}} < 0.65$) & 0.55018 & 0.56921 & 0.55912 & 0.65104 & 0.44038 & +0.00487 & -- \\
 \midrule
 \textbf{Zero-Leakage Deferral ($\tau^* = 0.49$)} & \textbf{0.55488} & \textbf{0.57125} & 0.58626 & 0.64935 & 0.42903 & \textbf{+0.00958} & 0.9494 \\
-\textbf{Selective Deferral ($\tau = 0.60$, Prior Threshold)} & \textbf{0.56166} & \textbf{0.57821} & 0.58626 & 0.64935 & \textbf{0.44938} & \textbf{+0.01635} & \textbf{0.9995} \\
+\textit{Selective Deferral ($\tau = 0.60$, post-hoc test peak)} & \textit{0.56166} & \textit{0.57821} & 0.58626 & 0.64935 & \textit{0.44938} & \textit{+0.01635} & \textit{0.9995}$^{\dagger}$ \\
 \midrule
 \textit{Theoretical Ceiling: Oracle Router} & \textit{0.60745} & \textit{0.62080} & \textit{0.63820} & \textit{0.69748} & \textit{0.48666} & \textit{+0.06214} & 1.0000 \\
 \bottomrule
 \end{tabular}
-\caption{Official MOCHEG P1 Test Benchmark ($N = 2,442$). Significance is evaluated via paired percentile bootstrap ($B=10,000$). For $\tau=0.60$, 95\% bootstrap CI is $[+0.00620, +0.02646]$, and McNemar test yields $p = 0.00412$.}
+\caption{Official MOCHEG P1 Test Benchmark ($N = 2,442$). The validation-selected ensemble is the primary zero-leakage claim. $^{\dagger}$The $\tau=0.60$ row is a post-hoc test-peak sensitivity result; its paired bootstrap CI $[+0.00620,+0.02646]$ and McNemar $p=0.00412$ do not correct threshold-selection bias.}
 \label{tab:routing_benchmark}
 \end{table*}
 
@@ -88,7 +88,7 @@ Confidence Gating ($\text{Conf}_{\text{B1}} < 0.65$) & 0.55018 & 0.56921 & 0.559
 To eliminate concerns regarding test-set hyperparameter tuning, we evaluate two operational protocols:
 \begin{enumerate}
     \item \textbf{Validation-Tuned Zero-Leakage Protocol ($\tau^* = 0.49$):} Sweeping $\tau$ exclusively on the validation split ($N_{\text{val}} = 1,456$, reaching validation Macro-$F_1 = 0.71121$) identifies $\tau^* = 0.49$. Freezing this parameter and applying it one-shot to the official test set yields a statistically robust gain of $+0.96\%$ Macro-$F_1$ ($0.55488$, $P(\Delta > 0) = 0.9494$).
-    \item \textbf{A Priori Decisive Majority Policy ($\tau = 0.60$):} From a conservative safety perspective, an entailment verdict from a primary verifier should only be superseded when an auxiliary sensor achieves a decisive majority ($P \ge 60\%$). Setting $\tau = 0.60$ establishes a new state-of-the-art Macro-$F_1$ of \textbf{0.56166} ($+1.64\%$ over baseline) and Accuracy of \textbf{0.57821}. Paired bootstrap testing reveals that this improvement is positive in $99.95\%$ of resamples ($P = 0.9995$, 95\% CI $[+0.00620, +0.02646]$), while McNemar's exact test confirms $48$ helpful corrections against $23$ regressions ($p = 0.00412$).
+    \item \textbf{Exploratory sensitivity policy ($\tau = 0.60$):} This operating point reaches Macro-$F_1$ 0.56166 and Accuracy 0.57821, but it is the maximum observed on the test threshold grid. We therefore report it only as evidence of routing potential; it is not the primary SOTA claim unless independently preregistered and confirmed on fresh data.
 \end{enumerate}
 
 Furthermore, sensitivity analysis across $\tau \in [0.40, 0.70]$ demonstrates that selective deferral strictly dominates the baseline across all operating thresholds ($\Delta \text{Macro-}F_1 \in [+0.00595, +0.01635]$), establishing high parameter stability. Finally, the theoretical Oracle router reaches \textbf{0.60745} Macro-$F_1$ ($+6.21\%$), indicating that evidence-conditioned routing provides a rich foundation for future mixture-of-experts verifiers.
@@ -110,7 +110,7 @@ Furthermore, sensitivity analysis across $\tau \in [0.40, 0.70]$ demonstrates th
 >
 > *Kết quả cho thấy:*
 > - *Nếu tìm ngưỡng $\tau^* = 0.49$ **hoàn toàn từ tập Validation và khóa cố định (Zero-Leakage)**, Macro-F1 trên tập Test chính thức ($n=2,442$) đạt **`0.55488`** (tăng $+0.96\%$).*
-> - *Nếu áp dụng nguyên lý an toàn hệ thống (chỉ ghi đè khi chuyên gia đạt đa số áp đảo $\tau = 0.60$), Macro-F1 đạt đỉnh **`0.56166`** (tăng **$+1.64\%$**, Accuracy đạt **`0.57821`**), với độ ý nghĩa thống kê áp đảo $P = \mathbf{0.9995}$ và kiểm định McNemar đạt $p = \mathbf{0.00412}$ ($p < 0.01$).*
+> - *Phân tích sensitivity hậu nghiệm đạt đỉnh **`0.56166`** tại $\tau=0.60$, nhưng vì đây là test peak nên chỉ dùng để định hướng xác nhận mới, không thay thế main zero-leakage claim.*
 > - *Đặc biệt, phân tích trần lý thuyết (Oracle Router) chứng minh tiềm năng có thể đạt tới **`0.60745`** Macro-F1, khẳng định hai mô hình này bù trừ tri thức cho nhau chứ không hề trùng lặp."*
 
 ---
@@ -119,8 +119,8 @@ Furthermore, sensitivity analysis across $\tau \in [0.40, 0.70]$ demonstrates th
 
 | Chỉ số / Mốc so sánh | Literature (AMuFC v2) | B1 Baseline | B18-A Seed 100 | Val Super-Ensemble | Val-Guided Deferral ($\tau^*=0.49$) | Selective Deferral ($\tau=0.60$) | Oracle Router Ceiling |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Test Macro-F1** | 0.54000 | 0.54531 | 0.55128 | 0.55507 | **0.55488** | **`0.56166`** | **`0.60745`** |
-| **Test Accuracy** | 0.54600 | 0.56798 | 0.56962 | 0.57535 | **0.57125** | **`0.57821`** | **`0.62080`** |
+| **Test Macro-F1** | 0.54000 | 0.54531 | 0.55128 | **0.55507** | 0.55488 | *`0.56166`†* | *`0.60745`* |
+| **Test Accuracy** | 0.54600 | 0.56798 | 0.56962 | **0.57535** | 0.57125 | *`0.57821`†* | *`0.62080`* |
 | **F1 Supported** | — | 0.58626 | 0.53846 | 0.58014 | 0.58626 | **0.58626** | 0.63820 |
 | **F1 Refuted** | — | 0.64935 | 0.66364 | 0.65735 | 0.64935 | **0.64935** | 0.69748 |
 | **F1 NEI** | — | 0.40032 | 0.45175 | 0.42770 | 0.42903 | **`0.44938`** | 0.48666 |

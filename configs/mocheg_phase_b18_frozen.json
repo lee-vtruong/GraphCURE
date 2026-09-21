@@ -57,7 +57,9 @@
         "exact_mcnemar_p": 0.46721
       },
       "selective_epistemic_deferral_tau_060": {
-        "description": "Asymmetric evidence sufficiency deferral policy: B1 direct verifier deferred to B18-A grounded explanation expert when P(NEI) >= 0.60",
+        "description": "Exploratory asymmetric evidence-sufficiency deferral policy evaluated after the official test threshold grid was inspected",
+        "claim_status": "exploratory_post_hoc_not_primary_sota",
+        "test_labels_used_for_threshold_selection": true,
         "threshold_tau": 0.60,
         "macro_f1": 0.56166,
         "accuracy": 0.57821,
@@ -74,6 +76,8 @@
       },
       "validation_guided_deferral_tau_049": {
         "description": "Zero-leakage asymmetric deferral: tau tuned strictly on validation (n=1456, tau*=0.49) and frozen for test",
+        "claim_status": "confirmatory_zero_leakage",
+        "test_labels_used_for_threshold_selection": false,
         "threshold_tau": 0.49,
         "val_macro_f1": 0.71121,
         "macro_f1": 0.55488,
@@ -131,5 +135,7 @@
       }
     }
   },
-  "zero_test_leakage_attestation": "Ensemble candidate subset (seeds 100, 87, 42) was determined strictly by validation split performance (n=1456) prior to test set evaluation. Script scripts/select_mocheg_ensemble_on_val.py audits this selection pipeline."
+  "primary_reported_system": "p1_official_test_n2442.val_selected_heterogeneous_ensemble_8_models",
+  "primary_official_macro_f1": 0.55507,
+  "zero_test_leakage_attestation": "The primary 8-model ensemble candidate subset (seeds 100, 87, 42) was determined strictly by validation split performance (n=1456) prior to test evaluation. The tau=0.49 deferral threshold was also selected on validation. The tau=0.60 result is retained only as post-hoc sensitivity analysis because the recorded threshold grid identifies it as the test peak."
 }

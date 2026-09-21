@@ -61,6 +61,26 @@ def apply_confidence_routing(b1_preds: np.ndarray, b18_preds: np.ndarray, b1_pro
     return routed_preds
 
 
+def fixed_tau_protocol(tau: float, provenance: str) -> tuple[str, bool, bool]:
+    """Describe whether an externally supplied threshold supports a primary claim.
+
+    A numeric threshold alone does not establish that it was fixed before test
+    inspection.  We therefore default to the conservative exploratory status;
+    callers must explicitly attest preregistration when that audit trail exists.
+    """
+    if provenance == "preregistered":
+        return (
+            f"Preregistered externally specified parameter: tau = {tau:.2f}",
+            False,
+            True,
+        )
+    return (
+        f"Exploratory externally specified parameter: tau = {tau:.2f}",
+        True,
+        False,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Dual-Expert Routing Analysis for GraphCURE")
     parser.add_argument("--b1-runs", "--test-b1-runs", dest="b1_runs", type=Path, nargs="+", required=True, help="B1 test prediction files")
@@ -72,7 +92,19 @@ def main() -> None:
     parser.add_argument("--iterations", type=int, default=10000, help="Bootstrap iterations")
     parser.add_argument("--seed", type=int, default=42, help="Bootstrap random seed")
     parser.add_argument("--fixed-tau", "--tau", dest="fixed_tau", type=float, default=None, help="Explicitly specify a fixed threshold tau (e.g. 0.60)")
+    parser.add_argument(
+        "--fixed-tau-provenance",
+        choices=("exploratory", "preregistered"),
+        default="exploratory",
+        help=(
+            "Audit status for --fixed-tau. Defaults to exploratory; use "
+            "preregistered only when a timestamped pre-test specification exists."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.fixed_tau is None and args.fixed_tau_provenance == "preregistered":
+        parser.error("--fixed-tau-provenance preregistered requires --fixed-tau")
 
     # Load Test Data
     test_ids, y_test, b1_test_probs, b18_test_probs = load_split_data(args.b1_runs, args.b18_runs)
@@ -136,6 +168,8 @@ def main() -> None:
                 best_w = float(w)
 
         tuning_source = f"Tuned on Validation (n={len(val_ids)}) and Frozen"
+        test_labels_used_for_parameter_selection = False
+        primary_claim_eligible = True
     else:
         logging.info("No validation data provided. Sweeping parameters directly on test set (diagnostic mode)...")
         # Sweep tau on test
@@ -169,10 +203,16 @@ def main() -> None:
                 best_w = float(w)
 
         tuning_source = "Swept directly on Test (Diagnostic / Potential Ceiling)"
+        test_labels_used_for_parameter_selection = True
+        primary_claim_eligible = False
 
     if args.fixed_tau is not None:
         best_tau = float(args.fixed_tau)
-        tuning_source = f"Explicitly Specified Prior Parameter: tau = {best_tau:.2f}"
+        (
+            tuning_source,
+            test_labels_used_for_parameter_selection,
+            primary_claim_eligible,
+        ) = fixed_tau_protocol(best_tau, args.fixed_tau_provenance)
         logging.info("Overriding tau with user-specified fixed parameter: %.2f", best_tau)
 
     # Apply Frozen / Selected Parameters to Test Set
@@ -195,6 +235,11 @@ def main() -> None:
     summary = {
         "samples": len(test_ids),
         "parameter_tuning_protocol": tuning_source,
+        "protocol_flags": {
+            "fixed_tau_provenance": args.fixed_tau_provenance if args.fixed_tau is not None else None,
+            "test_labels_used_for_parameter_selection": test_labels_used_for_parameter_selection,
+            "primary_claim_eligible": primary_claim_eligible,
+        },
         "parameters": {
             "optimal_tau_nei": best_tau,
             "optimal_gamma_confidence": best_gamma,
@@ -242,6 +287,8 @@ def main() -> None:
         "",
         f"- **Samples Evaluated:** {len(test_ids)} claims",
         f"- **Parameter Tuning Protocol:** {tuning_source}",
+        f"- **Test Labels Used for Parameter Selection:** {test_labels_used_for_parameter_selection}",
+        f"- **Eligible for Primary Claim:** {primary_claim_eligible}",
         f"- **Direct Verifier Expert ($\\\\mathcal{{M}}_{{\\\\text{{direct}}}}$):** B1 Baseline",
         f"- **Grounded Rationale Expert ($\\\\mathcal{{M}}_{{\\\\text{{grounded}}}}$):** B18-A Explanation Distillation",
         "",
