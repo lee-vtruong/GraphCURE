@@ -247,3 +247,77 @@ def test_end_to_end_prepare_selected_evidence_cli(tmp_path: Path) -> None:
     summary = json.loads(out_summary.read_text())
     assert summary["total_claims"] == 1
     assert summary["avg_selected_passages"] >= 1.0
+
+
+def test_prepare_selected_evidence_with_teacher_attribution(tmp_path: Path) -> None:
+    corpus_csv = tmp_path / "Corpus2.csv"
+    with corpus_csv.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["evidence_id", "Evidence"])
+        writer.writerow(["ev_1", "The president signed the treaty yesterday."])
+        writer.writerow(["ev_2", "Foreign ministers praised the bilateral agreement."])
+        writer.writerow(["ev_3", "Heavy snow caused delays at the international airport."])
+
+    manifest_jsonl = tmp_path / "claims.jsonl"
+    with manifest_jsonl.open("w", encoding="utf-8") as f:
+        f.write(json.dumps({"id": "c1", "claim": "The president signed the treaty."}) + "\n")
+
+    retrieval_jsonl = tmp_path / "retrieval.jsonl"
+    with retrieval_jsonl.open("w", encoding="utf-8") as f:
+        f.write(
+            json.dumps({"id": "c1", "retrieved_evidence_ids": ["ev_1", "ev_2", "ev_3"]}) + "\n"
+        )
+
+    teacher_exp_jsonl = tmp_path / "teacher_explanations.jsonl"
+    with teacher_exp_jsonl.open("w", encoding="utf-8") as f:
+        f.write(
+            json.dumps({
+                "id": "c1",
+                "is_valid": True,
+                "grounded": True,
+                "verdict": "SUPPORTED",
+                "key_evidence_ids": [1],  # ev_1
+                "retrieved_evidence_ids": ["ev_1", "ev_2", "ev_3"],
+            })
+            + "\n"
+        )
+
+    selector_dir = tmp_path / "dummy_selector"
+    selector_dir.mkdir(parents=True, exist_ok=True)
+    (selector_dir / "mock_selector_config.json").write_text(json.dumps({"is_mock": True}))
+
+    out_retrieval = tmp_path / "filtered.jsonl"
+    out_summary = tmp_path / "summary.json"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "scripts.prepare_mocheg_b18b_selected_evidence",
+        "--selector",
+        str(selector_dir),
+        "--retrieval",
+        str(retrieval_jsonl),
+        "--manifest",
+        str(manifest_jsonl),
+        "--corpus",
+        str(corpus_csv),
+        "--output",
+        str(out_retrieval),
+        "--summary",
+        str(out_summary),
+        "--teacher-explanations",
+        str(teacher_exp_jsonl),
+        "--policy-mode",
+        "adaptive",
+        "--mock",
+    ]
+    subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+    summary = json.loads(out_summary.read_text())
+    assert summary["policy_mode"] == "adaptive"
+    assert "teacher_attribution" in summary
+    attr = summary["teacher_attribution"]
+    assert attr["grounded_claims_evaluated"] == 1
+    assert attr["teacher_key_coverage_mean"] == 1.0
+    assert attr["pseudo_recall_at_1"] == 1.0
+

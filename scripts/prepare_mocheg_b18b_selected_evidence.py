@@ -38,6 +38,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-k", type=int, default=3, help="Maximum passages to keep per claim")
     parser.add_argument("--adaptive-margin", type=float, default=1.5, help="Relative score margin from top rank")
     parser.add_argument("--score-threshold", type=float, default=-1.0, help="Absolute score threshold for rank >= 2")
+    parser.add_argument(
+        "--policy-mode",
+        type=str,
+        choices=["adaptive", "fixed_top_1", "fixed_top_3", "original_top_5", "oracle_teacher"],
+        default="adaptive",
+        help="Evidence selection policy mode for ablations",
+    )
+    parser.add_argument(
+        "--teacher-explanations",
+        type=Path,
+        default=None,
+        help="Optional teacher explanations JSONL to evaluate teacher-key coverage & attribution metrics",
+    )
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--limit", type=int, default=0)
@@ -63,11 +76,30 @@ def main() -> None:
         retrieval_rows = retrieval_rows[:args.limit]
     logging.info("Loaded %d retrieval rows to filter", len(retrieval_rows))
 
+    teacher_explanations: dict[str, dict[str, Any]] = {}
+    if args.teacher_explanations:
+        logging.info("Reading teacher explanations from: %s", args.teacher_explanations)
+        teacher_explanations = {str(r["id"]): r for r in read_jsonl(args.teacher_explanations)}
+        logging.info("Loaded %d teacher explanation records for attribution evaluation", len(teacher_explanations))
+
+    # Configure policy parameters based on policy_mode
+    min_k = args.min_k
+    max_k = args.max_k
+    score_threshold = args.score_threshold
+    adaptive_margin = args.adaptive_margin
+
+    if args.policy_mode == "fixed_top_1":
+        min_k, max_k = 1, 1
+    elif args.policy_mode == "fixed_top_3":
+        min_k, max_k = 3, 3
+    elif args.policy_mode == "original_top_5":
+        min_k, max_k = args.top_k_candidates, args.top_k_candidates
+
     policy = AdaptiveSelectorPolicy(
-        min_k=args.min_k,
-        max_k=args.max_k,
-        score_threshold=args.score_threshold,
-        adaptive_margin=args.adaptive_margin,
+        min_k=min_k,
+        max_k=max_k,
+        score_threshold=score_threshold,
+        adaptive_margin=adaptive_margin,
     )
 
     is_mock = args.mock
@@ -84,6 +116,13 @@ def main() -> None:
     filtered_rows: list[dict[str, Any]] = []
     k_distribution: Counter = Counter()
     gold_hits: list[float] = []
+
+    # Attribution tracking
+    teacher_coverages: list[float] = []
+    teacher_precisions: list[float] = []
+    recalls_at_1: list[float] = []
+    recalls_at_2: list[float] = []
+    recalls_at_3: list[float] = []
 
     # Batch prediction logic
     for row in tqdm(retrieval_rows, desc="Filtering evidence candidates"):
@@ -111,9 +150,46 @@ def main() -> None:
             preds = model.predict(pairs, batch_size=args.batch_size, show_progress_bar=False)
             raw_scores = [float(s) for s in preds]
 
-        selected_ids, selected_scores = policy.select(valid_candidates, raw_scores)
+        # Check for Oracle Teacher selection mode
+        t_row = teacher_explanations.get(cid)
+        key_eids: set[str] = set()
+        if t_row and t_row.get("is_valid") and t_row.get("grounded"):
+            raw_indices = t_row.get("key_evidence_ids", [])
+            retrieved_eids_in_exp = t_row.get("retrieved_evidence_ids", [])
+            for idx in raw_indices:
+                if 1 <= idx <= len(retrieved_eids_in_exp):
+                    key_eids.add(retrieved_eids_in_exp[idx - 1])
+
+        if args.policy_mode == "oracle_teacher" and key_eids:
+            oracle_ids = [eid for eid in valid_candidates if eid in key_eids]
+            if not oracle_ids:
+                oracle_ids = [valid_candidates[0]]
+            selected_ids = oracle_ids[:args.max_k]
+            selected_scores = [raw_scores[valid_candidates.index(eid)] for eid in selected_ids]
+        else:
+            selected_ids, selected_scores = policy.select(valid_candidates, raw_scores)
+
         selected_k = len(selected_ids)
         k_distribution[selected_k] += 1
+
+        # Evaluate Teacher Attribution metrics if ground truth teacher key exists
+        if key_eids:
+            sel_set = set(selected_ids)
+            cov = len(sel_set & key_eids) / float(len(key_eids))
+            prec = len(sel_set & key_eids) / float(len(sel_set)) if sel_set else 0.0
+            teacher_coverages.append(cov)
+            teacher_precisions.append(prec)
+
+            # Measure ranking recall from raw_scores
+            order = np.argsort(-np.asarray(raw_scores, dtype=np.float32)).tolist()
+            rank_1_eid = valid_candidates[order[0]]
+            recalls_at_1.append(float(rank_1_eid in key_eids))
+
+            rank_2_eids = {valid_candidates[idx] for idx in order[:2]}
+            recalls_at_2.append(float(bool(rank_2_eids & key_eids)))
+
+            rank_3_eids = {valid_candidates[idx] for idx in order[:3]}
+            recalls_at_3.append(float(bool(rank_3_eids & key_eids)))
 
         # Check gold evidence retention if gold is present
         gold_set = set(row.get("gold_evidence_ids", []))
@@ -139,27 +215,56 @@ def main() -> None:
     avg_k = float(np.mean([r["selected_k"] for r in filtered_rows])) if filtered_rows else 0.0
     gold_recall = float(np.mean(gold_hits)) if gold_hits else None
 
+    total_count = max(1, len(filtered_rows))
+    k_dist_pct = {
+        f"K={k}": round(count / total_count * 100, 2)
+        for k, count in sorted(k_distribution.items())
+    }
+
+    attribution_metrics = None
+    if teacher_coverages:
+        attribution_metrics = {
+            "grounded_claims_evaluated": len(teacher_coverages),
+            "teacher_key_coverage_mean": float(np.mean(teacher_coverages)),
+            "teacher_key_precision_mean": float(np.mean(teacher_precisions)),
+            "pseudo_recall_at_1": float(np.mean(recalls_at_1)),
+            "pseudo_recall_at_2": float(np.mean(recalls_at_2)),
+            "pseudo_recall_at_3": float(np.mean(recalls_at_3)),
+        }
+
     summary_payload = {
         "phase": "B18-B",
         "task": "adaptive_evidence_filtering",
         "selector": str(args.selector),
+        "policy_mode": args.policy_mode,
         "total_claims": len(filtered_rows),
         "policy": {
-            "min_k": args.min_k,
-            "max_k": args.max_k,
-            "score_threshold": args.score_threshold,
-            "adaptive_margin": args.adaptive_margin,
+            "min_k": min_k,
+            "max_k": max_k,
+            "score_threshold": score_threshold,
+            "adaptive_margin": adaptive_margin,
             "top_k_candidates_evaluated": args.top_k_candidates,
         },
         "avg_selected_passages": avg_k,
         "k_distribution": dict(sorted(k_distribution.items())),
+        "k_distribution_percent": k_dist_pct,
         "gold_recall_at_selected": gold_recall,
+        "teacher_attribution": attribution_metrics,
     }
 
     args.summary.parent.mkdir(parents=True, exist_ok=True)
     args.summary.write_text(json.dumps(summary_payload, indent=2) + "\n", encoding="utf-8")
     logging.info("Diagnostic summary written to: %s", args.summary)
     logging.info("Filtering stats: avg_k=%.2f, distribution=%s", avg_k, dict(k_distribution))
+    if attribution_metrics:
+        logging.info(
+            "Teacher attribution stats: Coverage=%.4f, Precision=%.4f, Recall@1=%.4f, Recall@2=%.4f, Recall@3=%.4f",
+            attribution_metrics["teacher_key_coverage_mean"],
+            attribution_metrics["teacher_key_precision_mean"],
+            attribution_metrics["pseudo_recall_at_1"],
+            attribution_metrics["pseudo_recall_at_2"],
+            attribution_metrics["pseudo_recall_at_3"],
+        )
 
 
 if __name__ == "__main__":
