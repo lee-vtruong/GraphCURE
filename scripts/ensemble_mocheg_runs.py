@@ -23,7 +23,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 
 def load_run_predictions(run_path: Path, filename: str = "val_predictions.jsonl") -> dict[str, dict]:
-    if run_path.is_file():
+    if run_path.suffix == ".jsonl":
+        if not run_path.is_file():
+            raise FileNotFoundError(f"Predictions file not found: {run_path}")
+        pred_path = run_path
+    elif run_path.is_file():
         pred_path = run_path
     else:
         pred_path = run_path / filename
