@@ -69,7 +69,7 @@ def ensemble_predictions(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Heterogeneous Ensembling for GraphCURE Verifier Runs")
     parser.add_argument("--runs", type=Path, nargs="+", required=True, help="List of run directories to ensemble")
-    parser.add_argument("--baseline-runs", type=Path, nargs="*", default=None, help="Optional baseline run directories to compare against")
+    parser.add_argument("--baseline-runs", "--baseline", dest="baseline_runs", type=Path, nargs="*", default=None, help="Optional baseline run directories to compare against")
     parser.add_argument("--pred-file", type=str, default="val_predictions.jsonl", help="Prediction filename (e.g. test_predictions.jsonl)")
     parser.add_argument("--output", type=Path, default=None, help="Output JSON path")
     parser.add_argument("--markdown", type=Path, default=None, help="Output Markdown path")
