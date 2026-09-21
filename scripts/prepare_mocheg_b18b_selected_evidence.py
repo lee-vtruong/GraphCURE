@@ -126,6 +126,14 @@ def main() -> None:
     if policy_mode == "teacher_oracle" and args.teacher_explanations is None:
         raise ValueError("--teacher-explanations is required for teacher_oracle")
 
+    selector_training_summary = None
+    selector_training_summary_path = None
+    if args.selector is not None:
+        candidate_summary = args.selector / "training_summary.json"
+        if candidate_summary.is_file():
+            selector_training_summary_path = candidate_summary
+            selector_training_summary = json.loads(candidate_summary.read_text(encoding="utf-8"))
+
     logging.info("Reading claims manifest: %s", args.manifest)
     claims = {str(c["id"]): c.get("claim", "") for c in read_jsonl(args.manifest)}
     logging.info("Loaded %d claim texts", len(claims))
@@ -345,6 +353,21 @@ def main() -> None:
             "corpus_sha256": sha256_file(corpus_path),
             "teacher_explanations_sha256": (
                 sha256_file(args.teacher_explanations) if args.teacher_explanations else None
+            ),
+            "selector_training_summary_sha256": (
+                sha256_file(selector_training_summary_path)
+                if selector_training_summary_path is not None
+                else None
+            ),
+            "selector_checkpoint_selection": (
+                selector_training_summary.get("checkpoint_selection")
+                if selector_training_summary is not None
+                else None
+            ),
+            "selector_claim_split_overlap": (
+                selector_training_summary.get("claim_split_overlap")
+                if selector_training_summary is not None
+                else None
             ),
             "output_sha256": sha256_file(args.output),
             "preserves_upstream_order": policy_mode in RETRIEVAL_POLICIES,

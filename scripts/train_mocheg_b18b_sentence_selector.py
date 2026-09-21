@@ -130,6 +130,7 @@ def main() -> None:
     )
 
     args.output.mkdir(parents=True, exist_ok=True)
+    dev_metrics: dict[str, float] | None = None
 
     if args.mock:
         logging.info("Mock mode enabled: Saving mock model metadata without PyTorch fit")
@@ -151,7 +152,7 @@ def main() -> None:
     else:
         import torch
         from sentence_transformers import CrossEncoder, InputExample
-        from sentence_transformers.cross_encoder.evaluation import CEBinaryClassificationEvaluator
+        from sentence_transformers.cross_encoder.evaluation import CrossEncoderClassificationEvaluator
         from torch.utils.data import DataLoader
 
         if torch.cuda.is_available() and "cuda" in args.device:
@@ -172,7 +173,7 @@ def main() -> None:
 
         evaluator = None
         if dev_pairs:
-            evaluator = CEBinaryClassificationEvaluator(
+            evaluator = CrossEncoderClassificationEvaluator(
                 [[p["claim"], p["text"]] for p in dev_pairs],
                 [int(p["label"]) for p in dev_pairs],
                 name="claim-disjoint-dev",
@@ -203,6 +204,16 @@ def main() -> None:
             model.save(str(args.output))
         else:
             logging.info("Best claim-disjoint dev checkpoint saved to: %s", args.output)
+            best_model = CrossEncoder(str(args.output), device=args.device)
+            dev_metrics = {
+                key: float(value)
+                for key, value in evaluator(
+                    best_model,
+                    output_path=str(args.output),
+                    epoch=args.epochs,
+                    steps=total_steps,
+                ).items()
+            }
 
     summary_payload: dict[str, Any] = {
         "phase": "B18-B",
@@ -224,6 +235,7 @@ def main() -> None:
         "dev_claims": len(dev_claim_ids),
         "claim_split_overlap": len(train_claim_ids & dev_claim_ids),
         "checkpoint_selection": "claim_disjoint_dev" if dev_pairs else "final_epoch",
+        "best_checkpoint_dev_metrics": dev_metrics,
         "audit": {
             "explanations_sha256": sha256_file(args.explanations),
             "corpus_sha256": sha256_file(corpus_path),
