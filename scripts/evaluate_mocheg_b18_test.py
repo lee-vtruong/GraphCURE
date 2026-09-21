@@ -73,6 +73,8 @@ def evaluate_single_run(
     tag: str = "",
     force: bool = False,
 ) -> dict[str, Any]:
+    if model_dir.name == "best_adapter":
+        model_dir = model_dir.parent
     adapter_dir = model_dir / "best_adapter"
     if not adapter_dir.is_dir():
         # Fallback to model_dir itself if adapter is directly in root
@@ -155,9 +157,9 @@ def evaluate_single_run(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate B18 models on official test set and ensemble")
-    parser.add_argument("--runs", type=Path, nargs="+", required=True, help="List of model run directories to evaluate")
+    parser.add_argument("--runs", "--checkpoint", dest="runs", type=Path, nargs="+", required=True, help="List of model run directories or checkpoints to evaluate")
     parser.add_argument("--manifest", type=Path, default=Path("data/processed/mocheg_manifest_strict/test.jsonl"))
-    parser.add_argument("--retrieval-raw", type=Path, default=Path("outputs/retrieval_mocheg_dense_top50/test.jsonl"))
+    parser.add_argument("--retrieval", "--retrieval-raw", dest="retrieval_raw", type=Path, default=Path("outputs/retrieval_mocheg_dense_top50/test.jsonl"), help="Path to test retrieval jsonl")
     parser.add_argument("--retrieval-b18b", type=Path, default=Path("outputs/mocheg_b18b_filtered_retrieval/test.jsonl"))
     parser.add_argument("--retrieval-top3", type=Path, default=Path("outputs/mocheg_b18b_top3_retrieval/test.jsonl"))
     parser.add_argument("--corpus", type=Path, default=Path("data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv"))
