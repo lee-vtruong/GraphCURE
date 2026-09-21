@@ -15,6 +15,10 @@ from graphcure.selector import (
     mock_score_claim_evidence_pairs,
 )
 from scripts.prepare_mocheg_b18b_selected_evidence import select_retrieval_top_k
+from scripts.calibrate_mocheg_b18b_selector_policy import (
+    attribution_metrics,
+    choose_policy,
+)
 from scripts.train_mocheg_b18b_sentence_selector import split_pairs_by_claim
 
 
@@ -150,6 +154,39 @@ def test_retrieval_top_k_preserves_upstream_order_and_scores() -> None:
     selected_ids, selected_scores = select_retrieval_top_k(candidates, scores, 2)
     assert selected_ids == ["doc_c", "doc_a"]
     assert selected_scores == [0.91, 0.72]
+
+
+def test_calibration_prefers_recall_safe_policy() -> None:
+    records = [
+        {
+            "candidate_ids": ["a", "b", "c"],
+            "scores": [2.0, 1.2, -2.0],
+            "key_evidence_ids": {"a", "b"},
+        },
+        {
+            "candidate_ids": ["d", "e", "f"],
+            "scores": [1.8, 1.0, -2.0],
+            "key_evidence_ids": {"d", "e"},
+        },
+    ]
+    strict = attribution_metrics(
+        records,
+        score_threshold=1.5,
+        adaptive_margin=0.5,
+        min_k=1,
+        max_k=3,
+    )
+    recall_safe = attribution_metrics(
+        records,
+        score_threshold=0.0,
+        adaptive_margin=1.0,
+        min_k=1,
+        max_k=3,
+    )
+    chosen, satisfied = choose_policy([strict, recall_safe], minimum_teacher_recall=0.9)
+    assert satisfied is True
+    assert chosen["micro_teacher_key_recall"] == 1.0
+    assert chosen["mean_selected_k"] == 2.0
 
 
 def test_end_to_end_train_mock_selector_cli(tmp_path: Path) -> None:

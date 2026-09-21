@@ -228,6 +228,38 @@ python -m scripts.prepare_mocheg_b18b_selected_evidence \
 
 Chỉ khi các manifest trên có `audit.gold_evidence_used_for_selection=false`, `audit.label_used_for_selection=false` và selector có `claim_split_overlap=0`, mới chạy verifier. Thứ tự ưu tiên tiết kiệm GPU là: `retrieval_top_5` → `generic_ce_adaptive` → `distilled_ce_adaptive`, đều seed 42 trên fold 0; chỉ mở seed 87 và các fold xác nhận nếu candidate distilled vượt matched control.
 
+### 9.2. Hiệu chỉnh threshold/margin trên selector-dev trước verifier
+
+Không dùng trực tiếp policy mặc định nếu nó co ngữ cảnh quá mạnh. Quét cùng một grid cho generic và distilled selector trên claim-disjoint dev phía train, tối ưu teacher-key F2 với ràng buộc micro teacher-key recall tối thiểu `0.90`:
+
+```bash
+python -m scripts.calibrate_mocheg_b18b_selector_policy \
+  --selector cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --selector-training-summary outputs/mocheg_b18b_v2/selector/training_summary.json \
+  --explanations data/processed/mocheg_b18_explanations/train_fold0_explanations.jsonl \
+  --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+  --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --policy-name generic_ce_adaptive \
+  --minimum-teacher-recall 0.90 \
+  --output outputs/mocheg_b18b_v2/retrieval/generic_policy_calibration.json \
+  --device cuda
+
+python -m scripts.calibrate_mocheg_b18b_selector_policy \
+  --selector outputs/mocheg_b18b_v2/selector \
+  --selector-training-summary outputs/mocheg_b18b_v2/selector/training_summary.json \
+  --explanations data/processed/mocheg_b18_explanations/train_fold0_explanations.jsonl \
+  --retrieval outputs/retrieval_mocheg_qwen3_reranked/train.jsonl \
+  --manifest data/processed/mocheg_manifest_strict/train.jsonl \
+  --corpus data/raw/mocheg_dataset/extracted/mocheg/train/Corpus2.csv \
+  --policy-name distilled_ce_adaptive \
+  --minimum-teacher-recall 0.90 \
+  --output outputs/mocheg_b18b_v2/retrieval/distilled_policy_calibration.json \
+  --device cuda
+```
+
+Mỗi JSON lưu toàn bộ grid, policy được chọn, hash đầu vào và các cờ xác nhận không dùng verdict label, gold evidence, official validation hay test. Sau khi đóng băng hai policy, tạo lại manifest với đúng `selected_policy.score_threshold` và `selected_policy.adaptive_margin`, rồi mới chạy verifier.
+
 > Khối runbook cũ bên dưới được giữ để tái lập các run lịch sử. Với run mới, thay `--policy-mode adaptive` bằng `--policy-mode distilled_ce_adaptive` và luôn thêm `--dev-fraction 0.10` khi train selector.
 
 ```bash
