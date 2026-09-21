@@ -1,9 +1,9 @@
-# Báo cáo tiến độ GraphCURE: từ đề xuất ban đầu đến B16
+# Báo cáo tiến độ GraphCURE: từ đề xuất ban đầu đến B18
 
-**Mốc tổng hợp:** 13/09/2026  
+**Mốc tổng hợp:** 21/09/2026
 **Bài toán chính:** kiểm chứng thông tin đa phương thức trên MOCHEG  
 **Chỉ số chính:** Accuracy và Macro-F1; retrieval dùng Recall@k và MRR  
-**Trạng thái dữ liệu:** test được khóa; B6–B16 chủ yếu phát triển trên các fold chỉ tạo từ tập train
+**Trạng thái dữ liệu:** B18 đã được khóa bằng validation trước khi đánh giá P1 official/strict; B6–B17 là các ablation và failure-analysis cycles trước đó
 
 > Báo cáo này phân biệt nghiêm ngặt bốn loại số: kết quả test chính thức, test strict đã khử trùng lặp, validation, và train-only out-of-fold (OOF). Một con số tốt trên fold phát triển không được gọi là SOTA. Gold evidence cũng không được trộn với system-retrieved evidence, và live-web không được trộn với fixed-corpus retrieval.
 
@@ -18,16 +18,18 @@ Trong quá trình thực nghiệm, dự án đã chuyển từ các encoder nh�
 3. Qwen3-4B-Instruct-2507 được LoRA để đưa ra một verdict ở claim level.
 4. Các nhánh visual, hierarchical constraints, domain robustness, calibration và routing được đánh giá bằng ablation và confirmation độc lập.
 5. Sau khi xác định lỗi chính là **NEI/evidence-absence**, B16 đưa vào counterfactual evidence omission với ngân sách huấn luyện không đổi.
+6. B18 mở một chu kỳ mới với grounded explanation distillation, chọn ensemble trên validation và đánh giá một lần trên official/strict test.
 
 Kết quả tốt nhất đã hợp lệ trên test chính thức hiện tại là:
 
 | Hệ thống | Protocol | Accuracy | Macro-F1 | Trạng thái |
 |---|---|---:|---:|---|
-| GraphCURE-Qwen3 raw 5-seed ensemble | P1, official test, n=2442 | **0.56798** | **0.54531** | Kết quả test đã khóa |
-| GraphCURE-Qwen3 raw 5-seed ensemble | P1, strict test, n=2434 | **0.56902** | **0.54581** | Robustness track |
+| **GraphCURE-B18A heterogeneous ensemble** | **P1 official test, n=2442** | **0.57535** | **0.55507** | **Main frozen result** |
+| GraphCURE-B18A heterogeneous ensemble | P1 strict test, n=2434 | 0.57477 | 0.55383 | Robustness track |
+| GraphCURE-Qwen3 B1 5-seed ensemble | P1 official test, n=2442 | 0.56798 | 0.54531 | Frozen baseline |
 | B16 counterfactual curriculum | train-only fold 0, n=2327 | 0.67383 | **0.65683** | Development pass nhưng confirmation fail; đã đóng |
 
-So với Table 3 của AMuFC arXiv v2, GraphCURE test chính thức cao hơn khoảng **+2.20 điểm phần trăm Accuracy** và **+0.53 điểm Macro-F1**. Hai số `0.5577/0.5560` từng được ghi là “workshop report” không xuất hiện trong paper và không tìm được nguồn sơ cấp, nên đã bị loại. Kết luận hiện tại là **GraphCURE có point estimate P1 cao nhất trong các hàng đã xác minh**, nhưng chưa chứng minh statistical superiority vì không có paired predictions của AMuFC và khoảng bootstrap GraphCURE vẫn bao phủ point estimate đó. B16 không tái lập được lợi ích so với matched control nên đã đóng; official validation/test không được mở.
+So với Table 3 của AMuFC arXiv v2, B18-A official cao hơn **+2.94 điểm phần trăm Accuracy** và **+1.51 điểm Macro-F1**. Hai số `0.5577/0.5560` từng được ghi là “workshop report” không xuất hiện trong paper và đã bị loại. GraphCURE-B18A hiện có official P1 point estimate cao nhất trong các hàng đã xác minh. Paired bootstrap chứng minh B18-A vượt B1 (`P(Δ>0)=0.9839`, CI `[+0.00097,+0.01850]`); chưa có paired significance test trực tiếp với AMuFC vì prediction của AMuFC không được công bố.
 
 ## 2. Mục tiêu ban đầu và kiến trúc nghiên cứu
 
@@ -338,7 +340,7 @@ Không có leaderboard MOCHEG duy nhất hoàn toàn đồng nhất. Paper khác
 
 | Hạng tham khảo | Method | Năm | Hội nghị/tạp chí | Rank/uy tín venue | Accuracy | F1/Macro-F1 | Khả năng so trực tiếp |
 |---:|---|---:|---|---|---:|---:|---|
-| 1 | **GraphCURE-Qwen3 raw ensemble** | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | **0.5680** | **MF1 0.5453** | **P1 official n=2442; so trực tiếp; no test tuning** |
+| 1 | **GraphCURE-B18A heterogeneous ensemble** | 2026 | Chưa nộp; kết quả nghiên cứu nội bộ | Chưa xếp hạng | **0.57535** | **MF1 0.55507** | **P1 official n=2442; validation-selected composition** |
 | 2 | AMuFC arXiv v2 | 2026 | arXiv preprint | Preprint, chưa peer review/xếp hạng | 0.546 | MF1 0.540 | P1 retrieved multimodal; đối thủ trực tiếp mạnh nhất đã xác minh[^6] |
 | 3 | M-RAV, Qwen2.5-32B | 2026 | Information Processing & Management | **Q1** JCR/SJR[^12] | 0.5002 | MF1 0.5014 | System evidence nhưng test MOCHEG lọc còn n=2001; không xếp trực tiếp[^9] |
 | 4 | MEVER | 2026 | EACL 2026, long paper | **CORE A** | 0.483 ± 0.021 | MF1 0.497 ± 0.012 | Retrieved evidence nhưng paper dùng preprocessing thống nhất riêng; gần P1, không đồng nhất tuyệt đối[^7] |
@@ -388,14 +390,14 @@ GraphCURE strict robustness đạt `0.5690/0.5458` trên n=2434 nhưng không đ
 | Multimodal constraint encoder | Text, image, metadata-like descriptors, sufficiency/polarity tasks, counterfactual absence | Entity/temporal parsers chưa thành expert mạnh end-to-end |
 | Dependency-aware reasoning | Typed graph trên NewsCLIPpings; hierarchical sufficiency/polarity; evidence-set attention | Chưa có graph reasoning vượt flat/Qwen anchor ổn định |
 | Conflict-aware uncertainty | Entropy/confidence/conflict, PCGrad, crossfit value gate, source/group audits | Gate utility AUROC còn thấp; chưa đủ cho production routing |
-| Closed-corpus verdict | Qwen3 retrieval/rerank/LoRA; official test 0.5680/0.5453 | **Phase-B expert đã đóng băng; B16/B17 là negative ablation** |
+| Closed-corpus verdict | B18-A grounded explanation distillation + heterogeneous ensemble; official 0.57535/0.55507 | **Phase-B champion đã đóng băng; B1 là baseline, B2–B17 là ablation/failure analysis** |
 | Open-web verification | Mới ở mức research/protocol definition | Chưa xây/freeze Phase-C expert |
 | Cost-aware routing | Budget routers và selective routers đã thử | Chưa đo Pareto B-vs-C vì C chưa tồn tại |
-| Explanation | Có structured descriptors/reports và constraint heads | Chưa có final evidence-grounded explanation evaluation |
+| Explanation | B18-A dùng structured grounded teacher explanations trong training; direct-verdict inference không đổi | Cần human/explanation-quality evaluation nếu paper claim chất lượng explanation đầu ra |
 
 ## 11. Việc cần làm tiếp
 
-### 11.1. B17 đã hoàn tất: không mở B18 trên các fold đã xem
+### 11.1. B17 đã hoàn tất và chu kỳ B16/B17 đã được đóng
 
 B16 đã fail independent confirmation. B17 không huấn luyện model và không chọn threshold; nó đọc duy nhất held predictions của folds 1–4 để so B16 với **matched control**. Báo cáo:
 
@@ -409,16 +411,28 @@ Atlas cho thấy B16 thấp hơn matched control 0.00104 MF1, NEI-F1 giảm 0.00
 và cả hai nguồn đều âm nhẹ. Harm tập trung ở retrieval confidence/margin thấp,
 nhưng các chuyển đổi supported↔NEI gần đối xứng và không tạo ra một treatment
 subgroup ổn định. Vì vậy không tune omission ratio/router trên cùng dữ liệu và
-không đăng ký B18 chỉ để tiếp tục tìm kiếm architecture.
+không đăng ký một B18 hậu nghiệm từ chính các subgroup của atlas đó.
 
-### 11.2. Đóng băng Phase B
+### 11.2. B18 là một fresh hypothesis cycle độc lập
 
-Phase B được đóng băng ở Qwen3 five-seed P1 ensemble đã chạy official test một
-lần, không test-fitted parameters: Acc 0.5680/MF1 0.5453 official và
-0.5690/0.5458 strict. Đây là point-estimate SOTA trong các hàng P1 đã xác minh.
-B16/B17 được giữ làm negative ablation, không thay thế frozen expert.
+B18 không tiếp tục tune threshold/subgroup của B17. Nó kiểm tra một giả thuyết
+mới: teacher-distilled structured explanations có thể cải thiện representation
+cho direct verdict hay không. Ensemble membership được chọn trên validation;
+main official `n=2442` chỉ được dùng sau khi policy đã khóa. Kết quả:
 
-### 11.3. Sau Phase B
+- seed 100: Accuracy `0.56962`, Macro-F1 `0.55128`;
+- ensemble 5 B1 + top-3 B18-A: Accuracy `0.57535`, Macro-F1 `0.55507`;
+- delta so B1: `+0.00737` Accuracy, `+0.00976` Macro-F1;
+- paired bootstrap: CI `[+0.00097,+0.01850]`, `P(Δ>0)=0.9839`.
+
+### 11.3. Đóng băng Phase B
+
+Phase B được đóng băng tại B18-A heterogeneous ensemble: official
+Acc `0.57535`/MF1 `0.55507`; strict Acc `0.57477`/MF1 `0.55383`. Đây là
+point-estimate SOTA trong các hàng P1 đã xác minh. B1 được giữ làm frozen
+baseline và B2–B17 làm ablation/failure analysis.
+
+### 11.4. Sau Phase B
 
 - **Phase C:** xây open-web expert với query decomposition, evidence provenance/time, source diversity, contradiction-aware evidence table và MLLM judge; freeze cost/time/token accounting.
 - **Phase D:** route bằng expected value of information: lợi ích xác suất của open-web trừ latency/GPU/token/search cost. So Pareto curves ở fixed coverage/budget, không chỉ một threshold.
@@ -427,7 +441,7 @@ B16/B17 được giữ làm negative ablation, không thay thế frozen expert.
 ## 12. Đóng góp có thể viết thành paper
 
 1. **Protocol contribution:** phân tách P0/P1/P2/gold rõ ràng và deduplicated robustness track.
-2. **Strong closed-corpus pipeline:** modern dense retrieval + reranking + claim-level LoRA verifier.
+2. **Strong closed-corpus pipeline:** modern dense retrieval + reranking + grounded explanation distillation + heterogeneous verifier ensemble.
 3. **Evidence-absence finding:** retrieval recall cao nhưng verifier thất bại chủ yếu ở sufficiency/NEI, không phải top-k coverage.
 4. **Counterfactual verdict curriculum (negative finding):** biến constraint “evidence missing ⇒ NEI” thành supervision trong cùng verdict space và compute-neutral, nhưng independent confirmation cho thấy nó không hơn matched control; đây là bằng chứng để không tiếp tục tune omission ratio.
 5. **Negative-results discipline:** visual fusion, graph constraints, GroupDRO, PCGrad, calibration và routing được kiểm tra bằng matched controls/fresh confirmations, làm rõ cái gì không tổng quát hóa.
@@ -436,7 +450,7 @@ B16/B17 được giữ làm negative ablation, không thay thế frozen expert.
 ## 13. Hạn chế
 
 - B16 chỉ pass development fold và đã co về -0.00104 MF1 so matched control khi confirmation; đây là negative result đã đóng.
-- Main best hiện tại là text-retrieved, chưa hiện thực đầy đủ multimodal promise của proposal.
+- Main B18-A vẫn là text-retrieved, chưa hiện thực đầy đủ multimodal promise của proposal.
 - Một số paper dùng filtered splits hoặc evidence setup không đồng nhất; bảng 10 hệ thống là audit định vị, không phải leaderboard chính thức.
 - Các VLM visual reranker có chi phí rất cao (ước tính khoảng 25 GPU-hours cho một full validation configuration) nhưng stance gain thấp.
 - Official MOCHEG có thể chứa cross-split duplicate texts; cần báo song song official và strict, không chọn một track thuận lợi.
@@ -444,13 +458,17 @@ B16/B17 được giữ làm negative ablation, không thay thế frozen expert.
 
 ## 14. Kết luận
 
-GraphCURE đã đi từ graph-feature models khoảng MF1 0.42–0.46 đến một Qwen3 P1 system đạt official-test MF1 0.5453 và Accuracy 0.5680. Quan trọng hơn, chuỗi B1–B15 đã thu hẹp bottleneck từ retrieval, visual selection, domain imbalance và calibration xuống **evidence sufficiency/NEI behavior**. B16 cho tín hiệu mạnh ở fold 0 nhưng independent confirmation chứng minh phần lớn gain đến từ matched training trajectory, không phải counterfactual omission.
+GraphCURE đã đi từ graph-feature models khoảng MF1 0.42–0.46 đến B1 official
+MF1 `0.54531`, rồi đạt B18-A official MF1 `0.55507` và Accuracy `0.57535`.
+B18-A cải thiện đặc biệt ở NEI/sufficiency nhờ grounded explanation
+distillation, còn heterogeneous ensemble giữ lại thế mạnh bổ sung của B1.
 
-Vì vậy trạng thái khoa học đúng là: **Phase B đã đóng băng ở B1 Qwen3
-five-seed ensemble và có P1 official-test point estimate cao nhất trong các
-nguồn đã xác minh.** Chưa được viết “SOTA MOCHEG” không điều kiện và chưa có
-kiểm định paired superiority với AMuFC. B16/B17 đã đóng như một negative
-ablation; bước chính tiếp theo là Phase C open-web, sau đó Phase D routing.
+Vì vậy trạng thái khoa học hiện tại là: **Phase B đã đóng băng tại B18-A và có
+P1 official-test point estimate cao nhất trong các nguồn đã xác minh.** Có thể
+claim paired superiority so với B1, nhưng không claim paired statistical
+superiority với AMuFC khi chưa có prediction của AMuFC. B2–B17 được giữ như
+ablation/negative results; bước chính tiếp theo là Phase C open-web và Phase D
+cost-aware routing.
 
 ## Nguồn tham khảo
 

@@ -6,7 +6,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scripts.select_mocheg_ensemble_on_val import evaluate_ensemble_on_data, extract_ordered_data
+from scripts.select_mocheg_ensemble_on_val import (
+    evaluate_ensemble_on_data,
+    extract_ordered_data,
+    locked_test_policy_names,
+)
 
 
 def test_extract_ordered_data():
@@ -36,3 +40,13 @@ def test_evaluate_ensemble_on_data():
     assert metrics["accuracy"] == 1.0
     assert metrics["macro_f1"] == 1.0
     assert metrics["predictions"].tolist() == [0, 1]
+
+
+def test_locked_test_scope_excludes_nonchampion_top_k_policies():
+    assert locked_test_policy_names("top_3_val_candidates") == [
+        "top_3_val_candidates",
+        "full_unpruned_ensemble",
+    ]
+    assert locked_test_policy_names("full_unpruned_ensemble") == [
+        "full_unpruned_ensemble"
+    ]

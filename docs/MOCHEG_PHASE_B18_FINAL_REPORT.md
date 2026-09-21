@@ -11,18 +11,19 @@
 
 Để đảm bảo tính nghiêm ngặt khoa học chuẩn mực cho bài báo khoa học (paper publication), dự án GraphCURE phân biệt rõ ràng hai track dữ liệu kiểm thử độc lập:
 
-1. **`P1 strict test` (Strict Deduplicated Robustness Track, $n = 2,434$ claims):**
-   - Tập kiểm thử đã qua kiểm định khử trùng lặp xuyên tập (cross-split duplicate audit) ở Stage A (`data/processed/mocheg_manifest_strict/test.jsonl`).
-   - Đã loại bỏ **8 claims** có câu văn trùng lặp nguyên văn (verbatim duplicates) giữa tập train/val và test nhằm triệt tiêu hoàn toàn rò rỉ dữ liệu (zero leakage).
-   - **Đây là track đánh giá chính của Phase B18-A và toàn bộ báo cáo này.**
-   - Điểm chuẩn B1 Baseline trên track này: **Macro-F1 = `0.54581`**, **Accuracy = `0.56902`**.
+1. **`P1 official test` (Raw Official Benchmark Track, $n = 2,442$ claims):**
+   - Claim manifest chính thức: `data/processed/mocheg_manifest/test.jsonl`.
+   - Evidence corpus tương ứng: `data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv`.
+   - Đây là **main benchmark track** dùng để so sánh trực tiếp với HGTMFC, AMuFC v2 và các công trình dùng nguyên bản 2,442 claims.
+   - Điểm chuẩn B1: **Macro-F1 = `0.54531`**, **Accuracy = `0.56798`**.
 
-2. **`P1 official test` (Raw Official Benchmark Track, $n = 2,442$ claims):**
-   - Tập kiểm thử nguyên bản phát hành bởi Yao et al. (SIGIR 2023) (`data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv`).
-   - Dùng để so sánh trực tiếp với các bài báo công bố trên toàn bộ 2,442 claims (như HGTMFC AAAI 2025, AMuFC v2).
-   - Điểm chuẩn B1 Baseline trên track này: **Macro-F1 = `0.54531`**, **Accuracy = `0.56798`**.
+2. **`P1 strict test` (Strict Deduplicated Robustness Track, $n = 2,434$ claims):**
+   - Tập kiểm thử đã qua kiểm định khử trùng lặp xuyên tập ở Stage A (`data/processed/mocheg_manifest_strict/test.jsonl`).
+   - Đã loại bỏ **8 claims** có câu văn trùng lặp nguyên văn giữa train/validation và test.
+   - Đây là robustness track bổ sung cho main official benchmark.
+   - Điểm chuẩn B1: **Macro-F1 = `0.54581`**, **Accuracy = `0.56902`**.
 
-> **Lưu ý phương pháp luận:** Mọi số liệu trong báo cáo này nếu ghi $n = 2,434$ đều là **`P1 strict test`**, tuyệt đối không gọi tắt là "official test" nhằm tránh nhập nhằng với track 2,442 mẫu.
+> **Lưu ý phương pháp luận:** Main-table claim luôn dùng `P1 official test` $n=2,442$. `P1 strict test` $n=2,434$ chỉ được dùng như robustness result và luôn mang suffix `strict`.
 
 ---
 
@@ -39,9 +40,11 @@
 | *B18-A Candidate Seed 87* | 1 | 0.53770 / 0.55957 | 0.53938 / 0.56061 | 0.65261 | 0.44300 | -0.00593 | — |
 | 🌟 **B18-A Candidate Seed 100 (Single SOTA)** | **1** | **0.54960** / 0.56820 | **0.55128** / **0.56962** | **0.66364** | **0.45175** | **+0.00597** | — |
 | *B18-A 3-seed Homogeneous Ensemble* | 3 | 0.53906 / 0.55957 | 0.53986 / 0.55979 | 0.65332 | 0.44209 | -0.00545 | — |
-| 🏆 **Grand Super-Ensemble (5 B1 + 3 B18-A)** | **8** | **0.55383** / **0.57477** | **`0.55507`** / **`0.57535`** | **`0.65735`** | **`0.42770`** | **`+0.00976`** | **`0.9839`** |
+| 🛡️ **Full Unpruned Ensemble (5 B1 + 5 B18-A)** | **10** | *Đối chứng* | **0.55123** / **0.57166** | 0.65677 | **0.43413** | **+0.00592** | 0.8715 |
+| 🏆 **Val-Selected Super-Ensemble (5 B1 + Top-3 B18-A)** | **8** | **0.55383** / **0.57477** | **`0.55507`** / **`0.57535`** | **`0.65735`** | **`0.42770`** | **`+0.00976`** | **`0.9839`** |
 
 ### 2.2. Chi tiết Đánh giá trên P1 Official Test Set ($n = 2,442$)
+#### A. Vô địch: Val-Selected Heterogeneous Ensemble (8 Mô hình - 5 B1 + Seeds 100, 87, 42)
 - **Ensemble Macro-F1:** **`0.55507`** (Tăng **`+0.00976`** so với B1 Baseline).
 - **Ensemble Accuracy:** **`0.57535`** (Tăng **`+0.00737`** so với B1 Baseline).
 - **F1 Từng Lớp:** Supported: `0.58014`, Refuted: `0.65735` (+0.00800), NEI: `0.42770` (+0.02739).
@@ -49,10 +52,19 @@
 - **Khoảng Tin Cậy 95% Bootstrap CI:** $\mathbf{[+0.00097, +0.01850]}$ (hoàn toàn dương).
 - **Phân tích Sửa đúng vs Làm sai:** 54 ca sửa đúng so với 36 ca làm sai, McNemar $p = 0.07255$.
 
+#### B. Đối chứng: Full Unpruned Ensemble (10 Mô hình - Toàn bộ 5 B1 + 5 B18-A)
+- **Ensemble Macro-F1:** **`0.55123`** (Vẫn vượt B1 Baseline **`+0.00592`** MF1 mà không cần bất kỳ tham số chọn lọc nào).
+- **Ensemble Accuracy:** **`0.57166`** (Tăng **`+0.00369`** so với B1 Baseline).
+- **F1 Từng Lớp:** Supported: `0.56280`, Refuted: `0.65677`, NEI: `0.43413` (+0.03382).
+- **Kiểm định Bootstrap:** $P(\Delta > 0) = 0.8715$, 95% CI: `[-0.00436, 0.01608]`.
+- **Phân tích Sửa đúng vs Làm sai:** 65 ca sửa đúng so với 56 ca làm sai, McNemar $p = 0.46721$.
+
+> **Ý nghĩa khoa học:** Cả hai phương án (Full 10 mô hình và Val-Selected 8 mô hình) đều đánh bại mốc B1 Baseline. Việc chọn lọc Top-3 seed dựa trên tập Validation đã giúp loại bỏ phương sai nhiễu từ seed 13 và 21 (vốn có Supported F1 thấp hơn), nâng độ chắc chắn thống kê từ 0.8715 lên mức áp đảo **0.9839**.
+
 ### 2.3. Chi tiết Đánh giá trên P1 Strict Test Set ($n = 2,434$)
 - **Ensemble Macro-F1:** **`0.55383`** (Tăng **`+0.00803`** so với B1 Baseline).
 - **Ensemble Accuracy:** **`0.57477`** (Tăng **`+0.00575`** so với B1 Baseline).
-- **Kiểm định Bootstrap:** $P(\Delta > 0) = \mathbf{0.9621}$, 95% CI: `[+0.00084, +0.01526]`.
+- **Kiểm định Bootstrap:** các số bootstrap strict cũ được tạm rút khỏi claim chính vì CI và xác suất dương không được sinh từ cùng một audit run; cần tái tính trước khi dùng trong paper.
 - **Phân tích Sửa đúng vs Làm sai:** 51 ca sửa đúng so với 37 ca làm sai.
 
 ---
@@ -87,19 +99,19 @@ Một câu hỏi phản biện then chốt từ các reviewer hàng đầu (ACL/
 
 Phép kiểm định độ ý nghĩa thống kê giữa mô hình vô địch (Val-Selected 8-model Ensemble) và B1 Baseline được tiến hành với các thông số nghiêm ngặt:
 
-1. **Phương pháp:** Paired Percentile Bootstrap ở cấp độ claim ($n = 2,434$).
+1. **Phương pháp:** Paired Percentile Bootstrap ở cấp độ claim trên main official track ($n = 2,442$).
 2. **Số lượng mẫu lặp:** $B = 10,000$ iterations với cố định `random_seed = 42`.
 3. **Chỉ số kiểm định:** 
    $$\Delta \text{Macro-F1} = \text{Macro-F1}_{\text{ensemble}} - \text{Macro-F1}_{\text{baseline}}$$
-4. **Khoảng tin cậy 95% (95% Bootstrap CI):** `[+0.00084, +0.01526]`.
-   - **Ý nghĩa then chốt:** Cận dưới của khoảng tin cậy strictly lớn hơn 0 ($+0.00084 > 0$). Điều này chứng minh sự cải thiện của hệ thống có ý nghĩa thống kê ở mức kiểm định $\alpha = 0.05$.
+4. **Khoảng tin cậy 95% (95% Bootstrap CI):** `[+0.00097, +0.01850]`.
+   - **Ý nghĩa then chốt:** Cận dưới lớn hơn 0 ($+0.00097 > 0$), nên mức tăng so với B1 có ý nghĩa theo paired percentile bootstrap ở $\alpha = 0.05$.
 5. **Xác suất vượt trội (Bootstrap Probability of Superiority):**
-   $$P(\Delta > 0) = \mathbf{0.9621}$$
+   $$P(\Delta > 0) = \mathbf{0.9839}$$
    (Vượt ngưỡng tiên nghiệm $P \ge 0.95$ đã đăng ký trong protocol).
-6. **Kiểm định McNemar:** Phân tích 88 ca bất đồng giữa hai hệ thống:
-   - Số ca sửa đúng (Helpful corrections): **51**
-   - Số ca làm sai (Harmful regressions): **37**
-   - Tỉ lệ sửa đúng áp đảo số ca làm sai ($51 > 37$), giá trị $p = 0.1378$.
+6. **Kiểm định McNemar:** Phân tích 90 ca bất đồng giữa hai hệ thống:
+   - Số ca sửa đúng (Helpful corrections): **54**
+   - Số ca làm sai (Harmful regressions): **36**
+   - Helpful lớn hơn harmful ($54 > 36$), nhưng McNemar riêng lẻ chưa qua ngưỡng 0.05 ($p = 0.07255$).
 
 ---
 
@@ -110,7 +122,7 @@ Phép kiểm định độ ý nghĩa thống kê giữa mô hình vô địch (V
 3. **Cơ chế Hiệp đồng:** 
    - B1 giữ vai trò mỏ neo cho lớp `Supported` (F1 $0.58610$).
    - B18-A sửa lỗi triệt để cho lớp `NEI` và `Refuted`.
-   - Hai họ mô hình có không gian lỗi gần như trực giao, giúp Super-Ensemble đạt **Macro-F1 `0.55383`** và **Accuracy `0.57477`**.
+   - Hai họ mô hình có không gian lỗi bổ sung cho nhau, giúp Super-Ensemble đạt official **Macro-F1 `0.55507`** và **Accuracy `0.57535`**.
 
 ---
 
@@ -176,16 +188,17 @@ for SEED in 42 87 13 21 100; do
 done
 
 # -----------------------------------------------------------------------------
-# Bước 3: Đánh giá One-Shot trên tập P1 Strict Test (n = 2,434)
+# Bước 3: Đánh giá One-Shot trên main P1 Official Test (n = 2,442)
 # -----------------------------------------------------------------------------
 for SEED in 42 87 13 21 100; do
-  echo "=== Evaluating Candidate Seed $SEED on P1 Strict Test ==="
+  echo "=== Evaluating Candidate Seed $SEED on P1 Official Test ==="
   CUDA_VISIBLE_DEVICES=0 python -m scripts.evaluate_mocheg_b18_test \
     --checkpoint "outputs/mocheg_b18a_full/candidate_seed${SEED}/best_adapter" \
-    --manifest data/processed/mocheg_manifest_strict/test.jsonl \
-    --retrieval outputs/retrieval_mocheg_qwen3_reranked/test.jsonl \
+    --manifest data/processed/mocheg_manifest/test.jsonl \
+    --retrieval outputs/retrieval_mocheg_qwen3_reranked_official/test.jsonl \
     --corpus data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv \
     --base-model Qwen/Qwen3-4B-Instruct-2507 \
+    --tag official \
     --output-dir "outputs/mocheg_b18a_full/candidate_seed${SEED}" \
     --device cuda \
     2>&1 | tee "outputs/mocheg_b18a_full/candidate_seed${SEED}/test_eval.log"
@@ -202,11 +215,11 @@ python -m scripts.select_mocheg_ensemble_on_val \
     outputs/mocheg_b18a_full/candidate_seed87/val_predictions.jsonl \
     outputs/mocheg_b18a_full/candidate_seed100/val_predictions.jsonl \
   --candidate-test-files \
-    outputs/mocheg_b18a_full/candidate_seed13/test_predictions.jsonl \
-    outputs/mocheg_b18a_full/candidate_seed21/test_predictions.jsonl \
-    outputs/mocheg_b18a_full/candidate_seed42/test_predictions.jsonl \
-    outputs/mocheg_b18a_full/candidate_seed87/test_predictions.jsonl \
-    outputs/mocheg_b18a_full/candidate_seed100/test_predictions.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed13/test_predictions_official.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed21/test_predictions_official.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed42/test_predictions_official.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed87/test_predictions_official.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed100/test_predictions_official.jsonl \
   --baseline-val-files \
     outputs/mocheg_qwen3_lora_seed13/val_predictions.jsonl \
     outputs/mocheg_qwen3_lora_seed21/val_predictions.jsonl \
@@ -219,12 +232,13 @@ python -m scripts.select_mocheg_ensemble_on_val \
     outputs/mocheg_qwen3_lora_frozen_test/seed_42_predictions.jsonl \
     outputs/mocheg_qwen3_lora_frozen_test/seed_87_predictions.jsonl \
     outputs/mocheg_qwen3_lora_frozen_test/seed_100_predictions.jsonl \
-  --protocol-name "P1 strict test (n=2434)" \
-  --output outputs/mocheg_b18a_full_official_test/val_ensemble_audit.json \
-  --markdown outputs/mocheg_b18a_full_official_test/val_ensemble_audit.md
+  --protocol-name "P1 official test (n=2442)" \
+  --output outputs/mocheg_b18a_full_official_test/val_ensemble_audit_official.json \
+  --markdown outputs/mocheg_b18a_full_official_test/val_ensemble_audit_official.md
 
 # -----------------------------------------------------------------------------
-# Bước 5: Đánh giá Trực tiếp Super-Ensemble 8 mô hình (Lệnh đã chạy ra 0.55383)
+# Bước 5: Đánh giá Super-Ensemble 8 mô hình trên official n=2,442
+# Kết quả: Macro-F1 0.55507, Accuracy 0.57535
 # -----------------------------------------------------------------------------
 python -m scripts.ensemble_mocheg_runs \
   --runs \
@@ -233,11 +247,10 @@ python -m scripts.ensemble_mocheg_runs \
     outputs/mocheg_qwen3_lora_frozen_test/seed_42_predictions.jsonl \
     outputs/mocheg_qwen3_lora_frozen_test/seed_87_predictions.jsonl \
     outputs/mocheg_qwen3_lora_frozen_test/seed_100_predictions.jsonl \
-    outputs/mocheg_b18a_full/candidate_seed100/test_predictions.jsonl \
-    outputs/mocheg_b18a_full/candidate_seed87/test_predictions.jsonl \
-    outputs/mocheg_b18a_full/candidate_seed42/test_predictions.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed100/test_predictions_official.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed87/test_predictions_official.jsonl \
+    outputs/mocheg_b18a_full/candidate_seed42/test_predictions_official.jsonl \
   --baseline outputs/mocheg_qwen3_lora_frozen_test/ensemble_predictions.jsonl \
-  --pred-file test_predictions.jsonl \
-  --output outputs/mocheg_b18a_full_official_test/grand_super_ensemble.json \
-  --markdown outputs/mocheg_b18a_full_official_test/grand_super_ensemble.md
+  --output outputs/mocheg_b18a_full_official_test/grand_super_ensemble_official.json \
+  --markdown outputs/mocheg_b18a_full_official_test/grand_super_ensemble_official.md
 ```

@@ -41,6 +41,20 @@
         "helpful_corrections": 54,
         "harmful_regressions": 36,
         "exact_mcnemar_p": 0.07255
+      },
+      "full_unpruned_heterogeneous_ensemble_10_models": {
+        "macro_f1": 0.55123,
+        "accuracy": 0.57166,
+        "f1_supported": 0.56280,
+        "f1_refuted": 0.65677,
+        "f1_nei": 0.43413,
+        "delta_macro_f1_vs_b1": 0.00592,
+        "delta_accuracy_vs_b1": 0.00369,
+        "bootstrap_p_positive": 0.8715,
+        "bootstrap_ci_95": [-0.00436, 0.01608],
+        "helpful_corrections": 65,
+        "harmful_regressions": 56,
+        "exact_mcnemar_p": 0.46721
       }
     },
     "p1_strict_test_n2434": {
@@ -70,11 +84,10 @@
         "f1_nei": 0.42364,
         "delta_macro_f1_vs_b1": 0.00803,
         "delta_accuracy_vs_b1": 0.00575,
-        "bootstrap_p_positive": 0.9621,
-        "bootstrap_ci_95": [0.00084, 0.01526],
         "helpful_corrections": 51,
         "harmful_regressions": 37,
-        "exact_mcnemar_p": 0.1378
+        "exact_mcnemar_p": 0.1378,
+        "bootstrap_status": "legacy figures withheld pending same-run recomputation because the previously reported percentile CI and positive-delta probability were internally inconsistent"
       }
     }
   },

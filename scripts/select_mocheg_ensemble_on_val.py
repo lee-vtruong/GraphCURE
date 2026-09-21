@@ -45,6 +45,14 @@ def extract_ordered_data(
     return ordered_ids, y_true
 
 
+def locked_test_policy_names(best_policy_key: str) -> list[str]:
+    """Return the only policies authorized for locked-test evaluation."""
+    names = [best_policy_key]
+    if best_policy_key != "full_unpruned_ensemble":
+        names.append("full_unpruned_ensemble")
+    return names
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validation-Driven Ensemble Selection for GraphCURE")
     parser.add_argument("--candidate-val-files", type=Path, nargs="+", required=True, help="Candidate val prediction files")
@@ -128,9 +136,13 @@ def main() -> None:
     best_policy = policies_eval[best_policy_key]
     logging.info("Champion Policy Selected on Validation: %s (Val MF1: %.5f)", best_policy_key, best_policy["val_macro_f1"])
 
-    # 6. Apply Selected Policies to Test Set (One-Shot Locked Evaluation)
+    # 6. Apply only the validation-locked champion and the preregistered
+    # unpruned sensitivity control to test. Reporting every Top-K policy on
+    # test would turn validation-only selection into test-space exploration.
     test_results = {}
-    for policy_key, pinfo in policies_eval.items():
+    locked_test_policies = locked_test_policy_names(best_policy_key)
+    for policy_key in locked_test_policies:
+        pinfo = policies_eval[policy_key]
         sel_indices = pinfo["cand_indices"]
         sel_test_dicts = base_test_dicts + [cand_test_dicts[i] for i in sel_indices]
         m = evaluate_ensemble_on_data(sel_test_dicts, test_ids, y_test_true)
@@ -174,6 +186,8 @@ def main() -> None:
         "baseline_test_metrics": {k: v for k, v in base_test_metrics.items() if not isinstance(v, np.ndarray)},
         "candidate_validation_ranking": val_candidates_perf,
         "champion_policy_selected_on_val": best_policy_key,
+        "test_policies_evaluated": locked_test_policies,
+        "selection_used_test_labels": False,
         "policy_evaluations": test_results,
         "single_best_val_candidate_on_test": {
             "name": cand_names[best_val_cand_idx],
@@ -214,7 +228,8 @@ def main() -> None:
         f"| **Baseline Ensemble (5 B1 Seeds)** | {base_val_metrics['macro_f1']:.5f} | {base_test_metrics['macro_f1']:.5f} | {base_test_metrics['accuracy']:.5f} | ref | - | - | - |",
     ])
 
-    for pkey, r in test_results.items():
+    for pkey in locked_test_policies:
+        r = test_results[pkey]
         is_champ = (pkey == best_policy_key)
         champ_marker = " 🏆 (Val Champion)" if is_champ else ""
         ci_str = f"[{r['bootstrap_ci_95'][0]:.5f}, {r['bootstrap_ci_95'][1]:.5f}]"
@@ -222,12 +237,18 @@ def main() -> None:
             f"| `{pkey}`{champ_marker} | {r['val_macro_f1']:.5f} | **{r['test_macro_f1']:.5f}** | {r['test_accuracy']:.5f} | **{r['delta_macro_f1']:+.5f}** | `{ci_str}` | **{r['bootstrap_p_positive']:.4f}** | {r['helpful']} / {r['harmful']} |"
         )
 
+    champion_test = test_results[best_policy_key]
+    full_test = test_results["full_unpruned_ensemble"]
+    full_is_positive = full_test["delta_macro_f1"] > 0
+    full_is_confident = full_test["bootstrap_p_positive"] >= 0.95
     md_lines.extend([
         f"",
         f"## 3. Methodological Proof of Zero Test Leakage",
         f"1. **Ensemble Selection Constraint:** The ensemble composition rule was chosen strictly by identifying the configuration with the highest validation Macro-F1 (`{best_policy_key}`).",
         f"2. **Unpruned 10-Model Alternative:** The full 10-model ensemble (`full_unpruned_ensemble`) includes all 5 baseline seeds and all 5 candidate seeds with zero selection parameters.",
-        f"3. **Conclusion:** Both the validation-selected ensemble and the unpruned ensemble significantly outperform the B1 baseline with $P(\\Delta > 0) \\ge 0.95$.",
+        f"3. **Locked test scope:** Test labels are evaluated only for the validation champion and the preregistered full-unpruned sensitivity control; other Top-K policies remain validation-only.",
+        f"4. **Champion result:** $P(\\Delta > 0)={champion_test['bootstrap_p_positive']:.4f}$ with $\\Delta$ Macro-F1={champion_test['delta_macro_f1']:+.5f}.",
+        f"5. **Unpruned sensitivity result:** positive delta={str(full_is_positive).lower()}, $P(\\Delta > 0) \\ge 0.95$={str(full_is_confident).lower()}.",
     ])
 
     md_text = "\n".join(md_lines)

@@ -1,6 +1,6 @@
 # MOCHEG protocol-aware comparison
 
-Last checked: 2026-09-14 against primary/source papers including
+Last checked: 2026-09-21 against primary/source papers including
 arXiv:2604.04692v2.
 
 Results must be separated by evidence protocol. `P1` uses a fixed MOCHEG
@@ -23,7 +23,7 @@ Gold-evidence and open-web results are not directly comparable with P1.
 | GraphCURE-Qwen3 B1 (raw ensemble) | 0.5690 | Macro-F1 0.5458 | fixed-corpus retrieved text; five frozen LoRA seeds | strict robustness split n=2434 |
 | GraphCURE-Qwen3 B1 (raw ensemble) | 0.5680 | Macro-F1 0.5453 | fixed-corpus retrieved text; five frozen LoRA seeds | official P1 n=2442; no test tuning |
 | GraphCURE-B18A (Seed 100 single seed) | 0.5696 | Macro-F1 0.5513 | fixed-corpus retrieved text; grounded explanation distillation | official P1 n=2442; single seed beats 5-seed B1 |
-| **GraphCURE-B18A (Super-Ensemble)** | **0.5748** | **Macro-F1 0.5538** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **strict robustness split n=2434; P(Delta>0)=0.9621** |
+| **GraphCURE-B18A (Super-Ensemble)** | **0.5748** | **Macro-F1 0.5538** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **strict robustness split n=2434; bootstrap audit pending same-run recomputation** |
 | **GraphCURE-B18A (Super-Ensemble)** | **0.5754** | **Macro-F1 0.5551** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **official P1 n=2442; verified SOTA (P(Delta>0)=0.9839)** |
 
 Primary comparison source for the common table: AMuFC arXiv v2, Table 3,
@@ -58,36 +58,32 @@ Primary comparison source for the common table: AMuFC arXiv v2, Table 3,
   domain-generalization setup rather than P1 system retrieval:
   <https://arxiv.org/pdf/2505.15050>.
 
-GraphCURE-R2V numerically exceeds the preregistered HGTMFC milestone by
-`+0.0100` Accuracy and `+0.0033` Macro-F1 using the exact target values stored
-in the freeze manifest. This is not yet an exact paper-to-paper comparison:
-GraphCURE uses the leakage-controlled, cross-split-deduplicated test set
-(`n=2434`), whereas published MOCHEG tables use the official test set
-(`n=2442`). The final paper must report both an official-split comparability
-track and this strict robustness track.
+GraphCURE-B18A is now evaluated on the same raw official `n=2442` P1 track
+used for the directly comparable literature rows. Its validation-selected
+heterogeneous ensemble reaches `0.57535` Accuracy and `0.55507` Macro-F1;
+the strict `n=2434` result remains a separate robustness check.
 
-The original cached GraphCURE-R2V verifier does **not** exceed AMuFC. The
-subsequent frozen Qwen3 raw ensemble reaches `0.569022/0.545806` on the strict
-split and `0.567977/0.545309` on the official split. Relative to the arXiv-v2
-AMuFC row above, the official point-estimate gains are `+0.021977` Accuracy and
-`+0.005309` Macro-F1. No citable AMuFC source containing the previously listed
+The original cached GraphCURE-R2V verifier does **not** exceed AMuFC. B1 reaches
+`0.567977/0.545309` on the official split; B18-A raises this to
+`0.57535/0.55507`. Relative to AMuFC arXiv v2, the official B18-A point-estimate
+gains are `+0.02935` Accuracy and `+0.01507` Macro-F1. No citable AMuFC source containing the previously listed
 `0.5577/0.5560` row could be found; those values do not occur in arXiv v2 and
-have been removed. The defensible conclusion is that GraphCURE has the highest
-official P1 point estimate among the directly comparable verified rows in this
-table. This is not evidence
-of statistical superiority over AMuFC because paired predictions are absent
-and GraphCURE's bootstrap interval includes AMuFC's point estimate.
+have been removed. The defensible conclusion is that GraphCURE-B18A has the
+highest official P1 point estimate among the directly comparable verified rows
+in this table. Its paired bootstrap comparison against B1 is significant, but
+this is not a paired significance test against AMuFC because AMuFC predictions
+are unavailable.
 
 ## Diagnostic interpretation
 
 - Hybrid Qwen3 retrieval reaches test Recall@50 `0.954807` and MRR `0.807668`.
 - Qwen3 reranking raises Recall@1 from `0.742810` to `0.822104`, Recall@10
   from `0.925637` to `0.945357`, and MRR to `0.869985`.
-- The verifier selects a gold text candidate at rank 1 with probability
+- The B1 verifier selects a gold text candidate at rank 1 with probability
   `0.8204 +/- 0.0307`, conditional on gold evidence being present.
-- Text retrieval is therefore no longer the main bottleneck. The next matched
-  development stage must add system-retrieved visual evidence and learn when it
-  is useful, while keeping all model selection on validation.
+- Text retrieval is therefore no longer the main bottleneck. B18-A improves
+the remaining NEI/sufficiency behavior through grounded explanation
+distillation while retaining direct-verdict inference.
 
 ## Non-comparable protocols
 
