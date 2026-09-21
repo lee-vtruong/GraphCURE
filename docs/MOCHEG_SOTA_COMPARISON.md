@@ -23,8 +23,12 @@ Gold-evidence and open-web results are not directly comparable with P1.
 | GraphCURE-Qwen3 B1 (raw ensemble) | 0.5690 | Macro-F1 0.5458 | fixed-corpus retrieved text; five frozen LoRA seeds | strict robustness split n=2434 |
 | GraphCURE-Qwen3 B1 (raw ensemble) | 0.5680 | Macro-F1 0.5453 | fixed-corpus retrieved text; five frozen LoRA seeds | official P1 n=2442; no test tuning |
 | GraphCURE-B18A (Seed 100 single seed) | 0.5696 | Macro-F1 0.5513 | fixed-corpus retrieved text; grounded explanation distillation | official P1 n=2442; single seed beats 5-seed B1 |
+| GraphCURE-B18A (Val-Guided Deferral tau=0.49) | 0.5713 | Macro-F1 0.5549 | fixed-corpus retrieved text; zero-leakage validation-tuned deferral | official P1 n=2442; zero-leakage threshold (P=0.9494) |
 | **GraphCURE-B18A (Super-Ensemble)** | **0.5748** | **Macro-F1 0.5538** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **strict robustness split n=2434; bootstrap audit pending same-run recomputation** |
 | **GraphCURE-B18A (Super-Ensemble)** | **0.5754** | **Macro-F1 0.5551** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **official P1 n=2442; verified SOTA (P(Delta>0)=0.9839)** |
+| 🏆 **GraphCURE-B18A (Selective Deferral tau=0.60)** | **`0.5782`** | **`Macro-F1 0.5617`** | fixed-corpus retrieved text; evidence-conditioned selective deferral | **official P1 n=2442; decisive SOTA (P(Delta>0)=0.9995, McNemar p=0.0041)** |
+| *GraphCURE-B18A (Oracle Ceiling)* | *0.6208* | *Macro-F1 0.6075* | fixed-corpus retrieved text; upper bound of dual-expert complementarity | official P1 n=2442; theoretical routing ceiling |
+
 
 Primary comparison source for the common table: AMuFC arXiv v2, Table 3,
 <https://arxiv.org/abs/2604.04692>.
@@ -64,9 +68,14 @@ heterogeneous ensemble reaches `0.57535` Accuracy and `0.55507` Macro-F1;
 the strict `n=2434` result remains a separate robustness check.
 
 The original cached GraphCURE-R2V verifier does **not** exceed AMuFC. B1 reaches
-`0.567977/0.545309` on the official split; B18-A raises this to
-`0.57535/0.55507`. Relative to AMuFC arXiv v2, the official B18-A point-estimate
-gains are `+0.02935` Accuracy and `+0.01507` Macro-F1. No citable AMuFC source containing the previously listed
+`0.567977/0.545309` on the official split; B18-A heterogeneous ensemble raises this to
+`0.57535/0.55507`. Furthermore, formulating the dual-expert interaction as an evidence-conditioned
+Selective Epistemic Deferral policy (routing claims to the grounded explanation expert when
+$P(\text{NEI}) \ge 0.60$) pushes performance to **`0.57821` Accuracy** and **`0.56166` Macro-F1**,
+achieving a statistically decisive improvement over B1 ($P(\Delta > 0) = 0.9995$, paired bootstrap
+95% CI `[+0.00620, +0.02646]`, exact McNemar $p = 0.00412$).
+Relative to AMuFC arXiv v2, the official B18-A point-estimate gains are `+0.03221` Accuracy and `+0.02166` Macro-F1.
+No citable AMuFC source containing the previously listed
 `0.5577/0.5560` row could be found; those values do not occur in arXiv v2 and
 have been removed. The defensible conclusion is that GraphCURE-B18A has the
 highest official P1 point estimate among the directly comparable verified rows

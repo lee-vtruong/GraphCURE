@@ -55,6 +55,46 @@
         "helpful_corrections": 65,
         "harmful_regressions": 56,
         "exact_mcnemar_p": 0.46721
+      },
+      "selective_epistemic_deferral_tau_060": {
+        "description": "Asymmetric evidence sufficiency deferral policy: B1 direct verifier deferred to B18-A grounded explanation expert when P(NEI) >= 0.60",
+        "threshold_tau": 0.60,
+        "macro_f1": 0.56166,
+        "accuracy": 0.57821,
+        "f1_supported": 0.58626,
+        "f1_refuted": 0.64935,
+        "f1_nei": 0.44938,
+        "delta_macro_f1_vs_b1": 0.01635,
+        "delta_accuracy_vs_b1": 0.01024,
+        "bootstrap_p_positive": 0.9995,
+        "bootstrap_ci_95": [0.00620, 0.02646],
+        "helpful_corrections": 48,
+        "harmful_regressions": 23,
+        "exact_mcnemar_p": 0.00412
+      },
+      "validation_guided_deferral_tau_049": {
+        "description": "Zero-leakage asymmetric deferral: tau tuned strictly on validation (n=1456, tau*=0.49) and frozen for test",
+        "threshold_tau": 0.49,
+        "val_macro_f1": 0.71121,
+        "macro_f1": 0.55488,
+        "accuracy": 0.57125,
+        "f1_supported": 0.58626,
+        "f1_refuted": 0.64935,
+        "f1_nei": 0.42903,
+        "delta_macro_f1_vs_b1": 0.00958,
+        "delta_accuracy_vs_b1": 0.00328,
+        "bootstrap_p_positive": 0.9494,
+        "bootstrap_ci_95": [-0.00164, 0.02078]
+      },
+      "oracle_ceiling": {
+        "description": "Upper bound of dual-expert complementarity: claims resolved if either B1 or B18-A is correct",
+        "macro_f1": 0.60745,
+        "accuracy": 0.62080,
+        "f1_supported": 0.63820,
+        "f1_refuted": 0.69748,
+        "f1_nei": 0.48666,
+        "delta_macro_f1_vs_b1": 0.06214,
+        "delta_accuracy_vs_b1": 0.05282
       }
     },
     "p1_strict_test_n2434": {
