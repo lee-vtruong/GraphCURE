@@ -1,0 +1,47 @@
+{
+  "phase": "B18-A",
+  "name": "mocheg_b18a_explanation_distillation_frozen",
+  "description": "Evidence-grounded explanation distillation verifier on MOCHEG official test set",
+  "date_frozen": "2026-09-21",
+  "git_branch": "feature/mocheg-phase-b18-explanation-distillation",
+  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "teacher_model": "Qwen/Qwen2.5-7B-Instruct",
+  "protocol": "P1 (Official Locked Test, Strict Deduplication, n=2434)",
+  "loss_formulation": "L_verdict + 0.25 * L_explanation",
+  "evaluation": {
+    "test_samples": 2434,
+    "b1_baseline_macro_f1": 0.54581,
+    "b1_baseline_accuracy": 0.56902,
+    "single_seed_sota": {
+      "model": "candidate_seed100",
+      "macro_f1": 0.54960,
+      "accuracy": 0.56820,
+      "f1_supported": 0.53815,
+      "f1_refuted": 0.66243,
+      "f1_nei": 0.44820
+    },
+    "super_ensemble_8_models": {
+      "models": [
+        "outputs/mocheg_qwen3_lora_frozen_test/seed_13_predictions.jsonl",
+        "outputs/mocheg_qwen3_lora_frozen_test/seed_21_predictions.jsonl",
+        "outputs/mocheg_qwen3_lora_frozen_test/seed_42_predictions.jsonl",
+        "outputs/mocheg_qwen3_lora_frozen_test/seed_87_predictions.jsonl",
+        "outputs/mocheg_qwen3_lora_frozen_test/seed_100_predictions.jsonl",
+        "outputs/mocheg_b18a_full/candidate_seed100/test_predictions.jsonl",
+        "outputs/mocheg_b18a_full/candidate_seed87/test_predictions.jsonl",
+        "outputs/mocheg_b18a_full/candidate_seed42/test_predictions.jsonl"
+      ],
+      "macro_f1": 0.55383,
+      "accuracy": 0.57477,
+      "f1_supported": 0.57991,
+      "f1_refuted": 0.65793,
+      "f1_nei": 0.42364,
+      "delta_macro_f1_vs_b1": 0.00803,
+      "delta_accuracy_vs_b1": 0.00575,
+      "bootstrap_p_val": 0.9621,
+      "bootstrap_ci_95": [0.00084, 0.01526],
+      "helpful_vs_harmful": [51, 37],
+      "mcnemar_p_val": 0.1378
+    }
+  }
+}
