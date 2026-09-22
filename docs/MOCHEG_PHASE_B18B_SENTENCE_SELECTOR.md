@@ -3,7 +3,7 @@
 
 **Phase:** B18-B  
 **Mục tiêu:** Chưng cất kiến thức giải thích có căn cứ (Grounded Rationale Distillation) thành bộ chọn bằng chứng thích ứng (Adaptive Evidence Selector), tách rời hoàn toàn việc học tính hữu ích của bằng chứng (evidence utility) khỏi việc phán quyết sự thật (verdict classification) nhằm triệt tiêu nhiễu distractor và bảo toàn 100% độ đa dạng hạt giống (ensemble diversity).  
-**Trạng thái:** Sẵn sàng thực thi trên GPU Server (Ready for GPU Screen)  
+**Trạng thái:** Đã hoàn thành Fold-0 screen; không thăng hạng, không mở seed 87
 
 ---
 
@@ -431,3 +431,47 @@ python -m scripts.summarize_mocheg_b18_seeds \
 
 Khi B18-B vượt qua Promotion Gate, câu chuyện học thuật của bài báo sẽ được nâng tầm mạnh mẽ:
 > *"Thay vì dừng lại ở tuyên bố thông thường 'chúng tôi huấn luyện mô hình sinh giải thích', bài báo chứng minh một bước đột phá về kiến trúc: **Chuyển đổi các chuỗi suy luận tự nhiên (natural language rationales) thành tín hiệu quy kết hữu ích (evidence attribution) để huấn luyện bộ chọn bằng chứng thích ứng, tách rời việc xác định tính hữu ích của bằng chứng khỏi quá trình phán quyết sự thật.**"*
+
+---
+
+## 11. Kết quả Fold-0 đã đóng băng và quyết định
+
+Protocol: `fold0_matched_compute_evidence_selection_ablation_v1`. Official validation và test đều không được sử dụng.
+
+| Cấu hình | Accuracy | Macro-F1 | Supported F1 | Refuted F1 | NEI F1 |
+|---|---:|---:|---:|---:|---:|
+| Original Top-5 anchor | 0.6664 | 0.6435 | 0.6026 | 0.8213 | 0.5067 |
+| Retrieval Top-3 | **0.6720** | **0.6482** | 0.5964 | **0.8294** | 0.5187 |
+| Generic CE calibrated | 0.6496 | 0.6374 | 0.5674 | 0.8194 | **0.5253** |
+| Rationale-distilled CE calibrated | 0.6651 | 0.6460 | **0.6098** | 0.8180 | 0.5103 |
+
+### Paired conclusions
+
+- Distilled vs anchor: `+0.002493` Macro-F1; bootstrap `P(delta > 0)=0.5964`; 95% CI `[-0.01518, +0.02002]`; helpful/harmful `206/209`.
+- Distilled vs retrieval Top-3: `-0.002141` Macro-F1; bootstrap `P(delta > 0)=0.4088`.
+- Distilled vs generic CE: `+0.008651` Macro-F1; bootstrap `P(delta > 0)=0.8152`.
+- Generic CE vs retrieval Top-3: `-0.010792` Macro-F1; McNemar `p=0.0171`.
+- Source heterogeneity: distilled cải thiện PolitiFact `+0.02151` nhưng giảm Snopes `-0.00817`.
+
+### Diễn giải khoa học
+
+1. Teacher-rationale distillation tạo tín hiệu thực: nó phục hồi đáng kể phần suy giảm của generic CrossEncoder và tăng Supported F1.
+2. Tuy nhiên, tín hiệu này chưa đủ để vượt một heuristic rất đơn giản là giữ nguyên retrieval Top-3. Lợi ích không ổn định theo nguồn và không có bằng chứng thống kê rằng distilled tốt hơn anchor.
+3. Vì vậy B18-B là **ablation âm có thông tin**, không phải candidate được promotion. Không chạy seed 87 hoặc confirmation folds, tránh tiêu tốn compute sau khi gate tiên nghiệm đã thất bại.
+4. Trong paper, báo cáo Retrieval Top-3 như strong compression baseline; báo cáo generic CE và distilled CE để chứng minh rằng rationale supervision tốt hơn relevance reranking thuần túy nhưng chưa thay thế được baseline đơn giản.
+
+### Quyết định
+
+```json
+{
+  "b18b_screen_closed": true,
+  "promotion_passed": false,
+  "run_seed_87": false,
+  "run_confirmation_folds": false,
+  "best_fold0_ablation": "retrieval_top_3",
+  "distillation_beats_generic_ce": true,
+  "distillation_beats_retrieval_top_3": false,
+  "official_validation_used": false,
+  "test_split_used": false
+}
+```

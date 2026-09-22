@@ -5,7 +5,7 @@
 **Trạng thái:** Hoàn thành & Đạt chuẩn kiểm định thống kê (Passed Promotion Gate)  
 **Git Branch:** `feature/mocheg-phase-b18-explanation-distillation`  
 
-> **Nhánh thực nghiệm kế tiếp:** B18-B không thay thế kết quả confirmatory của B18-A. Đây là ablation kiến trúc riêng nhằm kiểm tra liệu teacher rationale có cải thiện verifier thông qua evidence selection thay vì explanation loss. Protocol v2 bắt buộc dùng retrieval Top-K controls giữ nguyên upstream order, generic CrossEncoder control, distilled CrossEncoder candidate và claim-disjoint selector dev split; xem `MOCHEG_PHASE_B18B_SENTENCE_SELECTOR.md`.
+> **B18-B follow-up đã hoàn thành:** B18-B không thay thế kết quả confirmatory của B18-A. Fold-0 cho thấy rationale-distilled selector tốt hơn generic CrossEncoder `+0.00865` Macro-F1, nhưng không vượt retrieval Top-3 (`-0.00214`) và không đạt promotion gate so với anchor. Nhánh được đóng như một ablation âm có thông tin; không mở seed 87 hoặc confirmation folds. Xem `MOCHEG_PHASE_B18B_SENTENCE_SELECTOR.md`.
 
 ---
 
