@@ -21,6 +21,10 @@ from scripts.calibrate_mocheg_b18b_selector_policy import (
     choose_policy,
 )
 from scripts.analyze_mocheg_b18b_fold0 import compare
+from scripts.analyze_mocheg_b18c_routing_feasibility import (
+    oracle_predictions,
+    outcome_overlap,
+)
 from scripts.train_mocheg_b18b_sentence_selector import split_pairs_by_claim
 
 
@@ -199,6 +203,22 @@ def test_b18b_fold0_comparison_counts_help_and_harm() -> None:
     assert result["helpful"] == 2
     assert result["harmful"] == 1
     assert result["accuracy_delta"] > 0.0
+
+
+def test_b18c_oracle_and_overlap_are_diagnostic_upper_bound() -> None:
+    labels = np.asarray([0, 1, 2, 0])
+    top3 = np.asarray([0, 0, 2, 1])
+    distilled = np.asarray([1, 1, 0, 1])
+    oracle = oracle_predictions(labels, top3, [top3, distilled])
+    assert oracle.tolist() == [0, 1, 2, 1]
+    overlap = outcome_overlap(labels, top3, distilled)
+    assert overlap == {
+        "both_correct": 0,
+        "first_only_correct": 2,
+        "second_only_correct": 1,
+        "both_wrong": 1,
+        "prediction_disagreements": 3,
+    }
 
 
 def test_end_to_end_train_mock_selector_cli(tmp_path: Path) -> None:
