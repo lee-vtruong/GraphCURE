@@ -29,6 +29,7 @@ from scripts.train_mocheg_b18c_crossfit_router import (
     choose_threshold,
     stable_fold,
 )
+from scripts.train_mocheg_b18c2_disagreement_router import choose_utility_threshold
 from scripts.train_mocheg_b18b_sentence_selector import split_pairs_by_claim
 
 
@@ -75,6 +76,24 @@ def test_b18c_threshold_selection_rejects_harmful_extra_route() -> None:
         maximum_route_rate=1.0,
     )
     assert selected["threshold"] == pytest.approx(0.85)
+    assert selected["route_rate"] == pytest.approx(0.25)
+
+
+def test_b18c2_utility_threshold_selects_positive_value_route() -> None:
+    labels = np.asarray([0, 1, 2, 0])
+    top3 = np.asarray([1, 1, 2, 0])
+    distilled = np.asarray([0, 0, 2, 1])
+    utility = np.asarray([0.8, -0.7, -0.2, -0.6])
+    selected = choose_utility_threshold(
+        labels,
+        top3,
+        distilled,
+        utility,
+        thresholds=np.asarray([-0.8, 0.0]),
+        minimum_route_rate=0.0,
+        maximum_route_rate=1.0,
+    )
+    assert selected["threshold"] == pytest.approx(0.0)
     assert selected["route_rate"] == pytest.approx(0.25)
 
 
