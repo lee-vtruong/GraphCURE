@@ -25,6 +25,10 @@ from scripts.analyze_mocheg_b18c_routing_feasibility import (
     oracle_predictions,
     outcome_overlap,
 )
+from scripts.train_mocheg_b18c_crossfit_router import (
+    choose_threshold,
+    stable_fold,
+)
 from scripts.train_mocheg_b18b_sentence_selector import split_pairs_by_claim
 
 
@@ -47,6 +51,31 @@ def test_adaptive_selector_policy_margin_pruning() -> None:
     selected_ids, selected_scores = policy.select(candidates, scores)
     assert selected_ids == ["doc_A", "doc_B"]
     assert selected_scores == [2.5, 1.8]
+
+
+def test_b18c_stable_fold_is_deterministic_and_bounded() -> None:
+    assignments = [stable_fold(f"claim-{index}", 5) for index in range(100)]
+    assert assignments == [stable_fold(f"claim-{index}", 5) for index in range(100)]
+    assert all(0 <= fold < 5 for fold in assignments)
+    assert len(set(assignments)) == 5
+
+
+def test_b18c_threshold_selection_rejects_harmful_extra_route() -> None:
+    labels = np.asarray([0, 1, 2, 0])
+    top3 = np.asarray([1, 1, 2, 0])
+    distilled = np.asarray([0, 0, 2, 1])
+    scores = np.asarray([0.90, 0.80, 0.10, 0.20])
+    selected = choose_threshold(
+        labels,
+        top3,
+        distilled,
+        scores,
+        thresholds=np.asarray([0.50, 0.85]),
+        minimum_route_rate=0.0,
+        maximum_route_rate=1.0,
+    )
+    assert selected["threshold"] == pytest.approx(0.85)
+    assert selected["route_rate"] == pytest.approx(0.25)
 
 
 def test_adaptive_selector_policy_threshold_pruning() -> None:
