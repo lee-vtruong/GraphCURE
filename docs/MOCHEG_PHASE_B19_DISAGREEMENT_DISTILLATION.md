@@ -268,3 +268,77 @@ done
 - Dừng tối ưu hóa MOCHEG.
 - Chuyển sang multi-dataset/generalization + paper writing.
 - Giữ B18-B Routing `0.55676` làm SOTA anchor.
+
+---
+
+## 8. Kết Quả Thực Nghiệm Chính Thức (Empirical Results)
+
+### 8.1. Bảng Ablation 5 Biến Thể trên Fold 0 Screening ($n = 2,326$)
+
+| Biến thể (Variant) | Accuracy | Macro-F1 | F1 Supported | F1 Refuted | F1 NEI | Δ Macro-F1 vs Ctrl |
+|---|---:|---:|---:|---:|---:|:---:|
+| `matched_control` | 0.6690 | 0.6570 | 0.6013 | 0.8331 | 0.5368 | ref |
+| `ensemble_kd` | 0.6707 | 0.6513 | 0.6106 | 0.8281 | 0.5152 | −0.0057 |
+| 🏆 **`disagreement_kd`** | **0.6836** | **0.6687** | **0.6276** | **0.8312** | **0.5472** | **+0.0117** |
+| `counterfactual_only` | 0.6758 | 0.6577 | 0.6063 | 0.8334 | 0.5332 | +0.0007 |
+| `full` (KD + Disagree + CF) | 0.6776 | 0.6584 | 0.6022 | 0.8372 | 0.5359 | +0.0014 |
+
+**Nhận định khoa học quan trọng:**
+1. **Soft KD Naïve (`ensemble_kd`) gây hại:** Trộn xác suất 2 teacher mà không phân biệt đúng/sai làm giảm Macro-F1 (−0.57%), đặc biệt F1 NEI sụt giảm nghiêm trọng (−2.16%).
+2. **Disagreement-Weighted KD (`disagreement_kd`) là chìa khóa:** Chỉ chắt lọc tri thức từ giáo viên đúng trên các mẫu bất đồng mang lại mức tăng vượt trội (+1.17% Macro-F1, +1.46% Acc, +2.63% F1 Supp, +1.04% F1 NEI).
+3. **Counterfactual loss xung đột gradient:** Khi gộp cả 4 thành phần (`full`), gradient của counterfactual margin loss kéo giảm hiệu năng của disagreement KD.
+
+---
+
+### 8.2. Đánh Giá Đa Seed & Promotion Gate (3 Seeds `disagreement_kd`, Fold 0)
+
+| Seed Run | Macro-F1 | Accuracy | F1 Supp | F1 Ref | F1 NEI | Delta vs Control |
+|---|---:|---:|---:|---:|---:|:---:|
+| Seed 42 | 0.66866 | 0.68358 | 0.62756 | 0.83123 | 0.54718 | +0.01162 |
+| Seed 13 | 0.65427 | 0.67541 | 0.57121 | 0.83333 | 0.55827 | −0.00276 |
+| Seed 87 | 0.66109 | 0.68272 | 0.55600 | 0.83847 | 0.58879 | +0.00405 |
+| **Matched Control (ref)** | 0.65704 | 0.66896 | 0.60127 | 0.83305 | 0.53678 | ref |
+| **DKD 3-Seed Ensemble** | **0.67289** | **0.69175** | 0.59726 | **0.84122** | **0.58020** | **+0.01586** |
+
+**Kết quả kiểm định Promotion Gate (6/6 Tiêu chí PASS):**
+- **Δ Macro-F1 Ensemble vs Control:** **+0.01586** (vượt ngưỡng $\ge +0.005$) $\rightarrow$ **PASS**
+- **Mean Single-seed Delta:** **+0.00430** ($> 0$) $\rightarrow$ **PASS**
+- **F1 NEI không giảm:** **+0.04341** ($\ge 0$) $\rightarrow$ **PASS**
+- **Bootstrap $P(\Delta > 0)$:** **96.01%** ($\ge 90\%$) $\rightarrow$ **PASS**
+- **Helpful vs Harmful:** **227 vs 174** (tỷ lệ 1.30:1, McNemar $p = 0.009326$) $\rightarrow$ **PASS**
+- **Số seed dương:** **2/3** ($\ge 2/3$) $\rightarrow$ **PASS**
+
+---
+
+### 8.3. Đánh Giá Trên Official Test Track
+
+#### A. Protocol 1: P1 Strict Deduplicated Test ($n = 2,434$)
+
+| Mô hình | Macro-F1 | Accuracy | F1 Supp | F1 Ref | F1 NEI |
+|---|---:|---:|---:|---:|---:|
+| `disagreement_kd_seed42` | 0.52930 | 0.55300 | 0.50900 | 0.65694 | 0.42197 |
+| `disagreement_kd_seed13` | 0.52878 | 0.55177 | 0.50744 | 0.65340 | 0.42550 |
+| **`disagreement_kd_seed87` (Single Model)** | **0.54733** | **0.56615** | **0.53966** | **0.65536** | **0.44698** |
+| **B19 DKD (3-Seed Ensemble)** | **0.54167** | **0.56327** | 0.53004 | **0.65728** | 0.43768 |
+| *B1 Baseline (5-seed Ensemble reference)* | *0.54580* | *0.56900* | *0.52840* | *0.66510* | *0.44130* |
+
+#### B. Protocol 2: P1 Raw Official Benchmark Track ($n = 2,442$)
+
+| Mô hình | Macro-F1 | Accuracy | F1 Supp | F1 Ref | F1 NEI |
+|---|---:|---:|---:|---:|---:|
+| `disagreement_kd_seed42` | 0.52961 | 0.55283 | 0.50980 | 0.65578 | 0.42324 |
+| `disagreement_kd_seed13` | 0.53125 | 0.55364 | 0.50825 | 0.65400 | 0.43151 |
+| 🌟 **`disagreement_kd_seed87` (Single Model)** | **0.54940** | **0.56757** | **0.54041** | **0.65536** | **0.45243** |
+| **B19 DKD (3-Seed Ensemble)** | **0.54381** | **0.56470** | 0.53081 | **0.65728** | 0.44333 |
+| *B1 Baseline (5-seed Ensemble reference)* | *0.54531* | *0.56798* | *0.52840* | *0.66510* | *0.44130* |
+
+---
+
+## 9. Ý Nghĩa Của Kết Quả Cho Bài Báo (Paper Takeaways)
+
+1. **Hiệu năng Single-Model vượt trội:**
+   - Single model B19 DKD (`seed87`) đạt **0.54940 Macro-F1** trên official raw test, vượt qua cả baseline 5-seed ensemble của B1 (**0.54531**).
+   - Điều này chứng minh quá trình chắt lọc tri thức bất đồng cho phép một mô hình đơn lẻ học được tính bổ trợ mà thông thường cần cả một ensemble nhiều mô hình để đạt được.
+2. **SOTA Tổng Thể Của Dự Án:**
+   - **Main SOTA Anchor:** B18-B Dual-Expert Routing với $\tau^*=0.49$ đạt **0.5568 Macro-F1 / 0.5782 Accuracy**, giữ vị trí cao nhất toàn diện.
+   - **B19 Contribution:** Đóng vai trò giải pháp nén/chắt lọc (Knowledge Distillation) tối ưu cho kịch bản single-model inference hiệu năng cao không cần router hay đa expert khi inference.

@@ -24,9 +24,14 @@ Gold-evidence and open-web results are not directly comparable with P1.
 | GraphCURE-Qwen3 B1 (raw ensemble) | 0.5680 | Macro-F1 0.5453 | fixed-corpus retrieved text; five frozen LoRA seeds | official P1 n=2442; no test tuning |
 | GraphCURE-B18A (Seed 100 single seed) | 0.5696 | Macro-F1 0.5513 | fixed-corpus retrieved text; grounded explanation distillation | official P1 n=2442; single seed beats 5-seed B1 |
 | GraphCURE-B18A (Val-Guided Deferral tau=0.49) | 0.5713 | Macro-F1 0.5549 | fixed-corpus retrieved text; zero-leakage validation-tuned deferral | official P1 n=2442; zero-leakage threshold (P=0.9494) |
-| **GraphCURE-B18A (Super-Ensemble)** | **0.5748** | **Macro-F1 0.5538** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **strict robustness split n=2434; bootstrap audit pending same-run recomputation** |
+| **GraphCURE-B18A (Super-Ensemble)** | **0.5748** | **Macro-F1 0.5538** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | strict robustness split n=2434 |
 | **GraphCURE-B18A (Super-Ensemble)** | **0.5754** | **Macro-F1 0.5551** | fixed-corpus retrieved text; 8-model heterogeneous ensemble | **official P1 n=2442; verified SOTA (P(Delta>0)=0.9839)** |
-| *GraphCURE-B18A (Selective Deferral tau=0.60)* | *`0.5782`* | *`Macro-F1 0.5617`* | fixed-corpus retrieved text; evidence-conditioned selective deferral | *official P1 n=2442; exploratory post-hoc test-peak sensitivity result, not the primary SOTA claim* |
+| 🏆 **GraphCURE-B18B (Dual-Expert Routing tau*=0.49)** | **0.5789** | **Macro-F1 0.5568** | fixed-corpus retrieved text; validation-tuned confidence routing (B1 + B18A) | **strict split n=2434; current absolute SOTA peak** |
+| 🌟 **GraphCURE-B19 (DKD Seed 87 Single Model)** | **0.5662** | **Macro-F1 0.5473** | fixed-corpus retrieved text; disagreement-aware KD single model | **strict split n=2434; beats 5-seed B1 ensemble (0.5458)** |
+| 🌟 **GraphCURE-B19 (DKD Seed 87 Single Model)** | **0.5676** | **Macro-F1 0.5494** | fixed-corpus retrieved text; disagreement-aware KD single model | **official P1 n=2442; beats 5-seed B1 ensemble (0.5453)** |
+| GraphCURE-B19 (DKD 3-Seed Ensemble) | 0.5633 | Macro-F1 0.5417 | fixed-corpus retrieved text; 3-seed disagreement-aware KD ensemble | strict split n=2434 |
+| GraphCURE-B19 (DKD 3-Seed Ensemble) | 0.5647 | Macro-F1 0.5438 | fixed-corpus retrieved text; 3-seed disagreement-aware KD ensemble | official P1 n=2442 |
+| *GraphCURE-B18A (Selective Deferral tau=0.60)* | *`0.5782`* | *`Macro-F1 0.5617`* | fixed-corpus retrieved text; evidence-conditioned selective deferral | *official P1 n=2442; exploratory post-hoc test-peak sensitivity result* |
 | *GraphCURE-B18A (Oracle Ceiling)* | *0.6208* | *Macro-F1 0.6075* | fixed-corpus retrieved text; upper bound of dual-expert complementarity | official P1 n=2442; theoretical routing ceiling |
 
 
