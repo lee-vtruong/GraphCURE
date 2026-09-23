@@ -369,3 +369,42 @@ def test_score_teacher_cli_requires_arguments():
     )
     assert result.returncode != 0
     assert "required" in result.stderr.lower() or "error" in result.stderr.lower()
+
+
+# ---------------------------------------------------------------------------
+# 11. train_mocheg_b19_distillation --full-train CLI argument validation
+# ---------------------------------------------------------------------------
+def test_train_distillation_full_train_args_validation():
+    """Verify --full-train requires val manifest/retrieval/corpus, and without it requires folds."""
+    # Test missing folds when full-train is not passed
+    res1 = subprocess.run(
+        [sys.executable, "-m", "scripts.train_mocheg_b19_distillation",
+         "--variant", "disagreement_kd",
+         "--manifest", "dummy_manifest.jsonl",
+         "--retrieval", "dummy_retrieval.jsonl",
+         "--corpus", "dummy_corpus.csv",
+         "--explanations", "dummy_exp.jsonl",
+         "--direct-teacher", "dummy_direct.jsonl",
+         "--grounded-teacher", "dummy_grounded.jsonl",
+         "--output", "dummy_out"],
+        capture_output=True, text=True,
+    )
+    assert res1.returncode != 0
+    assert "--folds is required" in res1.stderr
+
+    # Test missing val arguments when full-train is passed
+    res2 = subprocess.run(
+        [sys.executable, "-m", "scripts.train_mocheg_b19_distillation",
+         "--variant", "disagreement_kd",
+         "--manifest", "dummy_manifest.jsonl",
+         "--retrieval", "dummy_retrieval.jsonl",
+         "--corpus", "dummy_corpus.csv",
+         "--full-train",
+         "--explanations", "dummy_exp.jsonl",
+         "--direct-teacher", "dummy_direct.jsonl",
+         "--grounded-teacher", "dummy_grounded.jsonl",
+         "--output", "dummy_out"],
+        capture_output=True, text=True,
+    )
+    assert res2.returncode != 0
+    assert "required with --full-train" in res2.stderr

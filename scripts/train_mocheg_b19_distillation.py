@@ -192,8 +192,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--retrieval", type=Path, required=True)
     parser.add_argument("--corpus", type=Path, required=True)
-    parser.add_argument("--folds", type=Path, required=True)
+    parser.add_argument("--folds", type=Path, default=None,
+                        help="Fold JSON for screening. Omit with --full-train.")
     parser.add_argument("--fold", type=int, default=0)
+    parser.add_argument("--full-train", action="store_true",
+                        help="Use ALL training data; validate on --val-manifest.")
+    parser.add_argument("--val-manifest", type=Path, default=None,
+                        help="Official validation manifest (required with --full-train)")
+    parser.add_argument("--val-retrieval", type=Path, default=None,
+                        help="Official validation retrieval (required with --full-train)")
+    parser.add_argument("--val-corpus", type=Path, default=None,
+                        help="Official validation corpus (required with --full-train)")
     parser.add_argument("--explanations", type=Path, required=True)
     parser.add_argument("--direct-teacher", type=Path, required=True)
     parser.add_argument("--grounded-teacher", type=Path, required=True)
@@ -215,7 +224,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--limit", type=int, default=0)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.full_train:
+        for name in ("val_manifest", "val_retrieval", "val_corpus"):
+            if getattr(args, name) is None:
+                parser.error(f"--{name.replace('_', '-')} is required with --full-train")
+    elif args.folds is None:
+        parser.error("--folds is required unless --full-train is set")
+    return args
 
 
 def main() -> None:
@@ -231,16 +247,31 @@ def main() -> None:
         "lambda_cf": args.lambda_cf,
         "disagreement_alpha": args.disagreement_alpha,
     })
-    fold_data = json.loads(args.folds.read_text(encoding="utf-8"))
-    entry = next(row for row in fold_data["folds"] if int(row["fold"]) == args.fold)
-    train_ids, val_ids = set(map(str, entry["train_ids"])), set(map(str, entry["val_ids"]))
-    claims = read_jsonl(args.manifest)
-    train_claims = [row for row in claims if str(row["id"]) in train_ids]
-    val_claims = [row for row in claims if str(row["id"]) in val_ids]
+    fold_data = json.loads(args.folds.read_text(encoding="utf-8")) if args.folds else None
+    if args.full_train:
+        claims = read_jsonl(args.manifest)
+        train_claims = claims
+        val_claims = read_jsonl(args.val_manifest)
+        val_retrieval_path = args.val_retrieval
+        val_corpus_path = args.val_corpus
+        fold_used = "full_train"
+        logging.info("Full-train mode: %d train claims, %d val claims",
+                      len(train_claims), len(val_claims))
+    else:
+        entry = next(row for row in fold_data["folds"] if int(row["fold"]) == args.fold)
+        train_ids, val_ids = set(map(str, entry["train_ids"])), set(map(str, entry["val_ids"]))
+        claims = read_jsonl(args.manifest)
+        train_claims = [row for row in claims if str(row["id"]) in train_ids]
+        val_claims = [row for row in claims if str(row["id"]) in val_ids]
+        val_retrieval_path = args.retrieval
+        val_corpus_path = args.corpus
+        fold_used = args.fold
     if args.limit:
         train_claims, val_claims = train_claims[:args.limit], val_claims[:args.limit]
     retrieval = {str(row["id"]): row for row in read_jsonl(args.retrieval)}
     documents = read_documents(resolve_corpus_path(args.corpus))
+    val_retrieval = {str(row["id"]): row for row in read_jsonl(val_retrieval_path)}
+    val_documents = read_documents(resolve_corpus_path(val_corpus_path))
     explanations = {str(row["id"]): row for row in read_jsonl(args.explanations)}
     direct = {str(row["id"]): row for row in read_jsonl(args.direct_teacher)}
     grounded = {str(row["id"]): row for row in read_jsonl(args.grounded_teacher)}
@@ -285,7 +316,7 @@ def main() -> None:
         args.top_k, args.max_evidence_chars,
     )
     val_dataset = B18VerifierDataset(
-        val_claims, retrieval, documents, None,
+        val_claims, val_retrieval, val_documents, None,
         args.top_k, args.max_evidence_chars, training=False,
     )
     train_loader = DataLoader(
@@ -386,9 +417,9 @@ def main() -> None:
             handle.write(json.dumps(row) + "\n")
     payload = {
         "phase": "B19",
-        "protocol": "train_only_duplicate_safe_fold_screen",
+        "protocol": "full_train_official_val" if args.full_train else "train_only_duplicate_safe_fold_screen",
         "variant": args.variant,
-        "fold": args.fold,
+        "fold": fold_used,
         "seed": args.seed,
         "complete": True,
         "best_macro_f1": best_f1,
@@ -407,12 +438,12 @@ def main() -> None:
             "git_commit": git_commit(),
             "manifest_sha256": sha256(args.manifest),
             "retrieval_sha256": sha256(args.retrieval),
-            "folds_sha256": sha256(args.folds),
+            "folds_sha256": sha256(args.folds) if args.folds else None,
             "explanations_sha256": sha256(args.explanations),
             "direct_teacher_sha256": sha256(args.direct_teacher),
             "grounded_teacher_sha256": sha256(args.grounded_teacher),
         },
-        "official_validation_used": False,
+        "official_validation_used": args.full_train,
         "test_split_used": False,
     }
     summary_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
