@@ -15,18 +15,29 @@ import numpy as np
 from scripts.summarize_mocheg_b18_seeds import compute_metrics, load_seed_predictions
 
 
+def row_label(row: dict) -> int:
+    """Read the gold class from all prediction schemas used in this repo."""
+    for field in ("label", "gold", "gold_label", "target"):
+        if field in row:
+            return int(row[field])
+    raise KeyError(
+        "prediction row has no gold-label field; expected one of "
+        "label, gold, gold_label, target"
+    )
+
+
 def load_average(paths: list[Path]):
     runs = [load_seed_predictions(path) for path in paths]
     ids = sorted(set.intersection(*(set(run) for run in runs)))
     if not ids:
         raise ValueError("no common prediction IDs")
-    labels = np.asarray([int(runs[0][i]["label"]) for i in ids])
+    labels = np.asarray([row_label(runs[0][i]) for i in ids])
     probs = np.mean(
         [np.asarray([runs[j][i]["probabilities"] for i in ids], dtype=float)
          for j in range(len(runs))], axis=0,
     )
     for run in runs[1:]:
-        other = np.asarray([int(run[i]["label"]) for i in ids])
+        other = np.asarray([row_label(run[i]) for i in ids])
         if not np.array_equal(labels, other):
             raise ValueError("label mismatch across prediction files")
     return ids, labels, probs
@@ -39,7 +50,7 @@ def entropy(probs: np.ndarray) -> np.ndarray:
 
 def evaluate(labels: np.ndarray, probs: np.ndarray) -> dict:
     pred = probs.argmax(axis=1)
-    return compute_metrics(labels, pred, probs)
+    return compute_metrics(labels, pred)
 
 
 def main() -> None:
@@ -111,14 +122,17 @@ def main() -> None:
             "grounded_entropy_mean": float(entropy(grounded).mean()),
             "prediction_disagreement_count": int(np.sum(direct_pred != grounded_pred)),
         },
-        "official_validation_used": False,
+        "official_validation_used_for_evaluation": True,
+        "official_validation_used_for_policy_selection": False,
         "test_split_used": False,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     lines = [
         "# B18B train-only component ablations", "",
-        "Official validation used: **no**  ", "Test used: **no**", "",
+        "Official validation used for evaluation: **yes**  ",
+        "Official validation used for policy selection: **no**  ",
+        "Test used: **no**", "",
         "| Variant | Accuracy | Macro-F1 | Supported F1 | Refuted F1 | NEI F1 | Routes |",
         "|---|---:|---:|---:|---:|---:|---:|",
     ]
@@ -130,7 +144,7 @@ def main() -> None:
         )
     lines += [
         "", f"Threshold used for A4/A8: `{args.tau}`", 
-        "All results are train-only diagnostics; no policy was selected on test.",
+        "All results are frozen validation ablations; no policy was selected on test.",
     ]
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
