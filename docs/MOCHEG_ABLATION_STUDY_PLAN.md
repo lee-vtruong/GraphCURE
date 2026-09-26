@@ -187,3 +187,30 @@ Có thể đóng băng ablation khi đáp ứng đủ:
 - Official test chỉ được dùng cho A8 đã khóa.
 - Không tiếp tục quét biến thể chỉ vì muốn tăng thêm vài phần nghìn Macro-F1.
 
+## 12. Kết quả frozen-validation của nhóm A
+
+Protocol: official validation chỉ dùng để đánh giá các policy đã đóng băng;
+không dùng để chọn lại policy và không đọc test.
+
+| ID | Macro-F1 | Delta so với A8 | Ghi chú |
+|---|---:|---:|---|
+| A0 direct-only | 0.692045 | -0.019160 | Direct expert |
+| A1 grounded-only | 0.701191 | -0.010014 | Grounded expert |
+| A2 equal ensemble | 0.692773 | -0.018432 | Trung bình posterior không thay thế được router |
+| A3 symmetric confidence | 0.691095 | -0.020110 | Class-agnostic confidence routing |
+| A4 no asymmetric NEI | 0.704436 | -0.006769 | Ablation gần nhất và mạnh nhất |
+| A5 disagreement-only | 0.701191 | -0.010014 | Trùng quyết định với A1 trên tập này |
+| A6 max-confidence-only | 0.691095 | -0.020110 | Trùng nhãn dự đoán với A3 trên tập này |
+| A8 full asymmetric routing | **0.711205** | **0.000000** | Main method |
+
+Kết luận chính:
+
+- A8 là cấu hình tốt nhất trong toàn bộ nhóm đã chạy.
+- A8 hơn A0 `+0.019160`, A1 `+0.010014`, A2 `+0.018432` và A4
+  `+0.006769` Macro-F1.
+- So sánh A8 với A4 là bằng chứng trực tiếp nhất cho đóng góp của asymmetric
+  NEI deferral vì hai cấu hình dùng cùng threshold `0.49`.
+- A1/A5 và A3/A6 tạo cùng nhãn dự đoán trên validation. Đây là tính tương
+  đương của decision rule trên tập này, không phải hai bằng chứng độc lập.
+- Bảng chính của paper nên ưu tiên A0, A1, A2, A4, A8 và A9. Đưa A3, A5,
+  A6 cùng threshold sensitivity A7 vào appendix để tránh bảng chính dư thừa.
