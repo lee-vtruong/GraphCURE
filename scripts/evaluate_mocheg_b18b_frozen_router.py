@@ -18,16 +18,56 @@ def main() -> None:
     parser.add_argument("--grounded-runs", type=Path, nargs="+", required=True)
     parser.add_argument("--tau", type=float, required=True)
     parser.add_argument("--top-k", type=int, required=True)
+    parser.add_argument(
+        "--alignment", choices=("strict", "intersection"), default="strict",
+        help="Require identical IDs, or explicitly evaluate their audited intersection",
+    )
     parser.add_argument("--iterations", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--markdown", type=Path, required=True)
     args = parser.parse_args()
 
-    ids, labels, direct = load_average(args.direct_runs)
+    direct_ids, direct_labels, direct = load_average(args.direct_runs)
     grounded_ids, grounded_labels, grounded = load_average(args.grounded_runs)
-    if grounded_ids != ids or not np.array_equal(grounded_labels, labels):
-        raise ValueError("direct and grounded predictions are not aligned")
+    alignment_audit = {
+        "mode": args.alignment,
+        "direct_samples_before_alignment": len(direct_ids),
+        "grounded_samples_before_alignment": len(grounded_ids),
+    }
+    if direct_ids != grounded_ids:
+        if args.alignment == "strict":
+            raise ValueError(
+                "direct and grounded prediction IDs are not aligned; use "
+                "--alignment intersection only when reporting the resulting "
+                "common-ID protocol explicitly"
+            )
+        common_ids = sorted(set(direct_ids) & set(grounded_ids))
+        if not common_ids:
+            raise ValueError("direct and grounded predictions have no common IDs")
+        direct_index = {sample_id: index for index, sample_id in enumerate(direct_ids)}
+        grounded_index = {
+            sample_id: index for index, sample_id in enumerate(grounded_ids)
+        }
+        direct_positions = [direct_index[sample_id] for sample_id in common_ids]
+        grounded_positions = [grounded_index[sample_id] for sample_id in common_ids]
+        labels = direct_labels[direct_positions]
+        observed_grounded_labels = grounded_labels[grounded_positions]
+        direct = direct[direct_positions]
+        grounded = grounded[grounded_positions]
+        ids = common_ids
+        if not np.array_equal(labels, observed_grounded_labels):
+            raise ValueError("gold labels disagree on common prediction IDs")
+    else:
+        ids = direct_ids
+        labels = direct_labels
+        if not np.array_equal(labels, grounded_labels):
+            raise ValueError("gold labels disagree across aligned predictions")
+    alignment_audit.update({
+        "evaluated_samples": len(ids),
+        "direct_only_ids_dropped": len(set(direct_ids) - set(ids)),
+        "grounded_only_ids_dropped": len(set(grounded_ids) - set(ids)),
+    })
 
     direct_prediction = direct.argmax(axis=1)
     grounded_prediction = grounded.argmax(axis=1)
@@ -71,6 +111,7 @@ def main() -> None:
             "route_count": int(route.sum()),
             "route_rate": float(route.mean()),
         },
+        "alignment_audit": alignment_audit,
         "protocol_flags": {
             "top_k_selected_on_validation": True,
             "tau_selected_on_validation": True,
@@ -86,6 +127,11 @@ def main() -> None:
         "# B18B frozen-router locked-test evaluation", "",
         f"- Frozen Top-K: `{args.top_k}`",
         f"- Frozen tau: `{args.tau}`",
+        f"- Alignment mode: `{args.alignment}`",
+        f"- Evaluated samples: `{len(ids)}`",
+        f"- Direct-only/Grounded-only IDs dropped: "
+        f"`{alignment_audit['direct_only_ids_dropped']}/"
+        f"{alignment_audit['grounded_only_ids_dropped']}`",
         "- Test labels used for parameter selection: **no**", "",
         "| Policy | Accuracy | Macro-F1 | Supported F1 | Refuted F1 | NEI F1 |",
         "|---|---:|---:|---:|---:|---:|",

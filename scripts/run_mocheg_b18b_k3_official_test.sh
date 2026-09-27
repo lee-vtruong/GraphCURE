@@ -58,6 +58,7 @@ python -m scripts.evaluate_mocheg_b18b_frozen_router \
   --grounded-runs "${GROUNDED_TEST_RUNS[@]}" \
   --top-k 3 \
   --tau 0.49 \
+  --alignment intersection \
   --iterations 10000 \
   --seed 2026 \
   --output "$OUT/frozen_router.json" \
