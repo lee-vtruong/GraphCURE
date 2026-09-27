@@ -33,19 +33,18 @@ def aligned_fold(control_root: Path, candidate_root: Path):
     ])
     if not np.array_equal(labels, candidate_labels):
         raise ValueError("gold labels disagree between matched runs")
-    control_prediction = np.asarray([
-        int(control[sample_id].get(
-            "prediction",
-            np.argmax(control[sample_id]["probabilities"]),
-        )) for sample_id in ids
-    ])
-    candidate_prediction = np.asarray([
-        int(candidate[sample_id].get(
-            "prediction",
-            np.argmax(candidate[sample_id]["probabilities"]),
-        )) for sample_id in ids
-    ])
-    return ids, labels, control_prediction, candidate_prediction
+    control_probabilities = np.asarray([
+        control[sample_id]["probabilities"] for sample_id in ids
+    ], dtype=float)
+    candidate_probabilities = np.asarray([
+        candidate[sample_id]["probabilities"] for sample_id in ids
+    ], dtype=float)
+    control_prediction = control_probabilities.argmax(axis=1)
+    candidate_prediction = candidate_probabilities.argmax(axis=1)
+    return (
+        ids, labels, control_prediction, candidate_prediction,
+        control_probabilities, candidate_probabilities,
+    )
 
 
 def comparison(labels: np.ndarray, control: np.ndarray,
@@ -76,6 +75,7 @@ def main() -> None:
     parser.add_argument("--folds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     parser.add_argument("--iterations", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--tau", type=float, default=0.49)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--markdown", type=Path, required=True)
     args = parser.parse_args()
@@ -85,8 +85,12 @@ def main() -> None:
     labels_parts = []
     control_parts = []
     candidate_parts = []
+    routed_parts = []
     for fold in args.folds:
-        ids, labels, control, candidate = aligned_fold(
+        (
+            ids, labels, control, candidate,
+            control_probabilities, candidate_probabilities,
+        ) = aligned_fold(
             args.root / f"control_fold{fold}",
             args.root / f"candidate_fold{fold}",
         )
@@ -102,24 +106,45 @@ def main() -> None:
             labels, control, candidate,
             max(1000, args.iterations // len(args.folds)), args.seed + fold,
         )
+        route = (
+            (candidate == 2)
+            & (candidate_probabilities[:, 2] >= args.tau)
+        )
+        routed = control.copy()
+        routed[route] = 2
+        routed_metrics = compute_metrics(labels, routed)
+        routed_effect = comparison(
+            labels, control, routed,
+            max(1000, args.iterations // len(args.folds)),
+            args.seed + 100 + fold,
+        )
         per_fold.append({
             "fold": fold,
             "samples": len(ids),
             "matched_control": control_metrics,
             "explanation_supervision": candidate_metrics,
             "comparison": effect,
+            "asymmetric_router": routed_metrics,
+            "router_vs_control": routed_effect,
+            "route_count": int(route.sum()),
         })
         labels_parts.append(labels)
         control_parts.append(control)
         candidate_parts.append(candidate)
+        routed_parts.append(routed)
 
     labels = np.concatenate(labels_parts)
     control = np.concatenate(control_parts)
     candidate = np.concatenate(candidate_parts)
+    routed = np.concatenate(routed_parts)
     control_metrics = compute_metrics(labels, control)
     candidate_metrics = compute_metrics(labels, candidate)
     aggregate_effect = comparison(
         labels, control, candidate, args.iterations, args.seed
+    )
+    routed_metrics = compute_metrics(labels, routed)
+    routed_effect = comparison(
+        labels, control, routed, args.iterations, args.seed + 100
     )
     fold_deltas = np.asarray([
         row["comparison"]["macro_f1_delta"] for row in per_fold
@@ -136,12 +161,15 @@ def main() -> None:
             "control_lambda_exp": 0.0,
             "candidate_lambda_exp": 0.25,
             "top_k": 5,
+            "router_tau": args.tau,
         },
         "per_fold": per_fold,
         "aggregate": {
             "matched_control": control_metrics,
             "explanation_supervision": candidate_metrics,
             "comparison": aggregate_effect,
+            "asymmetric_router": routed_metrics,
+            "router_vs_control": routed_effect,
             "class_f1_delta": class_delta,
             "fold_delta": {
                 "mean": float(fold_deltas.mean()),
@@ -159,8 +187,8 @@ def main() -> None:
     lines = [
         "# B18 explanation-supervision five-fold ablation", "",
         "Official validation used: **no**  ", "Test used: **no**", "",
-        "| Fold | Control F1 (lambda=0) | Explanation F1 (lambda=.25) | Delta | Helpful/Harmful |",
-        "|---:|---:|---:|---:|---:|",
+        "| Fold | Control F1 | Explanation F1 | Exp-Control | Routed F1 | Router-Control |",
+        "|---:|---:|---:|---:|---:|---:|",
     ]
     for row in per_fold:
         effect = row["comparison"]
@@ -168,7 +196,8 @@ def main() -> None:
             f"| {row['fold']} | {row['matched_control']['macro_f1']:.6f} | "
             f"{row['explanation_supervision']['macro_f1']:.6f} | "
             f"{effect['macro_f1_delta']:+.6f} | "
-            f"{effect['helpful']}/{effect['harmful']} |"
+            f"{row['asymmetric_router']['macro_f1']:.6f} | "
+            f"{row['router_vs_control']['macro_f1_delta']:+.6f} |"
         )
     boot = aggregate_effect["bootstrap"]
     lines += [
@@ -188,6 +217,18 @@ def main() -> None:
         f"- Supported: `{class_delta['f1_supported']:+.6f}`",
         f"- Refuted: `{class_delta['f1_refuted']:+.6f}`",
         f"- NEI: `{class_delta['f1_nei']:+.6f}`",
+        "", "## Explanation expert with frozen asymmetric routing", "",
+        f"- Frozen tau: `{args.tau}`",
+        f"- Routed Macro-F1: `{routed_metrics['macro_f1']:.6f}`",
+        f"- Router delta vs control: `{routed_effect['macro_f1_delta']:+.6f}`",
+        f"- Router accuracy delta: `{routed_effect['accuracy_delta']:+.6f}`",
+        f"- Router helpful/harmful: `{routed_effect['helpful']}/{routed_effect['harmful']}`",
+        f"- Router exact McNemar p: `{routed_effect['exact_mcnemar_p']:.6f}`",
+        f"- Router bootstrap 95% CI: "
+        f"`[{routed_effect['bootstrap']['ci_95_percentile'][0]:+.6f}, "
+        f"{routed_effect['bootstrap']['ci_95_percentile'][1]:+.6f}]`",
+        f"- Router bootstrap P(delta > 0): "
+        f"`{routed_effect['bootstrap']['probability_delta_positive']:.4f}`",
     ]
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
