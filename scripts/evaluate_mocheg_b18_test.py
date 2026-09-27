@@ -168,6 +168,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/mocheg_b18_official_test"))
     parser.add_argument("--force", action="store_true", help="Force re-evaluation even if predictions already exist")
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--top-k", type=int, default=5, help="Explicit evidence count used by every evaluated run")
+    parser.add_argument("--max-evidence-chars", type=int, default=2200)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--bootstrap-iterations", type=int, default=10000)
     args = parser.parse_args()
@@ -206,6 +208,8 @@ def main() -> None:
             answer_ids=answer_ids,
             device=device,
             batch_size=args.batch_size,
+            top_k=args.top_k,
+            max_evidence_chars=args.max_evidence_chars,
             tag=args.tag,
             force=args.force,
         )
