@@ -105,6 +105,7 @@ def main() -> None:
     route_mask = (grounded_pred == 2) & (grounded[:, 2] >= args.tau)
     candidate_pred = direct_pred.copy()
     candidate_pred[route_mask] = 2
+    change_mask = candidate_pred != direct_pred
 
     lengths = [len(manifests[cid].get("claim", "").split()) for cid in ids]
     confidences = [float(retrieval[cid].get("retrieval_confidence", np.nan)) for cid in ids]
@@ -141,13 +142,17 @@ def main() -> None:
         for value in sorted({row[field] for row in metadata}):
             mask = np.asarray([row[field] == value for row in metadata])
             result = comparison(labels[mask], direct_pred[mask], candidate_pred[mask])
-            result["route_count"] = int(route_mask[mask].sum())
-            result["route_rate"] = float(route_mask[mask].mean())
+            result["activation_count"] = int(route_mask[mask].sum())
+            result["activation_rate"] = float(route_mask[mask].mean())
+            result["prediction_change_count"] = int(change_mask[mask].sum())
+            result["prediction_change_rate"] = float(change_mask[mask].mean())
             groups[field][value] = result
 
     overall = comparison(labels, direct_pred, candidate_pred)
-    overall["route_count"] = int(route_mask.sum())
-    overall["route_rate"] = float(route_mask.mean())
+    overall["activation_count"] = int(route_mask.sum())
+    overall["activation_rate"] = float(route_mask.mean())
+    overall["prediction_change_count"] = int(change_mask.sum())
+    overall["prediction_change_rate"] = float(change_mask.mean())
     overall["exact_mcnemar_p"] = exact_mcnemar_p(overall["helpful"], overall["harmful"])
     overall["bootstrap"] = bootstrap_delta(
         labels, direct_pred, candidate_pred,
@@ -184,18 +189,20 @@ def main() -> None:
         "Test used: **no**", "",
         f"- Overall Macro-F1 delta: `{overall['macro_f1_delta']:+.6f}`",
         f"- Helpful/harmful: `{overall['helpful']}/{overall['harmful']}`",
-        f"- Route count/rate: `{overall['route_count']}/{overall['route_rate']:.4f}`",
+        f"- Router activation count/rate: `{overall['activation_count']}/{overall['activation_rate']:.4f}`",
+        f"- Actual prediction changes: `{overall['prediction_change_count']}/{overall['prediction_change_rate']:.4f}`",
         f"- Bootstrap P(delta > 0): `{overall['bootstrap']['probability_delta_positive']:.4f}`", "",
     ]
     for field in fields:
         lines += [f"## {field}", "",
-                  "| Group | N | Direct F1 | B18B F1 | Delta | Routes | Helpful/Harmful |",
+                  "| Group | N | Direct F1 | B18B F1 | Delta | Active/Changed | Helpful/Harmful |",
                   "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
         for value, row in groups[field].items():
             lines.append(
                 f"| {value} | {row['samples']} | {row['anchor_macro_f1']:.6f} | "
                 f"{row['candidate_macro_f1']:.6f} | {row['macro_f1_delta']:+.6f} | "
-                f"{row['route_count']} | {row['helpful']}/{row['harmful']} |"
+                f"{row['activation_count']}/{row['prediction_change_count']} | "
+                f"{row['helpful']}/{row['harmful']} |"
             )
         lines.append("")
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
