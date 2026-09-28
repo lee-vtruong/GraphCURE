@@ -19,7 +19,7 @@ STRICT_RETRIEVAL="outputs/retrieval_mocheg_qwen3_reranked/test.jsonl"
 DIRECT=()
 STRICT_DIRECT=()
 for seed in 13 21 42 87 100; do
-  DIRECT+=("outputs/mocheg_qwen3_lora_frozen_test/seed_${seed}_predictions.jsonl")
+  DIRECT+=("$OUT/direct_raw/seed_${seed}_predictions.jsonl")
   STRICT_DIRECT+=("$OUT/direct_strict/seed_${seed}_predictions.jsonl")
 done
 GROUNDED=(
@@ -33,8 +33,7 @@ STRICT_GROUNDED=(
   "outputs/mocheg_b18a_full/candidate_seed42/test_predictions_canonical_k5_strict.jsonl"
 )
 
-for path in "$RAW_MANIFEST" "$STRICT_MANIFEST" "$RAW_RETRIEVAL" "$STRICT_RETRIEVAL" \
-  "${DIRECT[@]}"; do
+for path in "$RAW_MANIFEST" "$STRICT_MANIFEST" "$RAW_RETRIEVAL" "$STRICT_RETRIEVAL"; do
   if [[ ! -s "$path" ]]; then
     echo "ERROR: required canonical input is missing or empty: $path" >&2
     exit 1
@@ -42,6 +41,35 @@ for path in "$RAW_MANIFEST" "$STRICT_MANIFEST" "$RAW_RETRIEVAL" "$STRICT_RETRIEV
 done
 
 mkdir -p "$OUT"
+
+# Historic direct predictions were retained on the strict ID universe only.
+# Produce a dedicated raw-P1 artifact from the same frozen five B1 adapters;
+# this is inference-only and prevents any implicit raw/strict intersection.
+NEED_RAW_DIRECT=0
+for path in "${DIRECT[@]}"; do
+  [[ -s "$path" ]] || NEED_RAW_DIRECT=1
+done
+if [[ "$NEED_RAW_DIRECT" -eq 1 ]]; then
+  echo "Creating missing canonical K=5 raw-P1 predictions for frozen direct adapters."
+  CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
+  python -m scripts.evaluate_mocheg_qwen3_frozen_test \
+    --manifest "$RAW_MANIFEST" \
+    --retrieval "$RAW_RETRIEVAL" \
+    --corpus data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv \
+    --output-root "$OUT/direct_raw" \
+    --protocol P1_closed_corpus_retrieved_raw_n2442_canonical_b18b \
+    --expected-samples 2442 \
+    --batch-size 4 \
+    --bootstrap-iterations 10000 \
+    --device cuda \
+    2>&1 | tee "$OUT/direct_raw.log"
+fi
+for path in "${DIRECT[@]}"; do
+  if [[ ! -s "$path" ]]; then
+    echo "ERROR: canonical raw direct prediction was not produced: $path" >&2
+    exit 1
+  fi
+done
 
 # The historic report may contain a different prediction tag or no retained
 # raw prediction at all.  Always use this dedicated tag for the audit.  This
