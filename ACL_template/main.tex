@@ -34,7 +34,7 @@ Our central observation is that two verifiers have complementary error profiles.
 Our contributions are:
 \begin{itemize}
 \item \textsc{CURE}, a dual-expert formulation that combines direct verdict prediction with a rationale-trained complementary \textsc{NEI} signal;
-\item AND, a class-constrained cross-expert rule that permits only \textsc{NEI} deferral, and controlled ablations against grounded-only, posterior averaging, and symmetric routing alternatives;
+\item AND, a class-constrained cross-expert rule that permits only \textsc{NEI} deferral, and controlled ablations against rationale-trained-only, posterior averaging, and symmetric routing alternatives;
 \item post-hoc diagnostic analyses that identify \textsc{NEI} improvements and retrieval-miss failure cases, without using diagnostic labels as routing inputs; and
 \item a disagreement-distilled student as a secondary, lower-latency deployment extension.
 \end{itemize}
@@ -52,13 +52,13 @@ We distinguish frozen-test evaluation from development diagnostics. The heteroge
 \section{Task Definition and Protocols}
 Given a claim $c$ and retrieved evidence $E=\{e_j\}_{j=1}^{K}$, predict $y\in\{\textsc{Supported},\textsc{Refuted},\textsc{NEI}\}$. The principal P1 protocol uses MOCHEG's fixed corpus and upstream text retrieval; it is not an open-web evaluation. The raw official test contains 2,442 claims. A strict robustness track removes eight verbatim cross-split duplicates and contains 2,434 claims. We report both tracks separately. Development validation contains 1,456 claims.
 
-All routing thresholds are selected on validation or train-only out-of-fold data. Test labels are never used for selecting a seed, threshold, or policy in frozen-test evaluation. Open-web experiments in Phase C are not mixed into P1 tables.
+All routing thresholds are selected on validation or train-only out-of-fold data. Test labels are never used for selecting a seed, threshold, or policy in frozen-test evaluation. Open-web experiments are not mixed into P1 tables.
 
 \section{Method}
 \subsection{Direct and rationale-trained experts}
-The direct expert $f_D$ receives a claim $c$ and the top-$K$ reranked passages $E_K$ and predicts a three-way distribution $p_D(y\mid c,E_K)$. It is optimized only with verdict cross-entropy. The rationale-trained expert $f_G$ has the same Qwen3-4B-LoRA backbone and the same inference prompt, but is additionally trained to generate a structured teacher rationale. Thus, it remains a verdict classifier at inference rather than a rationale generator. We refer to it as ``grounded'' only in the provenance sense that its auxiliary targets are schema-validated against retrieved passages; this label does not assert that $p_G(\textsc{NEI})$ is a calibrated measure of evidence sufficiency.
+The direct expert $f_D$ receives a claim $c$ and the top-$K$ reranked passages $E_K$ and predicts a three-way distribution $p_D(y\mid c,E_K)$. It is optimized only with verdict cross-entropy. The rationale-trained expert $f_G$ has the same Qwen3-4B-LoRA backbone and the same inference prompt, but is additionally trained to generate a structured teacher rationale. Thus, it remains a verdict classifier at inference rather than a rationale generator. Its auxiliary targets are schema-validated against retrieved passages; this provenance check does not assert that $p_G(\textsc{NEI})$ is a calibrated measure of evidence sufficiency.
 
-Teacher rationales are generated once for training claims by Qwen2.5-7B-Instruct using the \emph{gold training verdict} and the system-retrieved top-five passages. The teacher is instructed to mark a rationale as ungrounded when those passages cannot justify that training verdict. A valid target contains a grounded flag, verdict, key-passage identifiers, free-text reason, and missing-information field. Generation is deterministic (greedy decoding, maximum 512 new tokens), and schema validation rejects malformed key-passage references and unsupported structured outputs. Explanation loss is applied only to valid, grounded targets. This use of training labels is ordinary supervised learning; no validation or test label, and no gold evidence passage, is included in a validation/test prompt.
+Teacher rationales are generated once for training claims by Qwen2.5-7B-Instruct using the \emph{gold training verdict} and the system-retrieved top-five passages. The teacher is instructed to flag a rationale when those passages cannot justify that training verdict. A valid target contains a retrieval-validation flag, verdict, key-passage identifiers, free-text reason, and missing-information field. Generation is deterministic (greedy decoding, maximum 512 new tokens), and schema validation rejects malformed key-passage references and unsupported structured outputs. Explanation loss is applied only to valid, retrieval-supported targets. This use of training labels is ordinary supervised learning; no validation or test label, and no gold evidence passage, is included in a validation/test prompt.
 
 For a training example $i$, let $z_i$ be the verdict target and $r_i$ the structured rationale target. The two expert objectives are
 \begin{equation}
@@ -67,7 +67,7 @@ For a training example $i$, let $z_i$ be the verdict target and $r_i$ the struct
 \mathcal{L}_{G} &= \mathcal{L}_{D}+\lambda_{r}\mathcal{L}_{\mathrm{rationale}}(r_i), \qquad \lambda_r=0.25.
 \end{aligned}
 \end{equation}
-The rationale term is token-level cross-entropy over the validated structured target. Both experts begin from the same base model, but the headline direct and rationale-trained ensembles use different optimization recipes (specified below); therefore their contrast establishes complementarity, not a causal attribution of every gain to rationale loss. We report a separate matched-recipe, train-only OOF explanation-supervision control. It tests the auxiliary target under one common recipe, but it is not an exact control of the B1 direct recipe against the headline rationale recipe; the latter remains an unresolved optimization confound. The implementation records teacher outputs, manifests, retrieval signatures, and prompt-format hashes. Gold evidence is used only for retrieval diagnostics, never injected into P1 validation or test prompts.
+The rationale term is token-level cross-entropy over the validated structured target. Both experts begin from the same base model, but the headline direct and rationale-trained ensembles use different optimization recipes (specified below); therefore their contrast establishes complementarity, not a causal attribution of every gain to rationale loss. We report a separate matched-recipe, train-only OOF explanation-supervision control. It tests the auxiliary target under one common recipe, but it is not an exact control of the earlier direct recipe against the headline rationale recipe; the latter remains an unresolved optimization confound. The implementation records teacher outputs, manifests, retrieval signatures, and prompt-format hashes. Gold evidence is used only for retrieval diagnostics, never injected into P1 validation or test prompts.
 
 \subsection{Asymmetric \textsc{NEI} deferral (AND)}
 The policy uses the direct expert as an anchor:
@@ -81,11 +81,11 @@ The policy uses the direct expert as an anchor:
 We use $\tau=0.49$, selected on validation and frozen thereafter for the registered $K=5$ router. This rule is intentionally asymmetric: the rationale-trained expert is not permitted to overwrite a direct Supported or Refuted decision with another decisive class. It can only defer to \textsc{NEI} when its complementary \textsc{NEI} posterior is high. AND is therefore distinct from posterior averaging, symmetric confidence routing, and an unconstrained expert switch. $p_G(\textsc{NEI})$ is a learned class posterior, not a Bayesian estimate of parameter uncertainty or a directly validated sufficiency probability.
 
 \subsection{Disagreement-aware distillation}
-B19 is a secondary single-model variant. Let $q_D$ and $q_G$ be frozen teacher distributions generated without the held-out fold. For agreement cases, the distillation target is their average; for disagreement cases, a train-only cross-fitted outcome identifies which teacher target to transfer. The confirmed B19 variant minimizes
+\textsc{CURE}-Student is a secondary single-model variant. Let $q_D$ and $q_G$ be frozen teacher distributions generated without the held-out fold. For agreement cases, the distillation target is their average; for disagreement cases, a train-only cross-fitted outcome identifies which teacher target to transfer. The confirmed variant minimizes
 \begin{equation}
  \mathcal L_{\mathrm{DKD}}=\mathcal L_{\mathrm{CE}}+\lambda_{\mathrm{KD}}T^2\mathrm{KL}(q\|p_S).
 \end{equation}
-Here $q$ is the selected teacher target and $T=2$ is the distillation temperature. A counterfactual sufficiency loss was tested during the Fold-0 mechanism screen but was not retained in the confirmed disagreement-KD variant. B19 is reported as a compute-efficient secondary extension, not as a replacement for AND.
+Here $q$ is the selected teacher target and $T=2$ is the distillation temperature. A counterfactual sufficiency loss was tested during the Fold-0 mechanism screen but was not retained in the confirmed disagreement-KD variant. \textsc{CURE}-Student is reported as a compute-efficient secondary extension, not as a replacement for AND.
 
 \subsection{Competitive ensemble variant}
 The CURE-Ensemble test system is a complementary, validation-selected ensemble: five frozen direct seeds plus the three best rationale-trained seeds ranked on validation. The composition $\{100,87,42\}$ is fixed before the official test is evaluated, and its prediction is the arithmetic mean of member verdict probabilities. We also report an unpruned ten-member ensemble (all five direct plus all five rationale-trained seeds) as a no-subset-selection control. This system is a competitive benchmark variant, not an implementation of AND: it answers whether heterogeneous expert predictions are complementary, whereas AND answers whether a constrained \textsc{NEI} deferral is useful. We do not have an eight-seed direct-only ensemble control; separating expert heterogeneity from ensemble size would require three additional independently trained direct seeds.
@@ -93,7 +93,7 @@ The CURE-Ensemble test system is a complementary, validation-selected ensemble: 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/graphcure_overview.png}
-\caption{Overview of \textsc{CURE}. The claim and retrieved evidence are processed by (i) a direct verdict expert and (ii) a rationale-trained complementary expert. AND may only defer a decision to \textsc{NEI}; otherwise it preserves the direct prediction. The lower B19 branch is a secondary distillation extension, not a required component of AND.}
+\caption{Overview of \textsc{CURE}. The claim and retrieved evidence are processed by (i) a direct verdict expert and (ii) a rationale-trained complementary expert. AND may only defer a decision to \textsc{NEI}; otherwise it preserves the direct prediction. The lower \textsc{CURE}-Student branch is a secondary distillation extension, not a required component of AND.}
 \label{fig:method}
 \end{figure*}
 
@@ -118,7 +118,7 @@ Strict test & 2,434 & no & duplicate-robustness\\
 \end{table}
 
 \subsection{Models and metrics}
-All verifiers use Qwen3-4B-Instruct-2507 with LoRA adapters. The direct ensemble uses seeds $\{13,21,42,87,100\}$; the grounded ensemble contains the validation-selected seeds $\{100,87,42\}$. The representative B1 runs use LoRA rank 16, LoRA scaling 32, dropout 0.05, learning rate $10^{-4}$, AdamW weight decay 0.01, warm-up ratio 0.05, three epochs, per-device batch size 1, and gradient accumulation 16. The headline explanation-grounded runs use the same LoRA rank/scaling/dropout but batch size 2, accumulation 4, and learning rate $2\times10^{-4}$. Hence their raw ensemble comparison is not a matched-optimization causal ablation. For causal attribution, we separately use the five-fold matched-recipe control reported in Section~\ref{sec:matched-exp}. Exact run configurations are retained in JSON summaries.
+All verifiers use Qwen3-4B-Instruct-2507 with LoRA adapters. The direct ensemble uses seeds $\{13,21,42,87,100\}$; the rationale-trained ensemble contains the validation-selected seeds $\{100,87,42\}$. The representative direct-baseline runs use LoRA rank 16, LoRA scaling 32, dropout 0.05, learning rate $10^{-4}$, AdamW weight decay 0.01, warm-up ratio 0.05, three epochs, per-device batch size 1, and gradient accumulation 16. The headline rationale-trained runs use the same LoRA rank/scaling/dropout but batch size 2, accumulation 4, and learning rate $2\times10^{-4}$. Hence their raw ensemble comparison is not a matched-optimization causal ablation. For causal attribution, we separately use the five-fold matched-recipe control reported in Section~\ref{sec:matched-exp}. Exact run configurations are retained in JSON summaries.
 
 We report accuracy, class F1, Macro-F1, expected calibration error (ECE) when available, paired percentile bootstrap intervals, and exact McNemar tests. Bootstrap samples are drawn at the claim level with 10,000 iterations. We call $P(\Delta>0)$ a bootstrap probability of superiority, not a frequentist $p$-value. All test table deltas compare predictions with matched claim IDs.
 
@@ -126,11 +126,11 @@ We report accuracy, class F1, Macro-F1, expected calibration error (ECE) when av
 Baselines include direct-only, rationale-trained-only, equal posterior averaging, symmetric confidence routing, no-asymmetric-NEI routing, disagreement-only routing, and max-confidence routing. Oracle-routing diagnostics are omitted because they do not constitute an implementable baseline. Literature scores are reported in a separate protocol-aware table. MOCHEG, HGTMFC, AMuFC, MEVER, M-RAV, and open-web systems do not necessarily share evidence, split, modality, or metric definitions; therefore a row is not treated as a direct leaderboard comparison unless its protocol is explicitly aligned.
 
 \subsection{Promotion gates and split discipline}
-Every development intervention is governed by a predefined promotion gate stored with the corresponding run configuration. From B6 onward, the project uses duplicate-family-safe train-only folds, fixed training epoch, compute-matched controls, and fresh confirmation folds. A screen-only gain therefore cannot become an official-test claim. CURE-Ensemble is selected on validation and applied once to test. The post-hoc $\tau=.60$ sensitivity result is reported separately and never used as a frozen-test result. The fixed AND condition uses $K=5$ and $\tau=.49$; a later $K$ sweep is descriptive rather than a retrospective change to this condition.
+We report a consistent directional-bootstrap reference threshold of $.95$, together with percentile intervals and exact McNemar tests; it is a reporting criterion rather than a claim of preregistration in this anonymized manuscript. The later duplicate-family-safe development studies use train-only folds, fixed training epochs, compute-matched controls, and fresh confirmation folds. A screen-only gain therefore cannot become an official-test claim. CURE-Ensemble is selected on validation and applied once to test. The post-hoc $\tau=.60$ sensitivity result is reported separately and never used as a frozen-test result. The fixed AND condition uses $K=5$ and $\tau=.49$; a later $K$ sweep is descriptive rather than a retrospective change to this condition.
 
 \section{Main Results}
 \subsection{Mechanism-focused evidence}
-We report only the development evidence needed to assess the proposed mechanism in the main paper. Earlier B2--B17 experiments are retained as a compact appendix ledger. They establish four negative findings: evidence compression did not reliably replace document context; symmetric auxiliary objectives and PCGrad did not generalize; calibration and unconstrained routing alternatives were unstable; and counterfactual curricula failed matched-control confirmation. These failures motivate retaining a competent direct verifier and treating the grounded branch as a constrained \textsc{NEI} signal rather than a universally superior classifier.
+We report only the development evidence needed to assess the proposed mechanism in the main paper. Earlier interventions are retained as a compact appendix ledger. They establish four negative findings: evidence compression did not reliably replace document context; symmetric auxiliary objectives and PCGrad did not generalize; calibration and unconstrained routing alternatives were unstable; and counterfactual curricula failed matched-control confirmation. These failures motivate retaining a competent direct verifier and treating the rationale-trained branch as a constrained \textsc{NEI} signal rather than a universally superior classifier.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -155,14 +155,14 @@ Counterfactual supervision & A +.01654 Fold-0 screen gain becomes -.00104 versus
 Variant & Acc. & Macro-F1 & F1-S & F1-R & F1-NEI\\
 \midrule
 A0 Direct-only & .700549 & .692045 & .720348 & .769904 & .585882\\
-A1 Grounded-only & .706731 & .701191 & .704519 & .780834 & .618221\\
+A1 Rationale-trained-only & .706731 & .701191 & .704519 & .780834 & .618221\\
 A2 Equal posterior average & .699863 & .692773 & .707071 & .772608 & .598639\\
 A3 Symmetric confidence switch & .698489 & .691095 & .706145 & .771930 & .595211\\
 A4 Unconstrained confident switch & .710165 & .704436 & .707904 & .781915 & .623491\\
 \textsc{CURE} (AND) & \textbf{.714973} & \textbf{.711205} & \textbf{.703016} & \textbf{.793008} & \textbf{.637591}\\
 \bottomrule
 \end{tabular}}
-\caption{Frozen validation component ablations (validation is used only to evaluate fixed policies). ``Unconstrained confident switch'' selects the grounded output of any class when its maximum probability is at least $\tau$. \textsc{CURE} applies the class-constrained AND rule at $\tau=.49$. Degenerate disagreement-only and max-confidence variants are omitted from the main table and reported in the released ablation artifact. F1-S/R denote Supported/Refuted.}
+\caption{Frozen validation component ablations (validation is used only to evaluate fixed policies). ``Unconstrained confident switch'' selects the rationale-trained output of any class when its maximum probability is at least $\tau$. \textsc{CURE} applies the class-constrained AND rule at $\tau=.49$. Degenerate disagreement-only and max-confidence variants are omitted from the main table and reported in the accompanying ablation artifact. F1-S/R denote Supported/Refuted.}
 \label{tab:ablation}
 \end{table}
 
@@ -175,7 +175,7 @@ We additionally compare AND with a direct-only self-deferral baseline. The latte
 \toprule
 Track & Comparison & Base MF1 & AND MF1 & $\Delta$ & $P(\Delta>0)$\\
 \midrule
-Validation & AND vs. grounded-only & .70119 & .71121 & +.01001 & .9470\\
+Validation & AND vs. rationale-trained-only & .70119 & .71121 & +.01001 & .9470\\
 Validation & AND vs. unconstrained switch & .70444 & .71121 & +.00677 & .8952\\
 Raw P1 & AND vs. direct & .54493 & .55470 & +.00977 & .9529\\
 Raw P1 & AND vs. self-deferral & .54970 & .55470 & +.00500 & .7805\\
@@ -187,7 +187,7 @@ Strict P1 & AND vs. self-deferral & .54911 & .55433 & +.00523 & .7920\\
 \end{table}
 
 \paragraph{Broader prior-work inventory.}
-Table~\ref{tab:prior-inventory} lists twelve relevant MOCHEG system rows. It is deliberately \emph{not} a single leaderboard: a reported F-score is preserved as F-score rather than silently renamed Macro-F1; filtered tests, gold evidence, or alternate preprocessing are marked. Only rows labelled ``aligned raw P1'' support an apples-to-apples point-estimate comparison.
+Table~\ref{tab:prior-inventory} lists twelve system rows: eight prior-work rows and four rows from this work. It is deliberately \emph{not} a single leaderboard: a reported F-score is preserved as F-score rather than silently renamed Macro-F1; filtered tests, gold evidence, or alternate preprocessing are marked. Only rows labelled ``aligned raw P1'' support an apples-to-apples point-estimate comparison.
 \begin{table*}[t]
 \centering\scriptsize
 \resizebox{\textwidth}{!}{\begin{tabular}{@{}lp{2.15cm}p{2.35cm}rrrp{2.35cm}@{}}
@@ -211,13 +211,13 @@ CURE-Ensemble & this work & validation-selected, raw P1 $n=2442$ & 8 & \textbf{.
 \caption{Protocol-aware comparison with prior work. ``Models'' is the number of sequential member forward passes when reported; a dash means not source-reported. ``Aligned'' means raw MOCHEG P1 test with system-retrieved evidence; it does not assert identical retrievers or model capacity. Only aligned rows may be used for a direct point-estimate comparison.}\label{tab:prior-inventory}
 \end{table*}
 
-AND has the highest frozen-validation point estimate in Table~\ref{tab:ablation}. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Replacing the class-constrained rule by an unconstrained confident switch reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. The rationale-trained-only branch is useful (+0.915 over A0) but remains 1.001 points below AND. AND's validation comparisons against grounded-only ($P=.9470$) and unconstrained switching ($P=.8952$) do not independently clear the project's .95 directional-bootstrap convention; they are point-estimate evidence, not decisive mechanism confirmation. The raw and strict P1 results retain the direction of the direct comparison, while their uncertainty intervals require a cautious interpretation.
+AND has the highest frozen-validation point estimate in Table~\ref{tab:ablation}. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Replacing the class-constrained rule by an unconstrained confident switch reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. The rationale-trained-only branch is useful (+0.915 over A0) but remains 1.001 points below AND. AND's validation comparisons against rationale-trained-only ($P=.9470$) and unconstrained switching ($P=.8952$) do not independently clear the reported $.95$ directional-bootstrap reference threshold; they are point-estimate evidence, not decisive mechanism confirmation. The raw and strict P1 results retain the direction of the direct comparison, while their uncertainty intervals require a cautious interpretation.
 
 \begin{table}[t]
 \centering\scriptsize
 \begin{tabular}{@{}lrrr@{}}
 \toprule
-Evidence policy & Acc. & Grounded MF1 & AND MF1\\
+Evidence policy & Acc. & Rationale MF1 & AND MF1\\
 \midrule
 $K=1$ & .707418 & .660969 & .704452\\
 $K=3$ & \textbf{.718407} & .695423 & \textbf{.715270}\\
@@ -225,7 +225,7 @@ $K=5$ & .714973 & \textbf{.701191} & .711205\\
 Direct-only & .700549 & -- & .692045\\
 \bottomrule
 \end{tabular}
-\caption{Evidence-count sensitivity on validation. The registered AND condition uses $K=5$, inherited from the B1 retrieval protocol. The later $K=3$ sweep has the highest validation score but is not substituted for the registered condition or used for an official-test claim.}\label{tab:topk}
+\caption{Evidence-count sensitivity on validation. The fixed AND condition uses $K=5$, inherited from the direct retrieval protocol. The later $K=3$ sweep has the highest validation score but is not substituted for the fixed condition or used for an official-test claim.}\label{tab:topk}
 \end{table}
 
 \begin{table}[t]
@@ -253,30 +253,34 @@ $\tau$ & Validation MF1 & Status\\
 \toprule
 CURE system & Macro-F1 & Accuracy & Raw-P1 status\\
 \midrule
-B1 five-seed & .5453 & .5680 & frozen baseline\\
-CURE Grounded seed 42 & .5338 & .5524 & one seed\\
-CURE Grounded seed 87 & .5394 & .5606 & one seed\\
-CURE Grounded seed 100 & .5513 & .5696 & best single grounded seed\\
+Direct five-seed ensemble & .5453 & .5680 & legacy frozen baseline artifact\\
+CURE rationale-trained seed 42 & .5338 & .5524 & one seed\\
+CURE rationale-trained seed 87 & .5394 & .5606 & one seed\\
+CURE rationale-trained seed 100 & .5513 & .5696 & best single rationale-trained seed\\
 CURE-Ensemble full 10-member & .5512 & .5717 & unpruned control\\
 CURE-Ensemble selected 8-member & \textbf{.5551} & \textbf{.5754} & frozen-test benchmark variant\\
 \textsc{CURE} AND (5+3 experts) & .5547 & .5713 & canonical frozen router\\
 CURE-Student DKD seed 87 & .5494 & .5676 & raw P1, one seed\\
 \bottomrule
 \end{tabular}}
-\caption{Raw official P1 test ($n=2{,}442$) for frozen CURE system variants. CURE-Ensemble and AND use distinct, validation-frozen compositions/policies and should not be read as interchangeable ablations. AND uses registered $K=5,\tau=.49$ with independently inferred raw-P1 predictions.}
+\caption{Raw official P1 test ($n=2{,}442$) for frozen CURE system variants. CURE-Ensemble and AND use distinct, validation-frozen compositions/policies and should not be read as interchangeable ablations. AND uses fixed $K=5,\tau=.49$ with independently inferred raw-P1 predictions. The legacy direct artifact (.54531 MF1) is not the paired AND anchor; Section~\ref{sec:canonical-test} uses a jointly materialized canonical direct anchor (.54493 MF1).}
 \label{tab:sota}
 \end{table}
 
-\subsection{Official test results and leakage control}
+\subsection{Official test results and leakage control}\label{sec:canonical-test}
 The frozen CURE-Ensemble reaches Macro-F1 $0.55507$ and accuracy $0.57535$ on raw P1 official test, compared with $0.54531$ and $0.56798$ for the previously materialized direct five-seed ensemble. The paired bootstrap probability of improvement is $0.9839$ with CI $[+0.00097,+0.01850]$. Its score is higher than AMuFC's reported raw-P1 point estimate (Macro-F1 .5400; accuracy .5460), but this is not a paired comparison and the two systems differ in retrieval, backbone, modality use, and member count. We therefore report it as a protocol-aligned point estimate rather than a claim of statistical superiority or state of the art. CURE-Student disagreement distillation reaches Macro-F1 $0.54940$ for a post-hoc reported single seed (87); it is an exploratory efficiency diagnostic, not a multi-seed or locked-test effectiveness comparison.
 
 AND has canonical test artifacts on both tracks. On raw P1, AND obtains .55470 Macro-F1 and .57125 accuracy, compared with its independently inferred direct anchor's .54493 and .56798: $\Delta$MF1=+.00977, with 86 helpful and 78 harmful changes and paired bootstrap $P(\Delta>0)=.9529$. On strict P1, it obtains .55433 versus .54490 ($\Delta$MF1=+.00943; 84/77 helpful/harmful; $P(\Delta>0)=.9477$). The direct-only self-deferral control is weaker on both tracks (.54970 raw and .54911 strict); AND improves on it by +.00500/+.00523 MF1, respectively. The associated probabilities (.7805/.7920) and all test-track percentile intervals include zero, and McNemar tests are non-significant. We therefore treat the replicated direction as modest directional test evidence, not as statistically resolved confirmation.
 
-The .00039 raw-MF1 difference between the previously materialized B1 direct ensemble (.54531) and the independently inferred AND anchor (.54493) arises because the latter is a new, canonical raw-manifest inference artifact built to align exactly with the AND members; it is not used in a cross-artifact paired comparison. Each AND comparison uses only predictions materialized together on the same manifest. The much larger validation--test difference is likewise not interpreted as a model improvement: validation was used for seed/threshold development and has a distinct claim composition. Its size quantifies selection and split sensitivity; we do not have evidence to apportion it between distribution shift, optimization, and selection. The AND gain contracts from +.01916 MF1 on validation to +.00977/+.00943 on raw/strict test, as expected when a policy is chosen on validation. Finally, raw CURE-Ensemble (.55507) is marginally above raw AND (.55470), despite A2 averaging being unhelpful on validation. This inconsistency is evidence of selection variance, not proof that routing dominates averaging: the two systems have distinct validation-frozen compositions and objectives, and neither is claimed as an ablation of the other. Both reports record manifest, retrieval, input-prediction, and materialized-output hashes. Because raw and strict ranked evidence differ for some shared IDs, each track is inferred independently from the same frozen checkpoints; no intersection or test-time tuning is used.
+\paragraph{Artifact alignment.} The .00039 raw-MF1 difference between the legacy direct ensemble (.54531) and the independently inferred AND anchor (.54493) arises because the latter is a new canonical raw-manifest inference artifact built to align exactly with the AND members. It is not used in a cross-artifact paired comparison: every AND comparison uses only predictions materialized together on the same manifest. Because raw and strict ranked evidence differ for some shared IDs, each track is inferred independently from the same frozen checkpoints; no intersection or test-time tuning is used.
+
+\paragraph{Validation--test gap.} The larger validation--test difference is not interpreted as a model improvement. Validation was used for seed and threshold development and has a distinct claim composition. The contraction from +.01916 MF1 on validation to +.00977/+.00943 on raw/strict test is consistent with development-selection sensitivity, but this study cannot apportion it among distribution shift, optimization, and selection.
+
+\paragraph{Routing versus averaging.} Raw CURE-Ensemble (.55507) is marginally above raw AND (.55470), although A2 averaging is unhelpful on validation. This difference does not establish that either decision rule dominates: the systems have distinct validation-frozen compositions and objectives, and neither is an ablation of the other. Both reports record manifest, retrieval, input-prediction, and materialized-output hashes.
 
 \section{Additional Ablations and Negative Results}
 \subsection{Sentence-selection branch}
-A separately named internal experiment, \emph{B18B-Sel}, distills teacher key-passage attribution into a MiniLM cross-encoder that adaptively selects one to three sentences. It is an evidence-selection ablation, not the dual-expert router. On Fold 0, rationale-distilled selection improves a generic cross-encoder by +.00865 MF1 but remains -.00214 behind the retrieval Top-3 control. It was therefore closed after its predefined screen rather than expanded to more seeds or test evaluation (Table~\ref{tab:selector}). This result prevents us from attributing the grounded-expert effect to sentence compression alone; it does not isolate the causal contribution of teacher capacity versus structured-rationale supervision.
+A sentence-selection ablation distills teacher key-passage attribution into a MiniLM cross-encoder that adaptively selects one to three sentences. It is an evidence-selection ablation, not the dual-expert router. On Fold 0, rationale-distilled selection improves a generic cross-encoder by +.00865 MF1 but remains -.00214 behind the retrieval Top-3 control. It was therefore not expanded to more seeds or test evaluation (Table~\ref{tab:selector}). This result prevents us from attributing the rationale-trained-expert effect to sentence compression alone; it does not isolate the causal contribution of teacher capacity versus structured-rationale supervision.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -290,14 +294,14 @@ Generic CE selector & .6496 & .6374 & .5674 & .5253\\
 Rationale-distilled selector & .6651 & .6460 & \textbf{.6098} & .5103\\
 \bottomrule
 \end{tabular}
-\caption{B18B-Sel train-only Fold-0 screen ($n=2{,}326$). The rationale-distilled selector is better than generic CE but does not exceed retrieval Top-3.}\label{tab:selector}
+\caption{Sentence-selection train-only Fold-0 screen ($n=2{,}326$). The rationale-distilled selector is better than generic CE but does not exceed retrieval Top-3.}\label{tab:selector}
 \end{table}
 
 \subsection{Why earlier constraint approaches were not promoted}
-Earlier B6--B17 interventions supplied useful diagnostics but did not establish a stable main method. B6-A's raw auxiliary ensemble reached .7080 MF1 on validation, yet its bootstrap probability against the compute-matched direct control was .9354, below the predefined .95 gate. B9 and B13 exhibited strong Fold-0 gains but degraded under fresh-fold confirmation. B16's counterfactual verdict curriculum improved Fold 0 by +.01654 MF1 versus its anchor, but aggregated confirmation was -.00104 versus the matched control. These negative outcomes motivate the CURE design choice: preserve a competent direct decision model and use a rationale-trained complementary signal through a constrained interface rather than continuously modifying the anchor's decision boundary.
+Earlier interventions supplied useful diagnostics but did not establish a stable main method. A source-aware auxiliary ensemble reached .7080 MF1 on validation, yet its bootstrap probability against the compute-matched direct control was .9354, below the reported .95 reference threshold. Calibration and curriculum variants exhibited strong Fold-0 gains but degraded under fresh-fold confirmation. A counterfactual verdict curriculum improved Fold 0 by +.01654 MF1 versus its anchor, but aggregated confirmation was -.00104 versus the matched control. These negative outcomes motivate the CURE design choice: preserve a competent direct decision model and use a rationale-trained complementary signal through a constrained interface rather than continuously modifying the anchor's decision boundary.
 
 \subsection{Matched-recipe explanation supervision control}\label{sec:matched-exp}
-This is a distinct control from the headline direct-versus-rationale-trained ensemble comparison. We ran a five-fold train-only OOF experiment in which verdict-only and explanation-supervised models use one common B18 script and optimizer schedule. The explanation model obtains .65757 aggregate MF1 versus .65762 for the matched verdict-only control ($\Delta=-.00006$; bootstrap $P(\Delta>0)=.4940$). Applying the frozen asymmetric router to this matched explanation expert yields .65898, only +.00135 over the control ($P(\Delta>0)=.7273$). These OOF values are neither validation nor test results and cannot be directly compared with the .71121 validation policy score. They show that structured rationale loss alone does \emph{not} improve average verdict accuracy under that common recipe. They do not isolate the headline recipe difference (B1 direct recipe versus rationale recipe); a direct-only expert trained with the headline rationale recipe is an unrun, necessary causal control.
+This is a distinct control from the headline direct-versus-rationale-trained ensemble comparison. We ran a five-fold train-only OOF experiment in which verdict-only and explanation-supervised models use one common training script and optimizer schedule. The explanation model obtains .65757 aggregate MF1 versus .65762 for the matched verdict-only control ($\Delta=-.00006$; bootstrap $P(\Delta>0)=.4940$). Applying the frozen asymmetric router to this matched explanation expert yields .65898, only +.00135 over the control ($P(\Delta>0)=.7273$). These OOF values are neither validation nor test results and cannot be directly compared with the .71121 validation policy score. They show that structured rationale loss alone does \emph{not} improve average verdict accuracy under that common recipe. They do not isolate the headline recipe difference (earlier direct recipe versus rationale recipe); a direct-only expert trained with the headline rationale recipe is a necessary causal control and is being evaluated separately.
 
 \section{Efficiency and Robustness Analysis}
 \subsection{Inference efficiency}
@@ -310,7 +314,7 @@ On an RTX 5090 with 256 common validation claims, batch size 4, and two warm-up 
 System & Passes & ms/claim & claims/s & Peak GiB\\
 \midrule
 Direct ensemble & 5 & 320.72 & 3.118 & 14.74\\
-Grounded ensemble & 3 & 193.17 & 5.177 & 14.74\\
+Rationale-trained ensemble & 3 & 193.17 & 5.177 & 14.74\\
 AND dual ensemble & 8 & 513.88 & 1.946 & 14.74\\
 CURE-Student & 1 & \textbf{64.47} & \textbf{15.511} & 14.74\\
 \bottomrule
@@ -341,8 +345,8 @@ Gold not retrieved & 59 & -.03260 & 1 / 4\\
 \caption{Selected frozen-validation subgroup audit: AND minus direct. Gold rank is a diagnostic label unavailable at inference, not a routing input.}\label{tab:subgroups}
 \end{table}
 
-\subsection{B19 distillation}
-Five-fold train-only OOF confirmation gives the B19 control Macro-F1 0.660788 and disagreement-KD Macro-F1 0.667607, a +0.006819 difference. Four of five folds improve and paired bootstrap $P(\Delta>0)=0.9517$. Table~\ref{tab:b19-ablation} shows why the disagreement target matters: naive ensemble KD is worse than the matched control, while counterfactual loss alone is nearly neutral and the full objective reduces the screen gain. This supports B19 as a practical compression extension, but its margin is close to the predefined bootstrap threshold. The reported seed-87 test number is post-hoc descriptive among the evaluated B19 seeds, not a locked-test model-selection claim.
+\subsection{\textsc{CURE}-Student distillation}
+Five-fold train-only OOF confirmation gives the student control Macro-F1 0.660788 and disagreement-KD Macro-F1 0.667607, a +0.006819 difference. Four of five folds improve and paired bootstrap $P(\Delta>0)=0.9517$. Table~\ref{tab:b19-ablation} shows why the disagreement target matters: naive ensemble KD is worse than the matched control, while counterfactual loss alone is nearly neutral and the full objective reduces the screen gain. This supports \textsc{CURE}-Student as a practical compression extension, but its margin is close to the reported bootstrap reference threshold. The reported seed-87 test number is post-hoc descriptive among the evaluated student seeds, not a locked-test model-selection claim.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -357,20 +361,20 @@ Full KD + disagree + CF & .6776 & .6584 & .6022 & .5359\\
 Disagreement KD & \textbf{.6836} & \textbf{.6687} & \textbf{.6276} & \textbf{.5472}\\
 \bottomrule
 \end{tabular}
-\caption{B19 train-only Fold-0 mechanism screen ($n=2{,}326$). The five-fold confirmation uses disagreement KD only; counterfactual terms are reported solely as screen ablations.}\label{tab:b19-ablation}
+\caption{\textsc{CURE}-Student train-only Fold-0 mechanism screen ($n=2{,}326$). The five-fold confirmation uses disagreement KD only; counterfactual terms are reported solely as screen ablations.}\label{tab:b19-ablation}
 \end{table}
 
 \section{Error Analysis}
-The dominant helpful transition is direct Refuted/Supported to grounded \textsc{NEI} on gold \textsc{NEI} claims. Harmful transitions are direct Supported to \textsc{NEI} (28 cases) and direct Refuted to \textsc{NEI} (9 cases). This explains why AND improves \textsc{NEI} while reducing decisive-class F1. The failure atlas also shows that routing under missing or rank-2--5 evidence is less reliable. A future system should estimate retrieval reliability before allowing deferral, but using gold rank or QREL status at inference would be invalid.
+The dominant helpful transition is direct Refuted/Supported to rationale-trained \textsc{NEI} on gold \textsc{NEI} claims. Harmful transitions are direct Supported to \textsc{NEI} (28 cases) and direct Refuted to \textsc{NEI} (9 cases). This explains why AND improves \textsc{NEI} while reducing decisive-class F1. The failure atlas also shows that routing under missing or rank-2--5 evidence is less reliable. A future system should estimate retrieval reliability before allowing deferral, but using gold rank or QREL status at inference would be invalid.
 
 \section{Discussion}
-The results support a narrow interpretation of the contribution. Rationale-trained and direct experts form a complementary pair, but explanation supervision alone is not consistently beneficial: a matched explanation-loss ablation produced approximately zero aggregate gain. Moreover, a decisive-evidence coverage diagnostic finds that the direct posterior has stronger ranking and calibration than the rationale-trained posterior (AUROC .6486 vs. .6155; Brier .1122 vs. .1406); this diagnostic uses gold labels only after prediction and is never a router input. AND also exceeds a frozen direct self-deferral baseline on both test tracks, although that incremental comparison is not statistically resolved. The useful object is therefore the asymmetric interface between complementary class posteriors, not a demonstrated sufficiency estimator. This interface also exposes a compute--quality trade-off: AND uses eight sequential expert passes, whereas B19 compresses complementary teacher behavior into one student. A stronger external definition of evidence sufficiency remains necessary before claiming that either posterior is calibrated for that construct.
+The results support a narrow interpretation of the contribution. Rationale-trained and direct experts form a complementary pair, but explanation supervision alone is not consistently beneficial: a matched explanation-loss ablation produced approximately zero aggregate gain. Moreover, a decisive-evidence coverage diagnostic finds that the direct posterior has stronger ranking and calibration than the rationale-trained posterior (AUROC .6486 vs. .6155; Brier .1122 vs. .1406); this diagnostic uses gold labels only after prediction and is never a router input. AND also exceeds a frozen direct self-deferral baseline on both test tracks, although that incremental comparison is not statistically resolved. The useful object is therefore the asymmetric interface between complementary class posteriors, not a demonstrated sufficiency estimator. This interface also exposes a compute--quality trade-off: AND uses eight sequential expert passes, whereas \textsc{CURE}-Student compresses complementary teacher behavior into one student. A stronger external definition of evidence sufficiency remains necessary before claiming that either posterior is calibrated for that construct.
 
 \section{Limitations and Ethical Considerations}\label{sec:limitations}
 MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live-web robustness or establish multimodal effectiveness. The rationale-trained expert inherits teacher errors and pseudo-label noise; moreover, teacher rationales are conditioned on the gold \emph{training} verdict, which is appropriate for training but prevents the rationale channel from being interpreted as independent supervision. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. Although AND now has independently inferred raw and strict test artifacts, its 95\% paired-bootstrap intervals include zero and strict-track directional evidence is .9477; stronger multi-dataset confirmation is needed before broad generalization claims. A direct \textsc{NEI}-threshold baseline is now reported, but a teacher-capacity ablation and an external dataset are important future evaluations. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
 
 \section{Conclusion}
-We presented \textsc{CURE}, a dual-expert constrained routing framework for retrieved-evidence fact verification. Its AND rule improves frozen-validation Macro-F1 by 1.92 points and has raw/strict P1 test point-estimate gains of .977/.943 points under a fixed $K=5,\tau=.49$ policy. The test evidence is directional but statistically unresolved: both percentile intervals include zero, and strict P1 falls just below the project's .95 directional-bootstrap convention. CURE-Ensemble provides a separate validation-selected benchmark variant, while B19 demonstrates a one-model compression extension. The next research steps are an exact headline-recipe causal control, external-dataset evaluation, and sharper retrieval-reliability gating, rather than post-hoc policy tuning on P1.
+We presented \textsc{CURE}, a dual-expert constrained routing framework for retrieved-evidence fact verification. Its AND rule improves frozen-validation Macro-F1 by 1.92 points and has raw/strict P1 test point-estimate gains of .977/.943 points under a fixed $K=5,\tau=.49$ policy. The test evidence is directional but statistically unresolved: both percentile intervals include zero, and strict P1 falls just below the reported .95 directional-bootstrap reference threshold. CURE-Ensemble provides a separate validation-selected benchmark variant, while \textsc{CURE}-Student demonstrates a one-model compression extension. The next research steps are an exact headline-recipe causal control, external-dataset evaluation, and sharper retrieval-reliability gating, rather than post-hoc policy tuning on P1.
 
 \section*{Acknowledgments}
 Omitted for anonymous review.
@@ -388,29 +392,29 @@ Table~\ref{tab:ledger-appendix} expands the main trajectory with the numerical e
 \toprule
 ID & Intervention & Quantitative observation & Interpretation\\
 \midrule
-B2-SV & flat versus hierarchical sufficiency verification & Flat MF1=.6371; SV=.6398 (+.0027) on Fold 0; five-fold confirmation $+.00060\pm.00745$ & Hierarchy had small local benefit but no stable promotion.\\
-B3 & source/evidence DRO & qrel-absent MF1 +.1004; overall MF1 -.0021 & Robustness improvement cannot be bought with aggregate regression.\\
-B4 & atomic sentence verifier & sentence retrieval Recall@8=.8661; verdict MF1 -.0270 vs article evidence & Retrieval coverage alone is insufficient; discourse matters.\\
-B5 & context packets & best interpolation +.01014 on one validation split; five-seed packet gain $+.00387\pm.00862$ & Complementarity exists but is not a reliable replacement.\\
-B6-A & sufficiency/polarity multi-task & auxiliary vs matched control $+.00886\pm.01081$; bootstrap .9354 & Positive transfer signal, below predefined stability gate.\\
-B6-B & PCGrad & conflict rate about 45--46\% in epoch 1; ensemble - .0105 vs control & Gradient conflict was real but projection did not improve generalization.\\
-B7 & selective expert router & MF1 +.00460; bootstrap .9294 & Helpful precision, insufficient gain and confidence.\\
-B8 & class-logit bias & MF1 +.00216; bootstrap .7604 & Prior shift does not explain the main error pattern.\\
-B9 & fixed seed ensemble & Fold-0 +.01348; fresh-fold mean +.00398 & A screen peak is not confirmation.\\
-B10 & cross-fitted calibrator & aggregate MF1=.67054; +.00345 vs unweighted ensemble & Bootstrap/source gates fail.\\
-B11 & provenance calibrator & -.00176 vs unweighted ensemble & Provenance-conditioned calibration harms aggregate accuracy.\\
-B12 & joint constraints from base & +.00538 vs compute control but -.01376 vs anchor & Constraint tasks help relative to compute but induce anchor drift.\\
-B13 & curriculum/blend & Fold-0 blend +.00510; five-fold mean +.00090 & Direct curriculum is unstable.\\
-B14 & NEI escape analysis & MF1 +.00209; accuracy +.01126 & It helps supported/refuted escape but damages NEI under qrel absence.\\
-B15 & value-of-information gate & MF1 +.00380; AUROC=.5660 & Observable utility is too weak for reliable routing.\\
-B16 & counterfactual omission & Fold-0 +.01654 vs anchor; confirmation -.00104 vs control & The strongest screen still fails matched-control confirmation.\\
-B17 & failure atlas & candidate/control .66517/.66621; help/harm 550/561 & No stable subgroup justified further tuning on inspected folds.\\
+SV & flat versus hierarchical sufficiency verification & Flat MF1=.6371; SV=.6398 (+.0027) on Fold 0; five-fold confirmation $+.00060\pm.00745$ & Hierarchy had small local benefit but no stable promotion.\\
+DRO & source/evidence DRO & qrel-absent MF1 +.1004; overall MF1 -.0021 & Robustness improvement cannot be bought with aggregate regression.\\
+Atomic & atomic sentence verifier & sentence retrieval Recall@8=.8661; verdict MF1 -.0270 vs article evidence & Retrieval coverage alone is insufficient; discourse matters.\\
+Packets & context packets & best interpolation +.01014 on one validation split; five-seed packet gain $+.00387\pm.00862$ & Complementarity exists but is not a reliable replacement.\\
+Multi-task & sufficiency/polarity multi-task & auxiliary vs matched control $+.00886\pm.01081$; bootstrap .9354 & Positive transfer signal, below the reported reference threshold.\\
+PCGrad & PCGrad & conflict rate about 45--46\% in epoch 1; ensemble - .0105 vs control & Gradient conflict was real but projection did not improve generalization.\\
+Router & selective expert router & MF1 +.00460; bootstrap .9294 & Helpful precision, insufficient gain and confidence.\\
+Bias & class-logit bias & MF1 +.00216; bootstrap .7604 & Prior shift does not explain the main error pattern.\\
+Ensemble & fixed seed ensemble & Fold-0 +.01348; fresh-fold mean +.00398 & A screen peak is not confirmation.\\
+Calibration & cross-fitted calibrator & aggregate MF1=.67054; +.00345 vs unweighted ensemble & Bootstrap/source gates fail.\\
+Provenance & provenance calibrator & -.00176 vs unweighted ensemble & Provenance-conditioned calibration harms aggregate accuracy.\\
+Constraints & joint constraints from base & +.00538 vs compute control but -.01376 vs anchor & Constraint tasks help relative to compute but induce anchor drift.\\
+Curriculum & curriculum/blend & Fold-0 blend +.00510; five-fold mean +.00090 & Direct curriculum is unstable.\\
+NEI escape & NEI escape analysis & MF1 +.00209; accuracy +.01126 & It helps supported/refuted escape but damages NEI under qrel absence.\\
+Value gate & value-of-information gate & MF1 +.00380; AUROC=.5660 & Observable utility is too weak for reliable routing.\\
+Counterfactual & counterfactual omission & Fold-0 +.01654 vs anchor; confirmation -.00104 vs control & The strongest screen still fails matched-control confirmation.\\
+Atlas & failure atlas & candidate/control .66517/.66621; help/harm 550/561 & No stable subgroup justified further tuning on inspected folds.\\
 \bottomrule
 \end{tabular}}
-\caption{B2--B17 negative and diagnostic experiments. Each value remains in its native protocol; no row is a P1 official-test claim.}\label{tab:ledger-appendix}
+\caption{Earlier negative and diagnostic experiments. Each value remains in its native protocol; no row is a P1 official-test claim.}\label{tab:ledger-appendix}
 \end{table*}
 
-\section{Five-Fold B19 Confirmation}
+\section{Five-Fold \textsc{CURE}-Student Confirmation}
 \begin{table}[t]
 \centering\scriptsize
 \begin{tabular}{@{}rrrr@{}}
@@ -426,7 +430,7 @@ Fold & Control MF1 & DKD MF1 & $\Delta$\\
 Aggregate & .660788 & .667607 & +.006819\\
 \bottomrule
 \end{tabular}
-\caption{B19 train-only out-of-fold confirmation. Four of five folds improve; the aggregate paired bootstrap probability is .9517.}\label{tab:b19-folds}
+\caption{\textsc{CURE}-Student train-only out-of-fold confirmation. Four of five folds improve; the aggregate paired bootstrap probability is .9517.}\label{tab:b19-folds}
 \end{table}
 
 \section{Raw versus Strict Test Reporting}
@@ -438,20 +442,20 @@ The raw official test ($n=2{,}442$) is the primary literature-comparison track. 
 \toprule
 System & Track & Acc. & MF1\\
 \midrule
-B1 five-seed & raw official & .56798 & .54531\\
-B1 five-seed & strict & .56902 & .54581\\
-B18A CURE-Ensemble & raw official & .57535 & .55507\\
-B18A CURE-Ensemble & strict & .57477 & .55383\\
-B19 seed 87 & raw official & .56757 & .54940\\
-B19 seed 87 & strict & .56615 & .54733\\
-B18B AND router & raw official canonical & .57125 & .55470\\
-B18B AND router & strict canonical & .57149 & .55433\\
+Direct five-seed & raw official & .56798 & .54531\\
+Direct five-seed & strict & .56902 & .54581\\
+CURE-Ensemble & raw official & .57535 & .55507\\
+CURE-Ensemble & strict & .57477 & .55383\\
+CURE-Student seed 87 & raw official & .56757 & .54940\\
+CURE-Student seed 87 & strict & .56615 & .54733\\
+AND router & raw official canonical & .57125 & .55470\\
+AND router & strict canonical & .57149 & .55433\\
 \bottomrule
 \end{tabular}
-\caption{Track-separated test results. B18B AND uses frozen $K=5,\tau=.49$ and independently inferred raw/strict predictions; it is not an intersection evaluation.}\label{tab:raw-strict}
+\caption{Track-separated test results. AND uses fixed $K=5,\tau=.49$ and independently inferred raw/strict predictions; it is not an intersection evaluation.}\label{tab:raw-strict}
 \end{table}
 
 \section{Reproducibility Checklist}
-The repository records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. The main scripts are `train\_mocheg\_qwen3\_lora\_verifier.py`, `train\_mocheg\_b18\_explanation\_verifier.py`, `analyze\_mocheg\_b18b\_component\_ablations.py`, `analyze\_mocheg\_b18b\_subgroups.py`, `train\_mocheg\_b19\_distillation.py`, `benchmark\_mocheg\_b18b\_efficiency.py`, and `evaluate\_mocheg\_b18b\_canonical\_router.py`. Before submission, add exact GPU driver versions, package-lock information, author metadata, and a public archival repository link.
+The anonymized artifact package records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. It includes training, component-ablation, subgroup, distillation, efficiency, and canonical-evaluation entry points. Before camera-ready release, we will add exact GPU driver versions, package-lock information, author metadata, and a public archival link.
 
 \end{document}
