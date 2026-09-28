@@ -2,14 +2,15 @@
 
 This evaluator deliberately consumes *saved, frozen* raw-official prediction
 files.  It neither loads a model nor tunes any policy on the test split.  Its
-job is to make the raw P1 and strict P1 reports reproducible from the same
-official prediction universe:
+job is to make the raw P1 and strict P1 reports reproducible under their
+respective frozen retrieval inputs:
 
 * raw official P1: the 2,442 IDs in the official manifest;
-* strict P1: the 2,434-ID duplicate-safe subset of that exact raw universe;
+* strict P1: the 2,434-ID duplicate-safe subset of the raw ID universe;
 * direct and grounded experts must each cover every raw ID exactly once;
-* the strict retrieval rows must agree with raw retrieval rows for all shared
-  IDs; and
+* if shared raw/strict ranked evidence IDs differ, strict predictions must be
+  supplied from independent frozen inference (rather than an invalid slice of
+  raw predictions); and
 * the already frozen AND policy is evaluated at an explicit ``(K, tau)``.
 
 The output records hashes for every input and materializes direct, grounded,
