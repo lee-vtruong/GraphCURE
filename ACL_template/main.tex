@@ -15,14 +15,14 @@
 \usepackage{url}
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
-\title{Selective Epistemic Deferral for Evidence-Grounded Multimodal Fact Checking}
+\title{GraphCURE: Grounded Cross-Expert Uncertainty Routing for Evidence-Aware Multimodal Fact Checking}
 \author{Anonymous ACL Submission}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Multimodal fact-checking systems often treat every retrieved evidence item and every expert as equally useful. This is problematic when retrieval contains distractors or when a verifier is overconfident despite insufficient evidence. We study this failure mode on MOCHEG, a multimodal fact-checking benchmark with textual and visual evidence, while using a controlled text-evidence protocol so that retrieval and verification effects can be isolated. We introduce GraphCURE-B18B, a heterogeneous dual-expert verifier with asymmetric epistemic deferral: a direct verdict expert handles ordinary decisions, while a grounded-rationale expert can override the decision with ``not enough information'' when its estimated evidence sufficiency is high. The policy is selected on validation only and frozen before test evaluation. On the frozen validation split, B18B improves Macro-F1 from 0.6920 to 0.7112 (+1.92 points), with 10,000-sample paired bootstrap $P(\Delta>0)=0.9975$. Subgroup analysis shows that gains concentrate on rank-one evidence and NEI claims, while retrieval misses remain a failure mode. A secondary disagreement-aware distillation model, B19, compresses the complementary experts into one model and reaches 0.5494 Macro-F1 on the raw official test split at roughly eight times higher throughput than the eight-member B18B ensemble. We report official and strict test protocols separately and identify unresolved artifact inconsistencies explicitly.
+Multimodal fact-checking systems are vulnerable to two coupled errors: retrieved evidence can be incomplete, and a verifier optimized for a verdict can remain overconfident when the evidence does not warrant one. We study this problem in a fixed-corpus MOCHEG protocol, isolating verifier and decision-policy effects from live-web variation. We introduce \textsc{GraphCURE} (\textbf{G}rounded \textbf{C}ross-\textbf{E}xpert \textbf{U}ncertainty \textbf{R}outing), a framework that combines a direct verdict expert with a grounded rationale expert. Its asymmetric epistemic-deferral policy preserves the direct verdict by default and emits \textsc{NEI} only when the grounded expert detects insufficient evidence with frozen high confidence. On frozen validation, the full policy improves Macro-F1 from 0.6920 to 0.7112 (+1.92 points; paired-bootstrap $P(\Delta>0)=0.9975$). We report broad component, top-$K$, threshold, subgroup, efficiency, and negative-ablation analyses. A validation-selected eight-model heterogeneous ensemble reaches 0.5551 Macro-F1 on the raw official P1 test ($n=2{,}442$), exceeding the 0.5400 reported by the directly comparable AMuFC baseline; a one-model disagreement-distilled student reaches 0.5494. We distinguish raw official and deduplicated strict tracks, never use test labels to select confirmatory policies, and identify an unreconciled B18B routing artifact as a pre-submission TODO.
 \end{abstract}
 
 \section{Introduction}
@@ -34,19 +34,19 @@ Our central observation is that two verifiers have complementary error profiles.
 
 Our contributions are:
 \begin{itemize}
-\item a reproducible, protocol-separated study of evidence-grounded verification on MOCHEG;
-\item GraphCURE-B18B, an asymmetric epistemic-deferral policy combining direct and grounded experts;
-\item a complete component, evidence-count, subgroup, and efficiency analysis; and
-\item B19, a secondary disagreement-aware distillation route that trades ensemble compute for a single student model.
+\item \textsc{GraphCURE}, a reproducible protocol-separated framework in which grounded explanations act as an evidence-sufficiency sensor rather than a symmetric second classifier;
+\item an asymmetric cross-expert decision rule that isolates the contribution of \textsc{NEI} deferral from ensembling, confidence routing, and grounded-only prediction;
+\item a fully auditable empirical ledger spanning B1--B19, including negative results, train-only OOF controls, frozen validation ablations, raw official test, and strict robustness evaluation; and
+\item B19 disagreement-aware knowledge distillation, a compute-efficient single-model alternative that transfers complementary teacher behavior without inference-time routing.
 \end{itemize}
 We do not claim that every number in the internal development history is directly comparable. Official-test claims are restricted to frozen, auditable artifacts; unresolved discrepancies are marked in Section~\ref{sec:limitations}.
 
 \section{Related Work}
-\paragraph{Fact verification.} FEVER introduced evidence-supported three-way verification at scale \citep{thorne2018fever}; LIAR explored short political statements and fine-grained truthfulness \citep{wang2017liar}; MultiFC expanded fact checking across fact-checking sources \citep{augenstein2019multifc}. Surveys describe retrieval, evidence selection, and verification as coupled but distinct stages \citep{guo2022survey}.
+\paragraph{Fact verification and evidence sufficiency.} FEVER established evidence-supported three-way verification at scale \citep{thorne2018fever}; LIAR studied short political claims \citep{wang2017liar}; and MultiFC broadened evaluation across sources and domains \citep{augenstein2019multifc}. These benchmarks make clear that label prediction and evidence sufficiency are not identical. Surveys consequently treat retrieval, evidence selection, reasoning, and calibration as coupled but distinct stages \citep{guo2022survey}. UKP-Athene illustrates the role of multi-sentence textual entailment in evidence-based verification \citep{hanselowski2019ukpathene}.
 
-\paragraph{Retrieval and reasoning.} Recent work emphasizes that retrieval quality can dominate verification quality. RAV combines hybrid retrieval with joint verification \citep{zheng2024rav}, while RAFTS synthesizes contrasting arguments from retrieved evidence \citep{yue2024rafts}. Realistic open-domain pipelines additionally decompose claims and retrieve evidence from the wild \citep{chen2024complex}. These systems motivate our strict separation between fixed-corpus experiments and open-web experiments.
+\paragraph{Retrieval, selection, and reasoning.} Evidence retrieval can dominate downstream verification \citep{zheng2024rav}. RAV combines retrieval with verification, while RAFTS synthesizes contrastive arguments from retrieved evidence \citep{yue2024rafts}. Complex-claim verification decomposes claims before retrieving web evidence \citep{chen2024complex}. These approaches study different evidence regimes from our P1 protocol: they motivate the separation between fixed-corpus evidence selection and live-web retrieval rather than serving as directly interchangeable leaderboard rows.
 
-\paragraph{Multimodal fact checking.} MOCHEG introduced end-to-end multimodal fact checking and explanation generation \citep{yao2023mocheg}. HGTMFC uses hypergraph and line-graph propagation to model high-order interactions between claims and multimodal evidence \citep{pang2025hgtmfc}. AMuFC argues that visual evidence should be used adaptively rather than universally \citep{jung2026amufc}. Our work shares the adaptive-evidence motivation, but studies an epistemic routing problem between verifier experts under a fixed textual retrieval protocol.
+\paragraph{Multimodal fact checking.} MOCHEG introduced end-to-end multimodal fact checking and explanation generation \citep{yao2023mocheg}. Recent systems pursue different ways to aggregate evidence: LVLM4FV uses large vision-language models with reranked evidence \citep{tahmasebi2024lvlm4fv}; MetaSumPerceiver creates claim-specific multimodal summaries \citep{chen2024metasumperceiver}; HGTMFC models high-order interactions with hypergraphs \citep{pang2025hgtmfc}; MEVER jointly addresses retrieval, verification, and explanations \citep{zhang2026mever}; and M-RAV augments cross-modal evidence alignment for zero-shot verification \citep{luu2027mrav}. AMuFC adaptively determines whether visual evidence is needed \citep{jung2026amufc}, while Entailed Opinion stresses entailment-oriented reasoning \citep{kumar2025entailed}. \textsc{GraphCURE} shares the adaptive-evidence motivation but studies an observable uncertainty-routing problem between two differently trained verifiers under an explicitly controlled P1 evidence protocol.
 
 \section{Task Definition and Protocols}
 Given a claim $c$ and retrieved evidence $E=\{e_j\}_{j=1}^{K}$, predict $y\in\{\textsc{Supported},\textsc{Refuted},\textsc{NEI}\}$. The principal P1 protocol uses MOCHEG's fixed corpus and upstream text retrieval; it is not an open-web evaluation. The raw official test contains 2,442 claims. A strict robustness track removes eight verbatim cross-split duplicates and contains 2,434 claims. We report both tracks separately. Development validation contains 1,456 claims.
@@ -55,7 +55,16 @@ All routing thresholds are selected on validation or train-only out-of-fold data
 
 \section{Method}
 \subsection{Direct and grounded experts}
-The direct expert $f_D$ receives the claim and the top-$K$ retrieved passages and predicts a distribution $p_D(y\mid c,E)$. It is trained with verdict cross-entropy. The grounded expert $f_G$ uses the same evidence but is additionally trained from structured teacher explanations containing a verdict, key evidence identifiers, and missing-information fields. At inference it emits only the three-way verdict distribution; explanation generation is not required.
+The direct expert $f_D$ receives claim $c$ and top-$K$ retrieved passages $E_K$ and predicts a three-way distribution $p_D(y\mid c,E_K)$. It is trained with ordinary verdict cross-entropy. The grounded expert $f_G$ shares the backbone and input format but is trained with teacher-distilled structured explanations. Each teacher target contains: (i) a verdict, (ii) selected key-evidence identifiers, (iii) sufficiency/polarity fields, and (iv) an explicit missing-information field. Hence the extra supervision makes insufficiency observable in the target representation without requiring the model to generate an explanation at inference.
+
+For a training example $i$, let $z_i$ be the verdict target and $r_i$ the structured rationale target. The two expert objectives are
+\begin{equation}
+\begin{aligned}
+\mathcal{L}_{D} &= -\sum_i\log p_D(z_i\mid c_i,E_i),\\
+\mathcal{L}_{G} &= \mathcal{L}_{D}+\lambda_{r}\mathcal{L}_{\mathrm{rationale}}(r_i).
+\end{aligned}
+\end{equation}
+The project records teacher outputs, manifests, retrieval signatures, and prompt-format hashes. Gold evidence is used only for retrieval diagnostics, never injected into P1 validation or test prompts.
 
 \subsection{Asymmetric epistemic deferral}
 The policy uses the direct expert as an anchor:
@@ -66,25 +75,28 @@ The policy uses the direct expert as an anchor:
  \arg\max_y p_D(y), & \text{otherwise.}
  \end{cases}$}
 \end{equation}
-We use $\tau=0.49$, selected on validation and frozen thereafter. This rule is intentionally asymmetric: the grounded expert is not permitted to overwrite a direct Supported or Refuted decision with another decisive class. It can only defer when it detects insufficiency. This is different from posterior averaging, confidence routing, or an oracle router.
+We use $\tau=0.49$, selected on validation and frozen thereafter. This rule is intentionally asymmetric: the grounded expert is not permitted to overwrite a direct Supported or Refuted decision with another decisive class. It can only defer when it detects insufficiency. This preserves the direct verifier's decisive-class calibration while using the grounded branch as an epistemic sensor. It is therefore distinct from posterior averaging, symmetric confidence routing, and the oracle routing upper bound.
 
 \subsection{Disagreement-aware distillation}
-B19 is a secondary single-model variant. Let $q_D$ and $q_G$ be frozen teacher distributions. The student minimizes
+B19 is a secondary single-model variant. Let $q_D$ and $q_G$ be frozen teacher distributions. For agreement cases, the distillation target is their average; for disagreement cases, the train-only held-out outcome identifies the teacher target during cross-fitted training. The student minimizes
 \begin{equation}
  \mathcal L=\mathcal L_{\mathrm{CE}}+\lambda_{\mathrm{KD}}T^2\mathrm{KL}(q\|p_S)+\lambda_{\mathrm{cf}}\mathcal L_{\mathrm{cf}},
 \end{equation}
-where $q$ selects the correct teacher on teacher disagreement and averages the teachers when both agree. A counterfactual loss compares evidence sets with and without teacher-identified key passages. This model is reported as a compute-efficient secondary contribution, not as a replacement for the main B18B routing analysis.
+where $q$ is the selected teacher target and $T$ is the distillation temperature. A counterfactual term compares an evidence set with a version in which teacher-identified key passages are omitted. B19 is reported as a compute-efficient secondary contribution, not as a replacement for the main B18B routing analysis.
+
+\subsection{Validation-selected heterogeneous ensemble}
+The confirmatory B18A test system is a complementary, validation-selected ensemble: five frozen B1 direct seeds plus the three best B18A grounded seeds ranked on validation. The composition $\{100,87,42\}$ is fixed before the official test is evaluated. Its prediction is the arithmetic mean of member verdict probabilities. We also report an unpruned ten-member ensemble (all five direct plus all five grounded seeds) as a no-subset-selection control. This is important because B18A ensemble selection and B18B routing answer different questions: the former is the principal P1 benchmark system; the latter is the main decision-policy ablation.
 
 \begin{figure}[t]
 \centering
-\fbox{\parbox{0.95\columnwidth}{\small Claim $+$ retrieved passages $\rightarrow$ Direct verdict expert $f_D$; the same input $\rightarrow$ Grounded sufficiency expert $f_G$. If $f_G$ predicts NEI with probability at least $\tau$, defer to NEI; otherwise retain $f_D$.}}
-\caption{GraphCURE-B18B inference policy. The grounded branch is a selective epistemic sensor, not a symmetric replacement classifier.}
+\includegraphics[width=\columnwidth]{figures/graphcure_overview.png}
+\caption{Overview of \textsc{GraphCURE}. The claim and retrieved evidence are processed by (i) a direct verdict expert and (ii) a grounded rationale expert. The frozen asymmetric gate may only defer a decision to \textsc{NEI}; otherwise it preserves the direct prediction. The lower B19 branch distills complementary expert behavior into a single student.}
 \label{fig:method}
 \end{figure}
 
 \section{Experimental Setup}
 \subsection{Data and preprocessing}
-MOCHEG contains claims from PolitiFact and Snopes with text, image, and social evidence \citep{yao2023mocheg}. Our P1 experiments use the project manifest, fixed text corpus, and Qwen3 dense/reranked retrieval. We retain upstream retrieval order and use $K=5$ passages unless an evidence ablation changes $K$. No gold evidence is injected at validation or test.
+MOCHEG contains 15,601 English claims from PolitiFact and Snopes with textual, visual, and social evidence \citep{yao2023mocheg}. Our P1 experiments use the project manifest, a fixed MOCHEG text corpus, Qwen3 dense retrieval, and reranking. We retain the resulting evidence order and use $K=5$ passages unless an evidence ablation changes $K$. No gold evidence is injected at validation or test. The open-web C-series snapshot is intentionally excluded from P1 effectiveness tables: it tests a different deployment regime.
 
 \begin{table}[t]
 \centering\small
@@ -103,92 +115,234 @@ Strict test & 2,434 & no & duplicate-robustness\\
 \end{table}
 
 \subsection{Models and metrics}
-All verifiers use Qwen3-4B-Instruct-2507 with LoRA adapters. The B1 anchor uses five seeds; B18A uses grounded rationale distillation; B18B combines the frozen direct and grounded predictions. We report accuracy, class F1, Macro-F1, ECE when available, paired bootstrap intervals, and exact McNemar tests. Bootstrap samples are drawn at the claim level with 10,000 iterations.
+All verifiers use Qwen3-4B-Instruct-2507 with LoRA adapters. The direct anchor uses five seeds $\{13,21,42,87,100\}$; B18A uses grounded-rationale distillation; B18B consumes the frozen direct and grounded predictions. The representative runs use LoRA rank 16, LoRA scaling 32, dropout 0.05, learning rate $10^{-4}$, AdamW weight decay 0.01, warm-up ratio 0.05, three epochs, per-device batch size 1, and gradient accumulation 16. Evidence is truncated to 2,200 characters for the standard grounded prompts; exact run configurations are retained in each JSON summary.
+
+We report accuracy, class F1, Macro-F1, expected calibration error (ECE) when available, paired percentile bootstrap intervals, and exact McNemar tests. Bootstrap samples are drawn at the claim level with 10,000 iterations. We call $P(\Delta>0)$ a bootstrap probability of superiority, not a frequentist $p$-value. All test table deltas compare predictions with matched claim IDs.
 
 \subsection{Baselines and comparison discipline}
-Baselines include direct-only, grounded-only, equal posterior averaging, symmetric confidence routing, no-asymmetric-NEI routing, and oracle routing. Literature scores are reported in a separate protocol-aware table. MOCHEG, HGTMFC, AMuFC, RAV, RAFTS, and open-web systems do not necessarily share evidence, split, or metric definitions; therefore a row is not treated as a direct leaderboard comparison unless its protocol is explicitly aligned.
+Baselines include direct-only, grounded-only, equal posterior averaging, symmetric confidence routing, no-asymmetric-NEI routing, disagreement-only routing, max-confidence routing, and oracle routing. Literature scores are reported in a separate protocol-aware table. MOCHEG, HGTMFC, AMuFC, MEVER, M-RAV, and open-web systems do not necessarily share evidence, split, modality, or metric definitions; therefore a row is not treated as a direct leaderboard comparison unless its protocol is explicitly aligned.
+
+\subsection{Promotion gates and split discipline}
+Every development intervention is governed by a predeclared promotion gate. From B6 onward, the project uses duplicate-family-safe train-only folds, fixed training epoch, compute-matched controls, and fresh confirmation folds. A screen-only gain therefore cannot become an official-test claim. The B18A ensemble is selected on validation and applied once to test. The post-hoc $\tau=.60$ sensitivity result is reported separately and never used as the main confirmatory result. This distinction is central to interpreting the long experimental record in Table~\ref{tab:trajectory}.
 
 \section{Main Results}
+\subsection{Research trajectory and negative evidence}
+The project did not proceed as a sequence of monotonically improving models. B2--B17 were registered hypothesis tests designed to explain or surpass the strong B1 anchor. Most were closed after fresh-fold confirmation or matched-control failure. Reporting them is important: it identifies which apparently promising mechanisms do \emph{not} generalize and narrows the evidence-based explanation for B18A/B18B.
+
+\begin{table*}[t]
+\centering\scriptsize
+\begin{tabular}{@{}clp{4.7cm}p{5.0cm}@{}}
+\toprule
+Phase & Scope & Key observed result & Decision and scientific finding\\
+\midrule
+B1 & P1 official & 0.5680 accuracy / 0.5453 Macro-F1 (five-seed ensemble) & Frozen direct-verdict anchor; modern dense retrieval + Qwen3 verifier establishes the benchmark.\\
+B2 & visual/sufficiency & SV screen +0.0027 MF1; confirmation $+0.0006\pm0.0074$ & Visual relevance did not reliably become claim--image stance improvement.\\
+B3 & source robustness & qrel-absent MF1 +0.1004; overall MF1 $-0.0021$ & Reweighting lacked source safety.\\
+B4 & sentence evidence & Recall@8=.8661; verifier MF1 $-0.0270$ & Atomic sentences lose discourse context.\\
+B5 & context packet & 5-seed gain $+0.0039\pm0.0086$ & Packet and article evidence are complementary but unstable.\\
+B6 & hierarchy / PCGrad & auxiliary ensemble MF1=.7080; $P(\Delta>0)=.9354$ vs control & Auxiliary signals transfer, but not robustly enough for promotion; PCGrad did not fix it.\\
+B7--B8 & frozen routing / prior & router +.00460; logit bias +.00216 & Small gains, insufficient bootstrap evidence.\\
+B9--B11 & seed calibration & B9 confirmation +.00398; cross-fit calibration +.00345 & Seed variance and provenance stacking did not generalize safely.\\
+B12--B13 & constraints/curriculum & B12 +.00538 vs control but $-.01376$ vs anchor & Long auxiliary training induces drift; blend was not independently confirmed.\\
+B14--B15 & NEI / value gate & NEI escape +.00209; value gate +.00380 & Evidence availability matters, but observable utility features were too weak.\\
+B16--B17 & counterfactual verdict & screen +.01654; confirmation $-.00104$ vs matched control & Counterfactual supervision was promising locally but failed causal confirmation.\\
+B18A & grounded explanation & official MF1=.55507, $\Delta$=.00976 vs B1 & Main frozen P1 ensemble; validation-selected heterogeneous composition.\\
+B18B & selective evidence/routing & frozen validation MF1=.711205; strict-test artifact pending & Main mechanism ablation: grounded uncertainty can selectively correct NEI.\\
+B19 & disagreement KD & OOF MF1=.667607 vs .660788 control & Secondary single-student compression; raw official seed-87 MF1=.54940.\\
+\bottomrule
+\end{tabular}
+\caption{Condensed experimental trajectory. Values originate from their respective development, OOF, or official protocols and must not be compared as one common leaderboard.}\label{tab:trajectory}
+\end{table*}
+
 \subsection{Frozen validation and ablations}
 \begin{table}[t]
 \centering\scriptsize
-\begin{tabular}{@{}lrrr@{}}
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrrrrr@{}}
 \toprule
-Variant & Accuracy & Macro-F1 & $\Delta$ vs A8\\
+Variant & Acc. & Macro-F1 & F1-S & F1-R & F1-NEI\\
 \midrule
-A0 Direct-only & .700549 & .692045 & -.019160\\
-A1 Grounded-only & .706731 & .701191 & -.010014\\
-A2 Equal ensemble & .699863 & .692773 & -.018432\\
-A3 Symmetric confidence & .698489 & .691095 & -.020110\\
-A4 No asymmetric NEI & .710165 & .704436 & -.006769\\
-A5 Disagreement-only & .706731 & .701191 & -.010014\\
-A6 Max-confidence-only & .698489 & .691095 & -.020110\\
-A8 Full B18B & \textbf{.714973} & \textbf{.711205} & \textbf{0}\\
+A0 Direct-only & .700549 & .692045 & .720348 & .769904 & .585882\\
+A1 Grounded-only & .706731 & .701191 & .704519 & .780834 & .618221\\
+A2 Equal ensemble & .699863 & .692773 & .707071 & .772608 & .598639\\
+A3 Symmetric confidence & .698489 & .691095 & .706145 & .771930 & .595211\\
+A4 No asymmetric NEI & .710165 & .704436 & .707904 & .781915 & .623491\\
+A5 Disagreement-only & .706731 & .701191 & .704519 & .780834 & .618221\\
+A6 Max-confidence-only & .698489 & .691095 & .706145 & .771930 & .595211\\
+A8 Full B18B & \textbf{.714973} & \textbf{.711205} & \textbf{.703016} & \textbf{.793008} & \textbf{.637591}\\
 \bottomrule
-\end{tabular}
-\caption{Frozen validation component ablations. A8 is the registered asymmetric policy with $\tau=.49$.}
+\end{tabular}}
+\caption{Frozen validation component ablations (official validation is used only for evaluation of frozen policies). A8 is the full asymmetric policy at $\tau=.49$. A5 equals A1 and A6 equals A3 on this prediction set; their inclusion documents the observed degeneracy. F1-S/R denote Supported/Refuted.}
 \label{tab:ablation}
 \end{table}
 
 \paragraph{Broader prior-work inventory.}
-Table~\ref{tab:prior-inventory} lists more than ten relevant systems and benchmarks.  The inventory is intentionally protocol-aware: a dash means that the source does not report a score that is directly comparable to our P1 fixed-corpus setting.  Thus the table provides positioning, not a merged leaderboard.
-\begin{table}[t]
+Table~\ref{tab:prior-inventory} lists twelve relevant MOCHEG system rows. It is deliberately \emph{not} a single leaderboard: a reported F-score is preserved as F-score rather than silently renamed Macro-F1; filtered tests, gold evidence, or alternate preprocessing are marked. Only rows labelled ``aligned raw P1'' support an apples-to-apples point-estimate comparison.
+\begin{table*}[t]
 \centering\scriptsize
-\resizebox{\columnwidth}{!}{\begin{tabular}{@{}p{1.65cm}p{1.55cm}p{1.55cm}p{2.0cm}@{}}
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lp{2.35cm}p{2.8cm}rrp{2.8cm}@{}}
 \toprule
-Work & Task/data & Reported result & Comparable to P1?\\
+System & Venue/year & Evidence and evaluation & Acc. & Reported F1 & Comparability\\
 \midrule
-FEVER & fact verification & F1 (official) & No: Wikipedia evidence\\
-LIAR & political claims & accuracy/F1 & No: short statements\\
-MultiFC & multi-source FC & macro-F1 & No: source-specific setup\\
-UKP-Athene & FEVER & F1 & No: different evidence\\
-MOCHEG & multimodal FC & F1=.4406 & Closest benchmark\\
-HGTMFC & MOCHEG & F1=.4678 & Same data; protocol differs\\
-RAV & open-domain FC & retrieval/FC metrics & No: open retrieval\\
-RAFTS & evidence reasoning & FC metrics & No: synthetic contrasts\\
-Complex Claim Verification & open-domain claims & FC metrics & No: decomposed claims\\
-AMuFC & multimodal FC & F1=.5400/.5460 & Setting differs\\
-GraphCURE-B1 & MOCHEG P1 & MF1=.5453 & Aligned raw P1\\
-GraphCURE-B18A & MOCHEG P1 & MF1=.5551 & Aligned raw P1\\
+MOCHEG \citep{yao2023mocheg} & SIGIR 2023 & system text+image & -- & F-score .4406 & original benchmark; score label retained\\
+LVLM4FV \citep{tahmasebi2024lvlm4fv} & arXiv 2024 & retrieved text+image & .4510 & micro-F1 .4510 & macro not source-reported\\
+HGTMFC \citep{pang2025hgtmfc} & AAAI 2025 & retrieved text+image, raw test & .4861 & Macro-F1 .4678 & aligned split; different model/retrieval\\
+MetaSumPerceiver \citep{chen2024metasumperceiver} & ACL 2024 & system text+image & -- & F-score .4860 & source does not label it Macro-F1\\
+MEVER \citep{zhang2026mever} & arXiv 2026 & retrieved multimodal & .483$\pm$.021 & MF1 .497$\pm$.012 & custom consistent preprocessing\\
+M-RAV (Qwen2.5-32B) \citep{luu2027mrav} & IPM 2027 & system evidence, filtered $n=2001$ & .5002 & MF1 .5014 & filtered test; not aligned\\
+Entailed Opinion \citep{kumar2025entailed} & arXiv 2025 & domain-generalization setting & -- & MF1 .5700 & not P1 system retrieval\\
+AMuFC \citep{jung2026amufc} & HCAI/CIKM 2025; arXiv 2026 & retrieved text+image, raw test & .5460 & MF1 .5400 & aligned raw P1 challenger\\
+GraphCURE-B1 & this work & fixed corpus, raw P1 $n=2442$ & .5680 & MF1 .5453 & aligned raw P1\\
+GraphCURE-B18A seed 100 & this work & fixed corpus, raw P1 $n=2442$ & .5696 & MF1 .5513 & aligned raw P1, one seed\\
+GraphCURE-B18A (8-model) & this work & validation-selected, raw P1 $n=2442$ & \textbf{.5754} & \textbf{MF1 .5551} & aligned raw P1, confirmatory\\
+GraphCURE-B18B & this work & frozen routing, strict $n=2434$ & .5666 & MF1 .5500 & strict-only artifact; see TODO\\
 \bottomrule
 \end{tabular}}
-\caption{Broader positioning inventory.  Scores are reproduced only when the cited source or frozen project artifact reports them; otherwise the result is marked as not directly comparable.}\label{tab:prior-inventory}
+\caption{Protocol-aware comparison with prior work. ``Aligned'' means raw MOCHEG P1 test with system-retrieved evidence; it does not assert identical retrievers or model capacity. The table has more than ten prior/system rows, but only aligned rows may be used for a direct point-estimate comparison.}\label{tab:prior-inventory}
+\end{table*}
+
+B18B is the strongest registered validation variant. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Removing the asymmetric NEI rule reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. The grounded-only branch is useful (+0.915 over A0) but remains 1.001 points below A8. These comparisons support the claim that the gain is due to the asymmetric decision interface rather than merely adding a second model.
+
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Evidence policy & Acc. & Grounded MF1 & B18B MF1\\
+\midrule
+$K=1$ & .707418 & .660969 & .704452\\
+$K=3$ & \textbf{.718407} & .695423 & \textbf{.715270}\\
+$K=5$ & .714973 & \textbf{.701191} & .711205\\
+Direct-only & .700549 & -- & .692045\\
+\bottomrule
+\end{tabular}
+\caption{Frozen evidence-count sensitivity on validation. $K=3$ is selected by validation Macro-F1. The grounded-only optimum at $K=5$ does not imply the routed-system optimum.}\label{tab:topk}
 \end{table}
 
-B18B is the strongest registered validation variant. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Removing the asymmetric NEI rule reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. These comparisons support the claim that the gain is due to the decision policy rather than simply adding a second model.
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+$\tau$ & Val. MF1 & Raw-test MF1 & $\Delta$ vs B1\\
+\midrule
+.40 & .70774 & .55126 & +.00595\\
+.45 & .70932 & .55428 & +.00897\\
+.49 (validation-selected) & \textbf{.71121} & .55488 & +.00958\\
+.50 & .71109 & .55577 & +.01046\\
+.55 & .71089 & .55745 & +.01214\\
+.60 (post-hoc peak) & .71012 & \textit{.56166} & \textit{+.01635}\\
+.65 & .70755 & .55938 & +.01407\\
+.70 & .70420 & .55627 & +.01096\\
+\bottomrule
+\end{tabular}
+\caption{Threshold sensitivity. Only $\tau=.49$ is selected without test labels. The $\tau=.60$ raw-test maximum is exploratory and is not a confirmatory result.}\label{tab:threshold}
+\end{table}
 
 \begin{table}[t]
 \centering\scriptsize
 \resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrr>{\raggedright\arraybackslash}p{1.65cm}@{}}
 \toprule
-System & Macro-F1 & Accuracy & Protocol\\
+GraphCURE system & Macro-F1 & Accuracy & Raw-P1 status\\
 \midrule
-AMuFC & .5400 & .5460 & raw P1, source Table 3\\
-HGTMFC & .4678 & .4861 & raw P1\\
-B1 five-seed & .5453 & .5680 & raw P1\\
-B18A super-ensemble & .5551 & .5754 & raw P1\\
+B1 five-seed & .5453 & .5680 & frozen baseline\\
+B18A seed 42 & .5338 & .5524 & one seed\\
+B18A seed 87 & .5394 & .5606 & one seed\\
+B18A seed 100 & .5513 & .5696 & best single grounded seed\\
+B18A full 10-member & .5512 & .5717 & unpruned control\\
+B18A deferral ($\tau=.49$) & .5549 & .5713 & frozen threshold\\
+B18A super-ensemble & \textbf{.5551} & \textbf{.5754} & main confirmatory result\\
 B19 DKD seed 87 & .5494 & .5676 & raw P1\\
-B18B & \todo{canonicalize} & \todo{canonicalize} & strict/raw artifact\\
 \bottomrule
 \end{tabular}}
-\caption{Protocol-aware external comparison. Only rows with verified aligned settings should be interpreted as a direct comparison. B18B test values require reconciliation of two project artifacts before submission.}
+\caption{Raw official P1 test ($n=2{,}442$) for frozen GraphCURE systems. The main result is the B18A heterogeneous ensemble selected on validation. B18B is not included because its available frozen routing output is a strict-track artifact.}
 \label{tab:sota}
 \end{table}
 
 \subsection{Official test results and leakage control}
-The frozen B18A heterogeneous ensemble reaches Macro-F1 $0.55507$ and accuracy $0.57535$ on raw P1 official test, compared with the B1 five-seed baseline of $0.54531$ and $0.56798$. The paired bootstrap probability of improvement is $0.9839$ with CI $[+0.00097,+0.01850]$. B19 disagreement distillation reaches Macro-F1 $0.54940$ with one student model. These numbers were produced after validation-only freezing.
+The frozen B18A heterogeneous ensemble reaches Macro-F1 $0.55507$ and accuracy $0.57535$ on raw P1 official test, compared with the B1 five-seed baseline of $0.54531$ and $0.56798$. The paired bootstrap probability of improvement is $0.9839$ with CI $[+0.00097,+0.01850]$. Compared with AMuFC's reported raw-P1 point estimate (Macro-F1 .5400; accuracy .5460), this is a +1.507 Macro-F1-point and +2.935 accuracy-point difference. This is a point-estimate comparison only: AMuFC predictions are unavailable, so no paired test can be performed. B19 disagreement distillation reaches Macro-F1 $0.54940$ with one student model. These numbers were produced after validation-only freezing.
 
 The test-peak $\tau=0.60$ result (Macro-F1 $0.56166$) is exploratory and is not used as the main claim because the threshold was identified after inspecting test outcomes. Similarly, any B18B row whose canonical prediction file is not yet reconciled remains TODO.
 
+\section{Additional Ablations and Negative Results}
+\subsection{Sentence-selection branch}
+The repository contains a separately named B18B sentence-selector study; to avoid ambiguity, we call it \emph{B18B-Sel} in this paper. B18B-Sel uses rationale-distilled cross-encoder scores to adaptively select one to three sentences. It is useful as an evidence-selection ablation, but it is \emph{not} the dual-expert routing method in Figure~\ref{fig:method}. On Fold 0, rationale-distilled selection improves a generic cross-encoder by +.00865 MF1 but is still -.00214 behind the retrieval Top-3 control. Consequently it was closed after the preregistered screen rather than expanded to more seeds or test evaluation (Table~\ref{tab:selector}). This negative result guards against attributing B18A gains to sentence compression alone.
+
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Evidence policy & Acc. & MF1 & F1-S & F1-NEI\\
+\midrule
+Original Top-5 anchor & .6664 & .6435 & .6026 & .5067\\
+Retrieval Top-3 & \textbf{.6720} & \textbf{.6482} & .5964 & \textbf{.5187}\\
+Generic CE selector & .6496 & .6374 & .5674 & .5253\\
+Rationale-distilled selector & .6651 & .6460 & \textbf{.6098} & .5103\\
+\bottomrule
+\end{tabular}
+\caption{B18B-Sel train-only Fold-0 screen ($n=2{,}326$). The rationale-distilled selector is better than generic CE but fails the promotion gate against retrieval Top-3.}\label{tab:selector}
+\end{table}
+
+\subsection{Why earlier constraint approaches were not promoted}
+Earlier B6--B17 interventions supplied useful diagnostics but did not establish a stable main method. B6-A's raw auxiliary ensemble reached .7080 MF1 on validation, yet its bootstrap probability against the compute-matched direct control was .9354, below the preregistered .95 gate. B9 and B13 exhibited strong Fold-0 gains but degraded under fresh-fold confirmation. B16's counterfactual verdict curriculum improved Fold 0 by +.01654 MF1 versus its anchor, but aggregated confirmation was -.00104 versus the matched control. These negative outcomes motivate the B18 design choice: preserve a competent direct decision model and use grounded supervision as a selective uncertainty signal rather than continuously modifying the anchor's decision boundary.
+
 \section{Efficiency and Robustness Analysis}
 \subsection{Inference efficiency}
-On an RTX 5090 with 256 common validation claims, batch size 4, and two warm-up batches, direct, grounded, B18B, and B19 systems require 320.72, 193.17, 513.88, and 64.47 ms per claim, respectively. B19 is approximately 7.97 times faster than B18B. All ensemble timings are sequential; peak allocated memory is therefore a per-checkpoint peak, not a simultaneous eight-model memory requirement.
+On an RTX 5090 with 256 common validation claims, batch size 4, and two warm-up batches, direct, grounded, B18B, and B19 systems require 320.72, 193.17, 513.88, and 64.47 ms per claim, respectively (Table~\ref{tab:efficiency}). B19 is approximately 7.97 times faster than B18B. All ensemble timings are sequential; peak allocated memory is therefore a per-checkpoint peak, not a simultaneous eight-model memory requirement. Subset effectiveness scores produced by this benchmark are diagnostic only.
+
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+System & Passes & ms/claim & claims/s & Peak GiB\\
+\midrule
+Direct ensemble & 5 & 320.72 & 3.118 & 14.74\\
+Grounded ensemble & 3 & 193.17 & 5.177 & 14.74\\
+B18B dual ensemble & 8 & 513.88 & 1.946 & 14.74\\
+B19 single student & 1 & \textbf{64.47} & \textbf{15.511} & 14.74\\
+\bottomrule
+\end{tabular}
+\caption{Efficiency benchmark: RTX 5090, 256 claims, batch size 4, two warm-up batches. Model-loading time is excluded.}\label{tab:efficiency}
+\end{table}
 
 \subsection{Subgroup behavior}
-On the frozen validation audit, B18B improves Macro-F1 by 1.916 points, with 58 helpful and 37 harmful changes. The gain is largest for NEI (+3.239), rank-one evidence (+2.772), evidence hits (+2.280), and Snopes (+1.994). Retrieval misses decrease by 3.223 points and supported claims decrease by 1.404 points. These results suggest that the method is an evidence-sufficiency correction, not a universal replacement for direct verification.
+On the frozen validation audit, B18B improves Macro-F1 by 1.916 points, with 58 helpful and 37 harmful changes. Table~\ref{tab:subgroups} separates where this gain occurs. It is largest for NEI (+3.239), rank-one evidence (+2.772), evidence hits (+2.280), and Snopes (+1.994). Retrieval misses decrease by 3.223 points and Supported claims decrease by 1.404 points. These results suggest that the method is an evidence-sufficiency correction, not a universal replacement for direct verification.
+
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Group & $n$ & $\Delta$ MF1 & Helpful/Harmful\\
+\midrule
+Overall & 1,456 & +.01916 & 58 / 37\\
+PolitiFact & 431 & -.00249 & 0 / 6\\
+Snopes & 1,025 & +.01994 & 58 / 31\\
+Gold NEI & 478 & +.03239 & 58 / 0\\
+Gold Refuted & 487 & -.00343 & 0 / 9\\
+Gold Supported & 491 & -.01404 & 0 / 28\\
+Gold rank 1 & 1,233 & +.02772 & 54 / 25\\
+Gold rank 2--5 & 131 & -.02607 & 3 / 7\\
+Gold not retrieved & 59 & -.03260 & 1 / 4\\
+\bottomrule
+\end{tabular}
+\caption{Selected frozen-validation subgroup audit: B18B minus direct. Gold rank is a diagnostic label unavailable at inference, not a routing input.}\label{tab:subgroups}
+\end{table}
 
 \subsection{B19 distillation}
-Five-fold train-only OOF confirmation gives B19 control Macro-F1 0.660788 and disagreement-KD Macro-F1 0.667607, a +0.006819 difference. Four of five folds improve and paired bootstrap $P(\Delta>0)=0.9517$. This supports B19 as a practical compression of complementary expertise, while B18B remains the main routing contribution.
+Five-fold train-only OOF confirmation gives B19 control Macro-F1 0.660788 and disagreement-KD Macro-F1 0.667607, a +0.006819 difference. Four of five folds improve and paired bootstrap $P(\Delta>0)=0.9517$. Table~\ref{tab:b19-ablation} shows why the disagreement target matters: naive ensemble KD is worse than the matched control, while counterfactual loss alone is nearly neutral and the full objective reduces the screen gain. This supports B19 as a practical compression of complementary expertise, while B18B remains the main routing contribution.
+
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Fold-0 variant & Acc. & MF1 & F1-S & F1-NEI\\
+\midrule
+Matched control & .6690 & .6570 & .6013 & .5368\\
+Naive ensemble KD & .6707 & .6513 & .6106 & .5152\\
+Counterfactual only & .6758 & .6577 & .6063 & .5332\\
+Full KD + disagree + CF & .6776 & .6584 & .6022 & .5359\\
+Disagreement KD & \textbf{.6836} & \textbf{.6687} & \textbf{.6276} & \textbf{.5472}\\
+\bottomrule
+\end{tabular}
+\caption{B19 train-only Fold-0 mechanism screen ($n=2{,}326$). Full B19 confirmation uses only disagreement KD after the screen.}\label{tab:b19-ablation}
+\end{table}
 
 \section{Error Analysis}
 The dominant helpful transition is direct Refuted/Supported to grounded NEI on gold NEI claims. Harmful transitions are direct Supported to NEI (28 cases) and direct Refuted to NEI (9 cases). This asymmetry explains why B18B improves NEI while slightly reducing decisive-class F1. The failure atlas also shows that routing under missing or rank-2--5 evidence is less reliable. A future system should estimate retrieval reliability before allowing deferral, but using gold rank or QREL status at inference would be invalid.
@@ -207,8 +361,80 @@ We presented GraphCURE-B18B, a dual-expert asymmetric epistemic-deferral policy 
 
 \bibliography{references}
 
+\clearpage
 \appendix
+\section{Detailed Development Ledger}
+Table~\ref{tab:ledger-appendix} expands the main trajectory with the numerical evidence used to close or advance each hypothesis. These are reported for reproducibility and to prevent failed development screens from being misrepresented as official-test improvements.
+
+\begin{table*}[t]
+\centering\scriptsize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}clp{4.9cm}p{5.2cm}@{}}
+\toprule
+ID & Intervention & Quantitative observation & Interpretation\\
+\midrule
+B2-SV & flat versus hierarchical sufficiency verification & Flat MF1=.6371; SV=.6398 (+.0027) on Fold 0; five-fold confirmation $+.00060\pm.00745$ & Hierarchy had small local benefit but no stable promotion.\\
+B3 & source/evidence DRO & qrel-absent MF1 +.1004; overall MF1 -.0021 & Robustness improvement cannot be bought with aggregate regression.\\
+B4 & atomic sentence verifier & sentence retrieval Recall@8=.8661; verdict MF1 -.0270 vs article evidence & Retrieval coverage alone is insufficient; discourse matters.\\
+B5 & context packets & best interpolation +.01014 on one validation split; five-seed packet gain $+.00387\pm.00862$ & Complementarity exists but is not a reliable replacement.\\
+B6-A & sufficiency/polarity multi-task & auxiliary vs matched control $+.00886\pm.01081$; bootstrap .9354 & Positive transfer signal, below preregistered stability gate.\\
+B6-B & PCGrad & conflict rate about 45--46\% in epoch 1; ensemble - .0105 vs control & Gradient conflict was real but projection did not improve generalization.\\
+B7 & selective expert router & MF1 +.00460; bootstrap .9294 & Helpful precision, insufficient gain and confidence.\\
+B8 & class-logit bias & MF1 +.00216; bootstrap .7604 & Prior shift does not explain the main error pattern.\\
+B9 & fixed seed ensemble & Fold-0 +.01348; fresh-fold mean +.00398 & A screen peak is not confirmation.\\
+B10 & cross-fitted calibrator & aggregate MF1=.67054; +.00345 vs unweighted ensemble & Bootstrap/source gates fail.\\
+B11 & provenance calibrator & -.00176 vs unweighted ensemble & Provenance-conditioned calibration harms aggregate accuracy.\\
+B12 & joint constraints from base & +.00538 vs compute control but -.01376 vs anchor & Constraint tasks help relative to compute but induce anchor drift.\\
+B13 & curriculum/blend & Fold-0 blend +.00510; five-fold mean +.00090 & Direct curriculum is unstable.\\
+B14 & NEI escape analysis & MF1 +.00209; accuracy +.01126 & It helps supported/refuted escape but damages NEI under qrel absence.\\
+B15 & value-of-information gate & MF1 +.00380; AUROC=.5660 & Observable utility is too weak for reliable routing.\\
+B16 & counterfactual omission & Fold-0 +.01654 vs anchor; confirmation -.00104 vs control & The strongest screen still fails matched-control confirmation.\\
+B17 & failure atlas & candidate/control .66517/.66621; help/harm 550/561 & No stable subgroup justified further tuning on inspected folds.\\
+\bottomrule
+\end{tabular}}
+\caption{B2--B17 negative and diagnostic experiments. Each value remains in its native protocol; no row is a P1 official-test claim.}\label{tab:ledger-appendix}
+\end{table*}
+
+\section{Five-Fold B19 Confirmation}
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+Fold & Control MF1 & DKD MF1 & $\Delta$\\
+\midrule
+0 & .657035 & .668656 & +.011621\\
+1 & .659998 & .656767 & -.003231\\
+2 & .662265 & .667143 & +.004878\\
+3 & .647130 & .660188 & +.013058\\
+4 & .674931 & .681645 & +.006714\\
+\midrule
+Aggregate & .660788 & .667607 & +.006819\\
+\bottomrule
+\end{tabular}
+\caption{B19 train-only out-of-fold confirmation. Four of five folds improve; the aggregate paired bootstrap probability is .9517.}\label{tab:b19-folds}
+\end{table}
+
+\section{Raw versus Strict Test Reporting}
+The raw official test ($n=2{,}442$) is the primary literature-comparison track. The strict test ($n=2{,}434$) removes eight verbatim cross-split duplicates and is a robustness track only. Table~\ref{tab:raw-strict} does not merge the two populations. The B18B strict routing output has an alignment/intersection artifact documented in project logs; until a checksum-matched re-evaluation produces a raw and strict pair, its result remains a robustness diagnostic rather than a headline test result.
+
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+System & Track & Acc. & MF1\\
+\midrule
+B1 five-seed & raw official & .56798 & .54531\\
+B1 five-seed & strict & .56902 & .54581\\
+B18A 8-model & raw official & .57535 & .55507\\
+B18A 8-model & strict & .57477 & .55383\\
+B19 seed 87 & raw official & .56757 & .54940\\
+B19 seed 87 & strict & .56615 & .54733\\
+B18B frozen router & strict intersection & .56656 & .54998\\
+\bottomrule
+\end{tabular}
+\caption{Track-separated test results. The B18B result is not used for the main official-test claim.}\label{tab:raw-strict}
+\end{table}
+
 \section{Reproducibility Checklist}
-The repository records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. The main scripts are `train\_mocheg\_qwen3\_lora\_verifier.py`, `analyze\_mocheg\_b18b\_component\_ablations.py`, `analyze\_mocheg\_b18b\_subgroups.py`, and `benchmark\_mocheg\_b18b\_efficiency.py`. Before submission, add exact GPU driver versions, package lock information, canonical B18B test hashes, and author metadata.
+The repository records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. The main scripts are `train\_mocheg\_qwen3\_lora\_verifier.py`, `train\_mocheg\_b18\_explanation\_verifier.py`, `analyze\_mocheg\_b18b\_component\_ablations.py`, `analyze\_mocheg\_b18b\_subgroups.py`, `train\_mocheg\_b19\_distillation.py`, and `benchmark\_mocheg\_b18b\_efficiency.py`. Before submission, add exact GPU driver versions, package-lock information, canonical B18B raw/strict prediction hashes, author metadata, and a public archival repository link.
 
 \end{document}

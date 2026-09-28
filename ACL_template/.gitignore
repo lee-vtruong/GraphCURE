@@ -7,3 +7,6 @@
 *.out
 *.synctex.gz
 compile.log
+compile-*.log
+preview-page*.png
+appendix-preview-*.png
