@@ -112,16 +112,23 @@ def coverage_diagnostic(ids: list[str], labels: np.ndarray, direct: np.ndarray,
     }
 
 
-def evaluate_test_track(name: str, paths: list[Path], tau: float,
-                        iterations: int, seed: int) -> dict:
-    ids, labels, direct = load_average(paths)
+def evaluate_test_track(name: str, direct_paths: list[Path], grounded_paths: list[Path],
+                        direct_tau: float, and_tau: float, iterations: int, seed: int) -> dict:
+    ids, labels, direct = load_average(direct_paths)
+    grounded_ids, grounded_labels, grounded = load_average(grounded_paths)
+    if ids != grounded_ids or not np.array_equal(labels, grounded_labels):
+        raise ValueError(f"{name}: direct and grounded predictions are not exactly aligned")
     direct_prediction = direct.argmax(axis=1)
-    self_prediction = self_deferral(direct, tau)
+    self_prediction = self_deferral(direct, direct_tau)
+    and_prediction = and_policy(direct, grounded, and_tau)
     return {
         "track": name,
         "samples": len(ids),
-        "frozen_tau_from_validation": tau,
+        "direct_self_deferral_tau_from_validation": direct_tau,
+        "and_tau_frozen": and_tau,
         "self_deferral_vs_direct": paired(labels, direct_prediction, self_prediction, iterations, seed),
+        "and_vs_direct": paired(labels, direct_prediction, and_prediction, iterations, seed + 1),
+        "and_vs_self_deferral": paired(labels, self_prediction, and_prediction, iterations, seed + 2),
     }
 
 
@@ -133,6 +140,8 @@ def main() -> None:
     parser.add_argument("--val-retrieval", type=Path, required=True)
     parser.add_argument("--raw-direct-runs", type=Path, nargs="+", required=True)
     parser.add_argument("--strict-direct-runs", type=Path, nargs="+", required=True)
+    parser.add_argument("--raw-grounded-runs", type=Path, nargs="+", required=True)
+    parser.add_argument("--strict-grounded-runs", type=Path, nargs="+", required=True)
     parser.add_argument("--and-tau", type=float, default=0.49)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--grid-step", type=float, default=0.01)
@@ -172,8 +181,8 @@ def main() -> None:
             "coverage_diagnostic": coverage_diagnostic(ids, labels, direct, grounded, args.val_manifest, args.val_retrieval, args.top_k),
         },
         "test": {
-            "raw_official": evaluate_test_track("raw_official_P1_n2442", args.raw_direct_runs, selected["tau"], args.iterations, args.seed + 3),
-            "strict": evaluate_test_track("strict_P1_n2434", args.strict_direct_runs, selected["tau"], args.iterations, args.seed + 4),
+            "raw_official": evaluate_test_track("raw_official_P1_n2442", args.raw_direct_runs, args.raw_grounded_runs, selected["tau"], args.and_tau, args.iterations, args.seed + 3),
+            "strict": evaluate_test_track("strict_P1_n2434", args.strict_direct_runs, args.strict_grounded_runs, selected["tau"], args.and_tau, args.iterations, args.seed + 6),
             "test_labels_used_for_selection": False,
         },
     }
@@ -208,7 +217,13 @@ def main() -> None:
     for name, item in result["test"].items():
         if name == "test_labels_used_for_selection":
             continue
-        lines += [f"### {name}", line("Self-deferral vs direct", item["self_deferral_vs_direct"]), ""]
+        lines += [
+            f"### {name}",
+            line("Self-deferral vs direct", item["self_deferral_vs_direct"]),
+            line("AND vs direct", item["and_vs_direct"]),
+            line("AND vs direct self-deferral", item["and_vs_self_deferral"]),
+            "",
+        ]
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
