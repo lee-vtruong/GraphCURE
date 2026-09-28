@@ -264,6 +264,12 @@ def main() -> None:
     parser.add_argument("--expected-strict", type=int, default=2434)
     parser.add_argument("--iterations", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument(
+        "--prediction-provenance",
+        choices=("existing_frozen_predictions", "canonical_raw_inference"),
+        default="existing_frozen_predictions",
+        help="Whether canonical-tag raw predictions were freshly inferred before this audit.",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if not 0.0 <= args.tau <= 1.0:
@@ -358,8 +364,11 @@ def main() -> None:
             "test_labels_used_for_parameter_selection": False,
             "test_labels_used_for_evaluation": True,
             "gold_evidence_used": False,
-            "test_predictions_recomputed": False,
+            "test_predictions_recomputed": (
+                args.prediction_provenance == "canonical_raw_inference"
+            ),
             "evaluation_from_frozen_saved_predictions": True,
+            "prediction_provenance": args.prediction_provenance,
         },
     }
     json_path = args.output_dir / "canonical_router.json"
@@ -390,7 +399,8 @@ def main() -> None:
         "- Policy: **Asymmetric NEI Deferral (AND)**",
         f"- Frozen parameters: `K={args.top_k}`, `tau={args.tau:.2f}`",
         "- Parameter source: **frozen validation policy; no test-time tuning**",
-        "- Evaluation uses saved frozen predictions; no model inference is run here.",
+        "- Evaluation uses frozen saved predictions; no parameter is tuned here.",
+        f"- Prediction provenance: `{args.prediction_provenance}`.",
         "- Gold evidence used: **no**", "",
     ]
     markdown.extend(section("Raw official P1 (n=2,442)", raw_result))

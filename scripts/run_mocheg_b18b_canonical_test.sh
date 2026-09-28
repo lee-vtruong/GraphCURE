@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Canonical, audit-only evaluation of the registered B18B AND policy.
-# This script does NOT train, tune tau/K, or run model inference. It evaluates
-# the already frozen raw-official prediction files, validates their provenance,
-# and derives the strict report only as the verified subset of the same raw IDs.
+# This script does NOT train or tune tau/K. It creates a fresh, named raw-P1
+# prediction artifact for the three frozen grounded adapters only when that
+# artifact is absent, then validates provenance and derives strict as the
+# verified subset of the same raw-ID universe.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,13 +20,13 @@ for seed in 13 21 42 87 100; do
   DIRECT+=("outputs/mocheg_qwen3_lora_frozen_test/seed_${seed}_predictions.jsonl")
 done
 GROUNDED=(
-  "outputs/mocheg_b18a_full/candidate_seed100/test_predictions_official.jsonl"
-  "outputs/mocheg_b18a_full/candidate_seed87/test_predictions_official.jsonl"
-  "outputs/mocheg_b18a_full/candidate_seed42/test_predictions_official.jsonl"
+  "outputs/mocheg_b18a_full/candidate_seed100/test_predictions_canonical_k5.jsonl"
+  "outputs/mocheg_b18a_full/candidate_seed87/test_predictions_canonical_k5.jsonl"
+  "outputs/mocheg_b18a_full/candidate_seed42/test_predictions_canonical_k5.jsonl"
 )
 
 for path in "$RAW_MANIFEST" "$STRICT_MANIFEST" "$RAW_RETRIEVAL" "$STRICT_RETRIEVAL" \
-  "${DIRECT[@]}" "${GROUNDED[@]}"; do
+  "${DIRECT[@]}"; do
   if [[ ! -s "$path" ]]; then
     echo "ERROR: required canonical input is missing or empty: $path" >&2
     exit 1
@@ -33,6 +34,53 @@ for path in "$RAW_MANIFEST" "$STRICT_MANIFEST" "$RAW_RETRIEVAL" "$STRICT_RETRIEV
 done
 
 mkdir -p "$OUT"
+
+# The historic report may contain a different prediction tag or no retained
+# raw prediction at all.  Always use this dedicated tag for the audit.  This
+# is inference-only (three adapters, no training); cached canonical files are
+# reused on restart.
+NEED_INFERENCE=0
+ADAPTERS=()
+for seed in 100 87 42; do
+  run="outputs/mocheg_b18a_full/candidate_seed${seed}"
+  adapter="$run/best_adapter"
+  prediction="$run/test_predictions_canonical_k5.jsonl"
+  if [[ ! -d "$adapter" ]]; then
+    echo "ERROR: frozen grounded adapter is missing: $adapter" >&2
+    exit 1
+  fi
+  ADAPTERS+=("$run")
+  if [[ ! -s "$prediction" ]]; then
+    NEED_INFERENCE=1
+  fi
+done
+
+if [[ "$NEED_INFERENCE" -eq 1 ]]; then
+  echo "Creating missing canonical K=5 raw-P1 predictions for frozen grounded adapters."
+  CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
+  python -m scripts.evaluate_mocheg_b18_test \
+    --runs "${ADAPTERS[@]}" \
+    --manifest "$RAW_MANIFEST" \
+    --retrieval "$RAW_RETRIEVAL" \
+    --corpus data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv \
+    --base-model Qwen/Qwen3-4B-Instruct-2507 \
+    --tag canonical_k5 \
+    --output-dir "$OUT/grounded_inference" \
+    --top-k 5 \
+    --max-evidence-chars 2200 \
+    --batch-size 4 \
+    --device cuda \
+    --bootstrap-iterations 10000 \
+    2>&1 | tee "$OUT/grounded_inference.log"
+fi
+
+for path in "${GROUNDED[@]}"; do
+  if [[ ! -s "$path" ]]; then
+    echo "ERROR: canonical grounded prediction was not produced: $path" >&2
+    exit 1
+  fi
+done
+
 python -m scripts.evaluate_mocheg_b18b_canonical_router \
   --raw-manifest "$RAW_MANIFEST" \
   --strict-manifest "$STRICT_MANIFEST" \
@@ -44,6 +92,7 @@ python -m scripts.evaluate_mocheg_b18b_canonical_router \
   --tau 0.49 \
   --iterations 10000 \
   --seed 2026 \
+  --prediction-provenance canonical_raw_inference \
   --output-dir "$OUT" \
   2>&1 | tee "$OUT/run.log"
 
