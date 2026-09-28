@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Canonical, audit-only evaluation of the registered B18B AND policy.
 # This script does NOT train or tune tau/K. It creates a fresh, named raw-P1
-# prediction artifact for the three frozen grounded adapters only when that
-# artifact is absent, then validates provenance and derives strict as the
-# verified subset of the same raw-ID universe.
+# prediction artifact for frozen adapters only when it is absent.  Raw and
+# strict retrieval manifests are audited separately; if their ranked evidence
+# IDs differ, strict predictions are independently inferred instead of being
+# incorrectly sliced from raw predictions.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,13 +17,20 @@ RAW_RETRIEVAL="outputs/retrieval_mocheg_qwen3_reranked_official/test.jsonl"
 STRICT_RETRIEVAL="outputs/retrieval_mocheg_qwen3_reranked/test.jsonl"
 
 DIRECT=()
+STRICT_DIRECT=()
 for seed in 13 21 42 87 100; do
   DIRECT+=("outputs/mocheg_qwen3_lora_frozen_test/seed_${seed}_predictions.jsonl")
+  STRICT_DIRECT+=("$OUT/direct_strict/seed_${seed}_predictions.jsonl")
 done
 GROUNDED=(
   "outputs/mocheg_b18a_full/candidate_seed100/test_predictions_canonical_k5.jsonl"
   "outputs/mocheg_b18a_full/candidate_seed87/test_predictions_canonical_k5.jsonl"
   "outputs/mocheg_b18a_full/candidate_seed42/test_predictions_canonical_k5.jsonl"
+)
+STRICT_GROUNDED=(
+  "outputs/mocheg_b18a_full/candidate_seed100/test_predictions_canonical_k5_strict.jsonl"
+  "outputs/mocheg_b18a_full/candidate_seed87/test_predictions_canonical_k5_strict.jsonl"
+  "outputs/mocheg_b18a_full/candidate_seed42/test_predictions_canonical_k5_strict.jsonl"
 )
 
 for path in "$RAW_MANIFEST" "$STRICT_MANIFEST" "$RAW_RETRIEVAL" "$STRICT_RETRIEVAL" \
@@ -81,6 +89,59 @@ for path in "${GROUNDED[@]}"; do
   fi
 done
 
+# The prior audit showed at least one raw/strict ranked-evidence mismatch.
+# Therefore strict predictions must be independently inferred with the same
+# frozen adapters and registered K=5 policy; no model is trained here.
+NEED_STRICT_DIRECT=0
+for path in "${STRICT_DIRECT[@]}"; do
+  [[ -s "$path" ]] || NEED_STRICT_DIRECT=1
+done
+if [[ "$NEED_STRICT_DIRECT" -eq 1 ]]; then
+  echo "Creating missing canonical K=5 strict-P1 predictions for frozen direct adapters."
+  CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
+  python -m scripts.evaluate_mocheg_qwen3_frozen_test \
+    --manifest "$STRICT_MANIFEST" \
+    --retrieval "$STRICT_RETRIEVAL" \
+    --corpus data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv \
+    --output-root "$OUT/direct_strict" \
+    --protocol P1_closed_corpus_retrieved_strict_n2434_canonical_b18b \
+    --expected-samples 2434 \
+    --batch-size 4 \
+    --bootstrap-iterations 10000 \
+    --device cuda \
+    2>&1 | tee "$OUT/direct_strict.log"
+fi
+
+NEED_STRICT_GROUNDED=0
+for path in "${STRICT_GROUNDED[@]}"; do
+  [[ -s "$path" ]] || NEED_STRICT_GROUNDED=1
+done
+if [[ "$NEED_STRICT_GROUNDED" -eq 1 ]]; then
+  echo "Creating missing canonical K=5 strict-P1 predictions for frozen grounded adapters."
+  CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
+  python -m scripts.evaluate_mocheg_b18_test \
+    --runs "${ADAPTERS[@]}" \
+    --manifest "$STRICT_MANIFEST" \
+    --retrieval "$STRICT_RETRIEVAL" \
+    --corpus data/raw/mocheg_dataset/extracted/mocheg/test/Corpus2.csv \
+    --base-model Qwen/Qwen3-4B-Instruct-2507 \
+    --tag canonical_k5_strict \
+    --output-dir "$OUT/grounded_strict_inference" \
+    --top-k 5 \
+    --max-evidence-chars 2200 \
+    --batch-size 4 \
+    --device cuda \
+    --bootstrap-iterations 10000 \
+    2>&1 | tee "$OUT/grounded_strict_inference.log"
+fi
+
+for path in "${STRICT_DIRECT[@]}" "${STRICT_GROUNDED[@]}"; do
+  if [[ ! -s "$path" ]]; then
+    echo "ERROR: canonical strict prediction was not produced: $path" >&2
+    exit 1
+  fi
+done
+
 python -m scripts.evaluate_mocheg_b18b_canonical_router \
   --raw-manifest "$RAW_MANIFEST" \
   --strict-manifest "$STRICT_MANIFEST" \
@@ -88,6 +149,8 @@ python -m scripts.evaluate_mocheg_b18b_canonical_router \
   --strict-retrieval "$STRICT_RETRIEVAL" \
   --direct-runs "${DIRECT[@]}" \
   --grounded-runs "${GROUNDED[@]}" \
+  --strict-direct-runs "${STRICT_DIRECT[@]}" \
+  --strict-grounded-runs "${STRICT_GROUNDED[@]}" \
   --top-k 5 \
   --tau 0.49 \
   --iterations 10000 \

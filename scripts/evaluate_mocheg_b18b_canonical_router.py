@@ -140,10 +140,11 @@ def validate_strict_subset(
     strict_manifest: dict[str, dict[str, Any]],
     raw_retrieval: dict[str, dict[str, Any]],
     strict_retrieval: dict[str, dict[str, Any]],
-) -> None:
+) -> bool:
     raw_index = {sample_id: index for index, sample_id in enumerate(raw_ids)}
     if not set(strict_ids) < set(raw_ids):
         raise ValueError("strict manifest IDs are not a proper subset of raw official IDs")
+    evidence_ids_match = True
     for index, sample_id in enumerate(strict_ids):
         if int(strict_labels[index]) != int(raw_labels[raw_index[sample_id]]):
             raise ValueError(f"raw/strict manifest label mismatch for {sample_id!r}")
@@ -154,7 +155,8 @@ def validate_strict_subset(
         if retrieval_fingerprint(raw_retrieval[sample_id]) != retrieval_fingerprint(
             strict_retrieval[sample_id]
         ):
-            raise ValueError(f"raw/strict retrieval fingerprint mismatch for {sample_id!r}")
+            evidence_ids_match = False
+    return evidence_ids_match
 
 
 def load_probability_ensemble(
@@ -260,6 +262,8 @@ def main() -> None:
     parser.add_argument("--strict-retrieval", type=Path, required=True)
     parser.add_argument("--direct-runs", type=Path, nargs="+", required=True)
     parser.add_argument("--grounded-runs", type=Path, nargs="+", required=True)
+    parser.add_argument("--strict-direct-runs", type=Path, nargs="+")
+    parser.add_argument("--strict-grounded-runs", type=Path, nargs="+")
     parser.add_argument("--tau", type=float, required=True)
     parser.add_argument("--top-k", type=int, required=True)
     parser.add_argument("--expected-raw", type=int, default=2442)
@@ -285,7 +289,7 @@ def main() -> None:
     )
     raw_retrieval = validate_retrieval(args.raw_retrieval, raw_ids, raw_labels)
     strict_retrieval = validate_retrieval(args.strict_retrieval, strict_ids, strict_labels)
-    validate_strict_subset(
+    shared_evidence_ids_match = validate_strict_subset(
         raw_ids, raw_labels, raw_manifest, strict_ids, strict_labels, strict_manifest,
         raw_retrieval, strict_retrieval,
     )
@@ -295,10 +299,34 @@ def main() -> None:
     raw_result, raw_direct_pred, raw_grounded_pred, raw_and_pred = evaluate_policy(
         raw_labels, direct_raw, grounded_raw, args.tau, args.iterations, args.seed
     )
-    raw_index = {sample_id: index for index, sample_id in enumerate(raw_ids)}
-    strict_positions = np.asarray([raw_index[sample_id] for sample_id in strict_ids], dtype=int)
-    strict_direct = direct_raw[strict_positions]
-    strict_grounded = grounded_raw[strict_positions]
+    strict_prediction_source: str
+    if shared_evidence_ids_match:
+        if bool(args.strict_direct_runs) != bool(args.strict_grounded_runs):
+            parser.error("provide both --strict-direct-runs and --strict-grounded-runs, or neither")
+        # The verified input is identical, so slicing the raw prediction is exact.
+        raw_index = {sample_id: index for index, sample_id in enumerate(raw_ids)}
+        strict_positions = np.asarray([raw_index[sample_id] for sample_id in strict_ids], dtype=int)
+        strict_direct = direct_raw[strict_positions]
+        strict_grounded = grounded_raw[strict_positions]
+        strict_prediction_source = "verified_raw_prediction_subset"
+    else:
+        if not args.strict_direct_runs or not args.strict_grounded_runs:
+            parser.error(
+                "raw and strict ranked evidence IDs differ; independent strict "
+                "predictions are required via --strict-direct-runs and "
+                "--strict-grounded-runs"
+            )
+        if len(args.strict_direct_runs) != len(args.direct_runs):
+            parser.error("strict direct member count must equal raw direct member count")
+        if len(args.strict_grounded_runs) != len(args.grounded_runs):
+            parser.error("strict grounded member count must equal raw grounded member count")
+        strict_direct = load_probability_ensemble(
+            args.strict_direct_runs, strict_ids, strict_labels
+        )
+        strict_grounded = load_probability_ensemble(
+            args.strict_grounded_runs, strict_ids, strict_labels
+        )
+        strict_prediction_source = "independent_strict_inference"
     strict_result, strict_direct_pred, strict_grounded_pred, strict_and_pred = evaluate_policy(
         strict_labels, strict_direct, strict_grounded, args.tau, args.iterations, args.seed + 1
     )
@@ -348,6 +376,12 @@ def main() -> None:
             "grounded_prediction_sha256": {
                 str(path): sha256_file(path) for path in args.grounded_runs
             },
+            "strict_direct_prediction_sha256": {
+                str(path): sha256_file(path) for path in (args.strict_direct_runs or [])
+            },
+            "strict_grounded_prediction_sha256": {
+                str(path): sha256_file(path) for path in (args.strict_grounded_runs or [])
+            },
         },
         "alignment_audit": {
             "raw_samples": len(raw_ids),
@@ -355,8 +389,8 @@ def main() -> None:
             "strict_is_proper_subset_of_raw": True,
             "raw_prediction_ids_match_raw_manifest": True,
             "strict_prediction_ids_match_strict_manifest": True,
-            "raw_strict_shared_ranked_evidence_ids_match": True,
-            "raw_strict_retrieval_score_metadata_may_differ": True,
+            "raw_strict_shared_ranked_evidence_ids_match": shared_evidence_ids_match,
+            "strict_prediction_source": strict_prediction_source,
             "direct_member_count": len(args.direct_runs),
             "grounded_member_count": len(args.grounded_runs),
         },
@@ -417,9 +451,9 @@ def main() -> None:
         f"`{audit['input_hashes']['strict_retrieval_sha256']}`",
         "- Strict IDs are a proper subset of raw official IDs: **yes**",
         "- Every direct and grounded member matches all 2,442 raw IDs exactly: **yes**",
-        "- Shared raw/strict ranked evidence IDs match exactly: **yes**",
-        "- Raw/strict score metadata may differ because retrieval was run separately; "
-        "it is not verifier input: **acknowledged**",
+        f"- Shared raw/strict ranked evidence IDs match exactly: "
+        f"**{'yes' if shared_evidence_ids_match else 'no'}**",
+        f"- Strict prediction source: `{strict_prediction_source}`",
         "- Test labels used for policy selection: **no**",
         "- Materialized AND prediction hashes are stored in `canonical_router.json`.",
     ])
