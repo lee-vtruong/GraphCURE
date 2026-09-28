@@ -65,7 +65,7 @@ For a training example $i$, let $z_i$ be the verdict target and $r_i$ the struct
 \mathcal{L}_{G} &= \mathcal{L}_{D}+\lambda_{r}\mathcal{L}_{\mathrm{rationale}}(r_i), \qquad \lambda_r=0.25.
 \end{aligned}
 \end{equation}
-The rationale term is token-level cross-entropy over the validated structured target. Both experts begin from the same base model and use matched optimizer-update budgets; their difference is the auxiliary rationale objective. The implementation records teacher outputs, manifests, retrieval signatures, and prompt-format hashes. Gold evidence is used only for retrieval diagnostics, never injected into P1 validation or test prompts.
+The rationale term is token-level cross-entropy over the validated structured target. Both experts begin from the same base model, but the headline direct and grounded ensembles were trained under different optimization recipes (specified below); therefore their contrast establishes complementarity, not a causal attribution of every gain to rationale loss. We additionally report a matched-recipe explanation-supervision control and treat it as a causal ablation rather than conflating it with the headline ensemble comparison. The implementation records teacher outputs, manifests, retrieval signatures, and prompt-format hashes. Gold evidence is used only for retrieval diagnostics, never injected into P1 validation or test prompts.
 
 \subsection{Asymmetric \textsc{NEI} deferral (AND)}
 The policy uses the direct expert as an anchor:
@@ -116,7 +116,7 @@ Strict test & 2,434 & no & duplicate-robustness\\
 \end{table}
 
 \subsection{Models and metrics}
-All verifiers use Qwen3-4B-Instruct-2507 with LoRA adapters. The direct ensemble uses seeds $\{13,21,42,87,100\}$; the grounded ensemble contains the validation-selected seeds $\{100,87,42\}$. The representative B1 runs use LoRA rank 16, LoRA scaling 32, dropout 0.05, learning rate $10^{-4}$, AdamW weight decay 0.01, warm-up ratio 0.05, three epochs, per-device batch size 1, and gradient accumulation 16. The explanation-grounded runs use the same LoRA configuration and matched update budget; their training command uses batch size 2, accumulation 4, and learning rate $2\times10^{-4}$. Exact run configurations are retained in JSON summaries.
+All verifiers use Qwen3-4B-Instruct-2507 with LoRA adapters. The direct ensemble uses seeds $\{13,21,42,87,100\}$; the grounded ensemble contains the validation-selected seeds $\{100,87,42\}$. The representative B1 runs use LoRA rank 16, LoRA scaling 32, dropout 0.05, learning rate $10^{-4}$, AdamW weight decay 0.01, warm-up ratio 0.05, three epochs, per-device batch size 1, and gradient accumulation 16. The headline explanation-grounded runs use the same LoRA rank/scaling/dropout but batch size 2, accumulation 4, and learning rate $2\times10^{-4}$. Hence their raw ensemble comparison is not a matched-optimization causal ablation. For causal attribution, we separately use the five-fold matched-recipe control reported in Section~\ref{sec:matched-exp}. Exact run configurations are retained in JSON summaries.
 
 We report accuracy, class F1, Macro-F1, expected calibration error (ECE) when available, paired percentile bootstrap intervals, and exact McNemar tests. Bootstrap samples are drawn at the claim level with 10,000 iterations. We call $P(\Delta>0)$ a bootstrap probability of superiority, not a frequentist $p$-value. All test table deltas compare predictions with matched claim IDs.
 
@@ -271,6 +271,9 @@ Rationale-distilled selector & .6651 & .6460 & \textbf{.6098} & .5103\\
 
 \subsection{Why earlier constraint approaches were not promoted}
 Earlier B6--B17 interventions supplied useful diagnostics but did not establish a stable main method. B6-A's raw auxiliary ensemble reached .7080 MF1 on validation, yet its bootstrap probability against the compute-matched direct control was .9354, below the predefined .95 gate. B9 and B13 exhibited strong Fold-0 gains but degraded under fresh-fold confirmation. B16's counterfactual verdict curriculum improved Fold 0 by +.01654 MF1 versus its anchor, but aggregated confirmation was -.00104 versus the matched control. These negative outcomes motivate the CURE design choice: preserve a competent direct decision model and use grounded supervision as a constrained retrieved-evidence signal rather than continuously modifying the anchor's decision boundary.
+
+\subsection{Matched-recipe explanation supervision control}\label{sec:matched-exp}
+To separate the rationale objective from training exposure, we also ran a five-fold control in which verdict-only and explanation-supervised models use the same B18 training script and optimizer schedule. The explanation model obtains .65757 aggregate MF1 versus .65762 for the matched verdict-only control ($\Delta=-.00006$; bootstrap $P(\Delta>0)=.4940$). Applying the frozen asymmetric router to this matched explanation expert yields .65898, only +.00135 over the control ($P(\Delta>0)=.7273$). Thus, the available matched control does \emph{not} establish that structured rationale loss alone improves average verdict accuracy. We retain the explanation-grounded branch because it yields a complementary NEI-oriented signal under the registered AND interface, but make no stronger causal claim about the source of that complementarity.
 
 \section{Efficiency and Robustness Analysis}
 \subsection{Inference efficiency}
