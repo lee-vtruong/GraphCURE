@@ -1,0 +1,214 @@
+\documentclass[11pt]{article}
+\usepackage[review]{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{url}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\title{Selective Epistemic Deferral for Evidence-Grounded Multimodal Fact Checking}
+\author{Anonymous ACL Submission}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Multimodal fact-checking systems often treat every retrieved evidence item and every expert as equally useful. This is problematic when retrieval contains distractors or when a verifier is overconfident despite insufficient evidence. We study this failure mode on MOCHEG, a multimodal fact-checking benchmark with textual and visual evidence, while using a controlled text-evidence protocol so that retrieval and verification effects can be isolated. We introduce GraphCURE-B18B, a heterogeneous dual-expert verifier with asymmetric epistemic deferral: a direct verdict expert handles ordinary decisions, while a grounded-rationale expert can override the decision with ``not enough information'' when its estimated evidence sufficiency is high. The policy is selected on validation only and frozen before test evaluation. On the frozen validation split, B18B improves Macro-F1 from 0.6920 to 0.7112 (+1.92 points), with 10,000-sample paired bootstrap $P(\Delta>0)=0.9975$. Subgroup analysis shows that gains concentrate on rank-one evidence and NEI claims, while retrieval misses remain a failure mode. A secondary disagreement-aware distillation model, B19, compresses the complementary experts into one model and reaches 0.5494 Macro-F1 on the raw official test split at roughly eight times higher throughput than the eight-member B18B ensemble. We report official and strict test protocols separately and identify unresolved artifact inconsistencies explicitly.
+\end{abstract}
+
+\section{Introduction}
+Automated fact checking is commonly decomposed into evidence retrieval and claim verification \citep{guo2022survey,thorne2018fever}. Modern systems increasingly retrieve heterogeneous evidence and use large language models, but two assumptions remain fragile: that all retrieved passages should be consumed by the verifier, and that an expert trained for verdict prediction is also calibrated about evidence sufficiency. These assumptions are particularly consequential for multimodal fact checking, where evidence may be noisy, missing, duplicated, or distributed across modalities.
+
+MOCHEG \citep{yao2023mocheg} provides a useful setting because it couples three-way truthfulness labels with retrieved textual and visual evidence and explanations. Existing MOCHEG systems model cross-modal interactions directly, for example with hypergraph transformers \citep{pang2025hgtmfc}. However, comparisons are difficult when systems use different retrieval assumptions. We therefore first establish a fixed-corpus, text-retrieval protocol and then study the verifier and routing decisions under identical evidence.
+
+Our central observation is that two verifiers have complementary error profiles. A direct verifier is strong when evidence appears decisive but can over-commit under missing evidence. A grounded expert, trained with structured explanations, is more sensitive to insufficiency but is not uniformly better. We turn this complementarity into a selective policy rather than averaging the experts. The direct expert remains the default; only a high-confidence grounded NEI signal can defer the decision.
+
+Our contributions are:
+\begin{itemize}
+\item a reproducible, protocol-separated study of evidence-grounded verification on MOCHEG;
+\item GraphCURE-B18B, an asymmetric epistemic-deferral policy combining direct and grounded experts;
+\item a complete component, evidence-count, subgroup, and efficiency analysis; and
+\item B19, a secondary disagreement-aware distillation route that trades ensemble compute for a single student model.
+\end{itemize}
+We do not claim that every number in the internal development history is directly comparable. Official-test claims are restricted to frozen, auditable artifacts; unresolved discrepancies are marked in Section~\ref{sec:limitations}.
+
+\section{Related Work}
+\paragraph{Fact verification.} FEVER introduced evidence-supported three-way verification at scale \citep{thorne2018fever}; LIAR explored short political statements and fine-grained truthfulness \citep{wang2017liar}; MultiFC expanded fact checking across fact-checking sources \citep{augenstein2019multifc}. Surveys describe retrieval, evidence selection, and verification as coupled but distinct stages \citep{guo2022survey}.
+
+\paragraph{Retrieval and reasoning.} Recent work emphasizes that retrieval quality can dominate verification quality. RAV combines hybrid retrieval with joint verification \citep{zheng2024rav}, while RAFTS synthesizes contrasting arguments from retrieved evidence \citep{yue2024rafts}. Realistic open-domain pipelines additionally decompose claims and retrieve evidence from the wild \citep{chen2024complex}. These systems motivate our strict separation between fixed-corpus experiments and open-web experiments.
+
+\paragraph{Multimodal fact checking.} MOCHEG introduced end-to-end multimodal fact checking and explanation generation \citep{yao2023mocheg}. HGTMFC uses hypergraph and line-graph propagation to model high-order interactions between claims and multimodal evidence \citep{pang2025hgtmfc}. AMuFC argues that visual evidence should be used adaptively rather than universally \citep{jung2026amufc}. Our work shares the adaptive-evidence motivation, but studies an epistemic routing problem between verifier experts under a fixed textual retrieval protocol.
+
+\section{Task Definition and Protocols}
+Given a claim $c$ and retrieved evidence $E=\{e_j\}_{j=1}^{K}$, predict $y\in\{\textsc{Supported},\textsc{Refuted},\textsc{NEI}\}$. The principal P1 protocol uses MOCHEG's fixed corpus and upstream text retrieval; it is not an open-web evaluation. The raw official test contains 2,442 claims. A strict robustness track removes eight verbatim cross-split duplicates and contains 2,434 claims. We report both tracks separately. Development validation contains 1,456 claims.
+
+All routing thresholds are selected on validation or train-only out-of-fold data. Test labels are never used for selecting a seed, threshold, or policy in the confirmatory result. Open-web experiments in Phase C are not mixed into P1 tables.
+
+\section{Method}
+\subsection{Direct and grounded experts}
+The direct expert $f_D$ receives the claim and the top-$K$ retrieved passages and predicts a distribution $p_D(y\mid c,E)$. It is trained with verdict cross-entropy. The grounded expert $f_G$ uses the same evidence but is additionally trained from structured teacher explanations containing a verdict, key evidence identifiers, and missing-information fields. At inference it emits only the three-way verdict distribution; explanation generation is not required.
+
+\subsection{Asymmetric epistemic deferral}
+The policy uses the direct expert as an anchor:
+\begin{equation}
+\resizebox{0.96\columnwidth}{!}{$
+ \hat y = \begin{cases}
+ \textsc{NEI}, & \arg\max_y p_G(y)=\textsc{NEI}\ \land\ p_G(\textsc{NEI})\ge\tau,\\
+ \arg\max_y p_D(y), & \text{otherwise.}
+ \end{cases}$}
+\end{equation}
+We use $\tau=0.49$, selected on validation and frozen thereafter. This rule is intentionally asymmetric: the grounded expert is not permitted to overwrite a direct Supported or Refuted decision with another decisive class. It can only defer when it detects insufficiency. This is different from posterior averaging, confidence routing, or an oracle router.
+
+\subsection{Disagreement-aware distillation}
+B19 is a secondary single-model variant. Let $q_D$ and $q_G$ be frozen teacher distributions. The student minimizes
+\begin{equation}
+ \mathcal L=\mathcal L_{\mathrm{CE}}+\lambda_{\mathrm{KD}}T^2\mathrm{KL}(q\|p_S)+\lambda_{\mathrm{cf}}\mathcal L_{\mathrm{cf}},
+\end{equation}
+where $q$ selects the correct teacher on teacher disagreement and averages the teachers when both agree. A counterfactual loss compares evidence sets with and without teacher-identified key passages. This model is reported as a compute-efficient secondary contribution, not as a replacement for the main B18B routing analysis.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.95\columnwidth}{\small Claim $+$ retrieved passages $\rightarrow$ Direct verdict expert $f_D$; the same input $\rightarrow$ Grounded sufficiency expert $f_G$. If $f_G$ predicts NEI with probability at least $\tau$, defer to NEI; otherwise retain $f_D$.}}
+\caption{GraphCURE-B18B inference policy. The grounded branch is a selective epistemic sensor, not a symmetric replacement classifier.}
+\label{fig:method}
+\end{figure}
+
+\section{Experimental Setup}
+\subsection{Data and preprocessing}
+MOCHEG contains claims from PolitiFact and Snopes with text, image, and social evidence \citep{yao2023mocheg}. Our P1 experiments use the project manifest, fixed text corpus, and Qwen3 dense/reranked retrieval. We retain upstream retrieval order and use $K=5$ passages unless an evidence ablation changes $K$. No gold evidence is injected at validation or test.
+
+\begin{table}[t]
+\centering\small
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrr>{\raggedright\arraybackslash}p{2.0cm}@{}}
+\toprule
+Split/protocol & Claims & Labels used for selection & Role\\
+\midrule
+Train & 11,631 & train only & optimization\\
+Validation & 1,456 & validation & frozen policy selection\\
+Official test & 2,442 & no & primary benchmark\\
+Strict test & 2,434 & no & duplicate-robustness\\
+\bottomrule
+\end{tabular}}
+\caption{Protocol sizes. Official and strict test results are not pooled.}
+\label{tab:splits}
+\end{table}
+
+\subsection{Models and metrics}
+All verifiers use Qwen3-4B-Instruct-2507 with LoRA adapters. The B1 anchor uses five seeds; B18A uses grounded rationale distillation; B18B combines the frozen direct and grounded predictions. We report accuracy, class F1, Macro-F1, ECE when available, paired bootstrap intervals, and exact McNemar tests. Bootstrap samples are drawn at the claim level with 10,000 iterations.
+
+\subsection{Baselines and comparison discipline}
+Baselines include direct-only, grounded-only, equal posterior averaging, symmetric confidence routing, no-asymmetric-NEI routing, and oracle routing. Literature scores are reported in a separate protocol-aware table. MOCHEG, HGTMFC, AMuFC, RAV, RAFTS, and open-web systems do not necessarily share evidence, split, or metric definitions; therefore a row is not treated as a direct leaderboard comparison unless its protocol is explicitly aligned.
+
+\section{Main Results}
+\subsection{Frozen validation and ablations}
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Variant & Accuracy & Macro-F1 & $\Delta$ vs A8\\
+\midrule
+A0 Direct-only & .700549 & .692045 & -.019160\\
+A1 Grounded-only & .706731 & .701191 & -.010014\\
+A2 Equal ensemble & .699863 & .692773 & -.018432\\
+A3 Symmetric confidence & .698489 & .691095 & -.020110\\
+A4 No asymmetric NEI & .710165 & .704436 & -.006769\\
+A5 Disagreement-only & .706731 & .701191 & -.010014\\
+A6 Max-confidence-only & .698489 & .691095 & -.020110\\
+A8 Full B18B & \textbf{.714973} & \textbf{.711205} & \textbf{0}\\
+\bottomrule
+\end{tabular}
+\caption{Frozen validation component ablations. A8 is the registered asymmetric policy with $\tau=.49$.}
+\label{tab:ablation}
+\end{table}
+
+\paragraph{Broader prior-work inventory.}
+Table~\ref{tab:prior-inventory} lists more than ten relevant systems and benchmarks.  The inventory is intentionally protocol-aware: a dash means that the source does not report a score that is directly comparable to our P1 fixed-corpus setting.  Thus the table provides positioning, not a merged leaderboard.
+\begin{table}[t]
+\centering\scriptsize
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}p{1.65cm}p{1.55cm}p{1.55cm}p{2.0cm}@{}}
+\toprule
+Work & Task/data & Reported result & Comparable to P1?\\
+\midrule
+FEVER & fact verification & F1 (official) & No: Wikipedia evidence\\
+LIAR & political claims & accuracy/F1 & No: short statements\\
+MultiFC & multi-source FC & macro-F1 & No: source-specific setup\\
+UKP-Athene & FEVER & F1 & No: different evidence\\
+MOCHEG & multimodal FC & F1=.4406 & Closest benchmark\\
+HGTMFC & MOCHEG & F1=.4678 & Same data; protocol differs\\
+RAV & open-domain FC & retrieval/FC metrics & No: open retrieval\\
+RAFTS & evidence reasoning & FC metrics & No: synthetic contrasts\\
+Complex Claim Verification & open-domain claims & FC metrics & No: decomposed claims\\
+AMuFC & multimodal FC & F1=.5400/.5460 & Setting differs\\
+GraphCURE-B1 & MOCHEG P1 & MF1=.5453 & Aligned raw P1\\
+GraphCURE-B18A & MOCHEG P1 & MF1=.5551 & Aligned raw P1\\
+\bottomrule
+\end{tabular}}
+\caption{Broader positioning inventory.  Scores are reproduced only when the cited source or frozen project artifact reports them; otherwise the result is marked as not directly comparable.}\label{tab:prior-inventory}
+\end{table}
+
+B18B is the strongest registered validation variant. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Removing the asymmetric NEI rule reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. These comparisons support the claim that the gain is due to the decision policy rather than simply adding a second model.
+
+\begin{table}[t]
+\centering\scriptsize
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrr>{\raggedright\arraybackslash}p{1.65cm}@{}}
+\toprule
+System & Macro-F1 & Accuracy & Protocol\\
+\midrule
+AMuFC & .5400 & .5460 & raw P1, source Table 3\\
+HGTMFC & .4678 & .4861 & raw P1\\
+B1 five-seed & .5453 & .5680 & raw P1\\
+B18A super-ensemble & .5551 & .5754 & raw P1\\
+B19 DKD seed 87 & .5494 & .5676 & raw P1\\
+B18B & \todo{canonicalize} & \todo{canonicalize} & strict/raw artifact\\
+\bottomrule
+\end{tabular}}
+\caption{Protocol-aware external comparison. Only rows with verified aligned settings should be interpreted as a direct comparison. B18B test values require reconciliation of two project artifacts before submission.}
+\label{tab:sota}
+\end{table}
+
+\subsection{Official test results and leakage control}
+The frozen B18A heterogeneous ensemble reaches Macro-F1 $0.55507$ and accuracy $0.57535$ on raw P1 official test, compared with the B1 five-seed baseline of $0.54531$ and $0.56798$. The paired bootstrap probability of improvement is $0.9839$ with CI $[+0.00097,+0.01850]$. B19 disagreement distillation reaches Macro-F1 $0.54940$ with one student model. These numbers were produced after validation-only freezing.
+
+The test-peak $\tau=0.60$ result (Macro-F1 $0.56166$) is exploratory and is not used as the main claim because the threshold was identified after inspecting test outcomes. Similarly, any B18B row whose canonical prediction file is not yet reconciled remains TODO.
+
+\section{Efficiency and Robustness Analysis}
+\subsection{Inference efficiency}
+On an RTX 5090 with 256 common validation claims, batch size 4, and two warm-up batches, direct, grounded, B18B, and B19 systems require 320.72, 193.17, 513.88, and 64.47 ms per claim, respectively. B19 is approximately 7.97 times faster than B18B. All ensemble timings are sequential; peak allocated memory is therefore a per-checkpoint peak, not a simultaneous eight-model memory requirement.
+
+\subsection{Subgroup behavior}
+On the frozen validation audit, B18B improves Macro-F1 by 1.916 points, with 58 helpful and 37 harmful changes. The gain is largest for NEI (+3.239), rank-one evidence (+2.772), evidence hits (+2.280), and Snopes (+1.994). Retrieval misses decrease by 3.223 points and supported claims decrease by 1.404 points. These results suggest that the method is an evidence-sufficiency correction, not a universal replacement for direct verification.
+
+\subsection{B19 distillation}
+Five-fold train-only OOF confirmation gives B19 control Macro-F1 0.660788 and disagreement-KD Macro-F1 0.667607, a +0.006819 difference. Four of five folds improve and paired bootstrap $P(\Delta>0)=0.9517$. This supports B19 as a practical compression of complementary expertise, while B18B remains the main routing contribution.
+
+\section{Error Analysis}
+The dominant helpful transition is direct Refuted/Supported to grounded NEI on gold NEI claims. Harmful transitions are direct Supported to NEI (28 cases) and direct Refuted to NEI (9 cases). This asymmetry explains why B18B improves NEI while slightly reducing decisive-class F1. The failure atlas also shows that routing under missing or rank-2--5 evidence is less reliable. A future system should estimate retrieval reliability before allowing deferral, but using gold rank or QREL status at inference would be invalid.
+
+\section{Discussion}
+The results support a narrow interpretation of the contribution. Evidence-grounded explanations are useful as a sufficiency sensor, but explanation supervision alone is not consistently beneficial: a matched explanation-loss ablation produced approximately zero aggregate gain. The useful object is the asymmetric interface between epistemic sensing and verdict prediction. This interface also exposes a compute--quality trade-off: B18B uses eight sequential expert passes, whereas B19 compresses the complementarity into one student.
+
+\section{Limitations and Ethical Considerations}\label{sec:limitations}
+MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live web robustness. The grounded expert inherits teacher errors and pseudo-label noise. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. The current repository contains inconsistent B18B test summaries; the final paper must replace the TODO row with a checksum-matched canonical evaluation. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
+
+\section{Conclusion}
+We presented GraphCURE-B18B, a dual-expert asymmetric epistemic-deferral policy for evidence-grounded fact checking. On frozen validation it improves Macro-F1 by 1.92 points with strong paired-bootstrap evidence, and subgroup analysis attributes the gain to correcting NEI decisions when high-quality evidence is available. B19 demonstrates that complementary experts can be compressed into a single efficient student. The remaining priority is canonicalizing the B18B official-test artifact and evaluating frozen policies on an external dataset before making a broad cross-domain claim.
+
+\section*{Acknowledgments}
+\todo{Add authors, affiliations, funding, and reproducibility URL after unblinding.}
+
+\bibliography{references}
+
+\appendix
+\section{Reproducibility Checklist}
+The repository records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. The main scripts are `train\_mocheg\_qwen3\_lora\_verifier.py`, `analyze\_mocheg\_b18b\_component\_ablations.py`, `analyze\_mocheg\_b18b\_subgroups.py`, and `benchmark\_mocheg\_b18b\_efficiency.py`. Before submission, add exact GPU driver versions, package lock information, canonical B18B test hashes, and author metadata.
+
+\end{document}
