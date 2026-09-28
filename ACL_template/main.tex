@@ -21,7 +21,7 @@
 \maketitle
 
 \begin{abstract}
-Fact verifiers often conflate two distinct decisions: which verdict is most likely and whether the retrieved evidence is sufficient to support a decisive verdict. We study this distinction in a fixed-corpus, text-evidence MOCHEG protocol. \textsc{CURE} (\textbf{C}onstrained \textbf{U}ncertainty \textbf{R}outing with Explanation-Grounded \textbf{E}xperts) combines a verdict-trained direct expert with an explanation-grounded expert. Its \emph{Asymmetric NEI Deferral} rule preserves the direct verdict by default and permits only a high-confidence grounded \textsc{NEI} prediction to defer the output. On frozen validation, this constrained rule improves Macro-F1 from 0.6920 to 0.7112 (+1.92 points; paired-bootstrap $P(\Delta>0)=0.9975$), whereas equal averaging and symmetric confidence routing do not. The gains concentrate on gold \textsc{NEI} claims with retrieved evidence available, while retrieval misses remain a failure mode. Separately, a validation-selected heterogeneous ensemble reaches 0.5551 Macro-F1 on the raw official P1 test ($n=2{,}442$); we report it as a competitive system variant rather than an evaluation of the routing rule because the latter's canonical raw-test artifact is not yet reconciled. We also report a disagreement-distilled one-model extension for efficient deployment.
+Fact verifiers often conflate two distinct decisions: which verdict is most likely and whether the retrieved evidence is sufficient to support a decisive verdict. We study this distinction in a fixed-corpus, text-evidence MOCHEG protocol. \textsc{CURE} (\textbf{C}onstrained \textbf{U}ncertainty \textbf{R}outing with Explanation-Grounded \textbf{E}xperts) combines a verdict-trained direct expert with an explanation-grounded expert. Its \emph{Asymmetric NEI Deferral} rule preserves the direct verdict by default and permits only a high-confidence grounded \textsc{NEI} prediction to defer the output. On frozen validation, this constrained rule improves Macro-F1 from 0.6920 to 0.7112 (+1.92 points; paired-bootstrap $P(\Delta>0)=0.9975$), whereas equal averaging and symmetric confidence routing do not. In checksum-audited P1 test inference with frozen $K=5$ and $\tau=.49$, AND improves Macro-F1 by +0.00977 on raw official test ($n=2{,}442$) and +0.00943 on duplicate-safe strict test ($n=2{,}434$). The gains concentrate on \textsc{NEI} claims with retrieved evidence available, while retrieval misses remain a failure mode. A separate validation-selected heterogeneous ensemble reaches 0.5551 Macro-F1 on raw P1, and a disagreement-distilled student offers a lower-latency extension.
 \end{abstract}
 
 \section{Introduction}
@@ -38,7 +38,7 @@ Our contributions are:
 \item an analysis showing that the benefit is concentrated in \textsc{NEI} cases with high-quality retrieved evidence, not a universal improvement across labels or retrieval conditions; and
 \item a disagreement-distilled student as a secondary, lower-latency deployment extension.
 \end{itemize}
-We distinguish confirmatory results from development diagnostics. The heterogeneous ensemble's official-test result and the routing rule's frozen-validation result answer different questions; the unresolved routing raw-test artifact is not used to claim official-test routing superiority.
+We distinguish confirmatory results from development diagnostics. The heterogeneous ensemble and AND answer different questions: the former tests broad probability complementarity, while the latter tests a registered, class-constrained decision policy. Both are evaluated on their respective frozen test protocols without test-time parameter selection.
 
 \section{Related Work}
 \paragraph{Fact verification and evidence sufficiency.} FEVER established evidence-supported three-way verification at scale \citep{thorne2018fever}; LIAR studied short political claims \citep{wang2017liar}; and MultiFC broadened evaluation across sources and domains \citep{augenstein2019multifc}. These benchmarks make clear that label prediction and evidence sufficiency are not identical. Surveys consequently treat retrieval, evidence selection, reasoning, and calibration as coupled but distinct stages \citep{guo2022survey}. UKP-Athene illustrates the role of multi-sentence textual entailment in evidence-based verification \citep{hanselowski2019ukpathene}.
@@ -182,13 +182,14 @@ Entailed Opinion \citep{kumar2025entailed} & arXiv 2025 & domain-generalization 
 AMuFC \citep{jung2026amufc} & HCAI/CIKM 2025; arXiv 2026 & retrieved text+image, raw test & .5460 & MF1 .5400 & aligned raw P1 challenger\\
 CURE Direct ensemble & this work & fixed corpus, raw P1 $n=2442$ & .5680 & MF1 .5453 & aligned raw P1\\
 CURE Grounded seed 100 & this work & fixed corpus, raw P1 $n=2442$ & .5696 & MF1 .5513 & aligned raw P1, one seed\\
+CURE AND (5+3 experts) & this work & fixed corpus, frozen $K=5,\tau=.49$, raw P1 & .5713 & MF1 .5547 & aligned raw P1, canonical router\\
 CURE-Ensemble (8-model) & this work & validation-selected, raw P1 $n=2442$ & \textbf{.5754} & \textbf{MF1 .5551} & aligned raw P1, confirmatory variant\\
 \bottomrule
 \end{tabular}}
 \caption{Protocol-aware comparison with prior work. ``Aligned'' means raw MOCHEG P1 test with system-retrieved evidence; it does not assert identical retrievers or model capacity. The table has more than ten prior/system rows, but only aligned rows may be used for a direct point-estimate comparison.}\label{tab:prior-inventory}
 \end{table*}
 
-AND is the strongest frozen validation policy. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Replacing the class-constrained rule by an unconstrained confident switch reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. The grounded-only branch is useful (+0.915 over A0) but remains 1.001 points below AND. These comparisons are consistent with the value of the asymmetric interface; they do not by themselves establish official-test routing superiority.
+AND is the strongest frozen validation policy. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Replacing the class-constrained rule by an unconstrained confident switch reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. The grounded-only branch is useful (+0.915 over A0) but remains 1.001 points below AND. The independently inferred raw and strict P1 results below retain the direction of this effect, while their uncertainty intervals require a cautious interpretation.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -221,7 +222,7 @@ $\tau$ & Validation MF1 & Status\\
 .70 & .70420 & sensitivity\\
 \bottomrule
 \end{tabular}
-\caption{Validation threshold sensitivity for AND. $\tau=.49$ is frozen for the registered condition. We omit unreconciled raw-test threshold sweeps from the main paper; they are not evidence of confirmatory routing performance.}\label{tab:threshold}
+\caption{Validation threshold sensitivity for AND. $\tau=.49$ is frozen for the registered condition. No raw-test threshold sweep is used for parameter selection.}\label{tab:threshold}
 \end{table}
 
 \begin{table}[t]
@@ -236,17 +237,18 @@ CURE Grounded seed 87 & .5394 & .5606 & one seed\\
 CURE Grounded seed 100 & .5513 & .5696 & best single grounded seed\\
 CURE-Ensemble full 10-member & .5512 & .5717 & unpruned control\\
 CURE-Ensemble selected 8-member & \textbf{.5551} & \textbf{.5754} & confirmatory benchmark variant\\
+\textsc{CURE} AND (5+3 experts) & .5547 & .5713 & canonical frozen router\\
 CURE-Student DKD seed 87 & .5494 & .5676 & raw P1, one seed\\
 \bottomrule
 \end{tabular}}
-\caption{Raw official P1 test ($n=2{,}442$) for frozen CURE system variants. The selected heterogeneous ensemble is a confirmatory benchmark variant. AND is intentionally absent because no checksum-matched raw-test routing artifact is available.}
+\caption{Raw official P1 test ($n=2{,}442$) for frozen CURE system variants. CURE-Ensemble and AND use distinct, validation-frozen compositions/policies and should not be read as interchangeable ablations. AND uses registered $K=5,\tau=.49$ with independently inferred raw-P1 predictions.}
 \label{tab:sota}
 \end{table}
 
 \subsection{Official test results and leakage control}
 The frozen CURE-Ensemble reaches Macro-F1 $0.55507$ and accuracy $0.57535$ on raw P1 official test, compared with $0.54531$ and $0.56798$ for the direct five-seed ensemble. The paired bootstrap probability of improvement is $0.9839$ with CI $[+0.00097,+0.01850]$. Its score is higher than AMuFC's reported raw-P1 point estimate (Macro-F1 .5400; accuracy .5460), but this is not a paired comparison and the two systems differ in retrieval, backbone, and modality use. We therefore report it as a protocol-aligned point estimate rather than a claim of statistical superiority or state of the art. CURE-Student disagreement distillation reaches Macro-F1 $0.54940$ with one student seed; it is an efficiency diagnostic, not a multi-seed official-test comparison.
 
-AND's current raw/strict test files are not checksum-matched under one common ID manifest. We therefore make no official-test effectiveness claim for AND, omit all raw-test threshold sweeps, and report the available strict-intersection result only as an appendix diagnostic. Resolving this artifact is a prerequisite for a final routing-test claim.
+AND now has canonical test artifacts on both tracks. On raw P1, AND obtains .55470 Macro-F1 and .57125 accuracy, compared with its independently inferred direct anchor's .54493 and .56798: $\Delta$MF1=+.00977, with 86 helpful and 78 harmful changes and paired bootstrap $P(\Delta>0)=.9546$. On strict P1, it obtains .55433 versus .54490 ($\Delta$MF1=+.00943; 84/77 helpful/harmful; $P(\Delta>0)=.9485$). The raw result passes the preregistered probability-of-superiority threshold by a narrow margin; the strict result is consistent in point estimate but narrowly below that probability threshold. The percentile intervals include zero on both tracks, and McNemar tests are non-significant, so we treat this as confirmatory but modest evidence rather than a claim of large or unqualified statistical superiority. Both reports record manifest, retrieval, input-prediction, and materialized-output hashes. Because raw and strict ranked evidence differ for some shared IDs, each track is inferred independently from the same frozen checkpoints; no intersection or test-time tuning is used.
 
 \section{Additional Ablations and Negative Results}
 \subsection{Sentence-selection branch}
@@ -338,10 +340,10 @@ The dominant helpful transition is direct Refuted/Supported to grounded \textsc{
 The results support a narrow interpretation of the contribution. Explanation-grounded training creates a complementary retrieved-evidence \textsc{NEI} signal, but explanation supervision alone is not consistently beneficial: a matched explanation-loss ablation produced approximately zero aggregate gain. The useful object is the asymmetric interface between a sufficiency-oriented signal and verdict prediction. This interface also exposes a compute--quality trade-off: AND uses eight sequential expert passes, whereas B19 compresses complementary teacher behavior into one student. A direct-expert \textsc{NEI}-threshold baseline and a dedicated sufficiency-detection AUROC/AUPRC study remain necessary before claiming that the grounded probability is a calibrated insufficiency detector.
 
 \section{Limitations and Ethical Considerations}\label{sec:limitations}
-MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live-web robustness or establish multimodal effectiveness. The grounded expert inherits teacher errors and pseudo-label noise; moreover, teacher rationales are conditioned on the gold \emph{training} verdict, which is appropriate for training but prevents the rationale channel from being interpreted as independent supervision. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. The current AND test files have a direct/grounded ID-alignment discrepancy, so this paper makes no raw official-test claim for routing. A checksum-matched rerun on raw and strict manifests, a direct \textsc{NEI}-threshold baseline, a teacher-capacity ablation, and an external dataset are necessary before submission. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
+MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live-web robustness or establish multimodal effectiveness. The grounded expert inherits teacher errors and pseudo-label noise; moreover, teacher rationales are conditioned on the gold \emph{training} verdict, which is appropriate for training but prevents the rationale channel from being interpreted as independent supervision. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. Although AND now has independently inferred, checksum-audited raw and strict test artifacts, its 95\% paired-bootstrap intervals include zero and its strict-track superiority probability is .9485; stronger multi-dataset confirmation is necessary before broad generalization claims. A direct \textsc{NEI}-threshold baseline, a teacher-capacity ablation, and an external dataset remain necessary before submission. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
 
 \section{Conclusion}
-We presented \textsc{CURE}, a dual-expert constrained routing framework for retrieved-evidence fact verification. Its AND rule improves frozen-validation Macro-F1 by 1.92 points and concentrates gains on \textsc{NEI} decisions when high-quality evidence is retrieved. CURE-Ensemble provides a separate validation-selected official-test benchmark variant, while B19 demonstrates a one-model compression extension. The next required step is a checksum-matched AND rerun on raw and strict test manifests; until then, the routing contribution should be interpreted as a controlled validation mechanism study rather than an official-test claim.
+We presented \textsc{CURE}, a dual-expert constrained routing framework for retrieved-evidence fact verification. Its AND rule improves frozen-validation Macro-F1 by 1.92 points and improves independently inferred raw/strict P1 test Macro-F1 by .977/.943 points under a frozen $K=5,\tau=.49$ policy. The effect is modest and uncertainty-aware: only raw P1 clears the preregistered .95 bootstrap-probability gate. CURE-Ensemble provides a separate validation-selected benchmark variant, while B19 demonstrates a one-model compression extension. The next research steps are external-dataset confirmation and sharper retrieval-reliability gating, rather than post-hoc policy tuning on P1.
 
 \section*{Acknowledgments}
 Omitted for anonymous review.
@@ -401,7 +403,7 @@ Aggregate & .660788 & .667607 & +.006819\\
 \end{table}
 
 \section{Raw versus Strict Test Reporting}
-The raw official test ($n=2{,}442$) is the primary literature-comparison track. The strict test ($n=2{,}434$) removes eight verbatim cross-split duplicates and is a robustness track only. Table~\ref{tab:raw-strict} does not merge the two populations. The internal B18B routing output has an alignment/intersection artifact documented in project logs; until a checksum-matched re-evaluation produces a raw and strict pair, it remains a robustness diagnostic rather than a headline test result.
+The raw official test ($n=2{,}442$) is the primary literature-comparison track. The strict test ($n=2{,}434$) removes eight verbatim cross-split duplicates and is a robustness track only. Table~\ref{tab:raw-strict} does not merge the two populations. Canonical AND uses independently inferred predictions on each retrieval manifest because their ranked evidence IDs differ for some shared claims; every prediction file is checked against its full manifest rather than evaluated on an intersection.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -415,13 +417,14 @@ B18A CURE-Ensemble & raw official & .57535 & .55507\\
 B18A CURE-Ensemble & strict & .57477 & .55383\\
 B19 seed 87 & raw official & .56757 & .54940\\
 B19 seed 87 & strict & .56615 & .54733\\
-B18B AND router (internal) & strict intersection & .56656 & .54998\\
+B18B AND router & raw official canonical & .57125 & .55470\\
+B18B AND router & strict canonical & .57149 & .55433\\
 \bottomrule
 \end{tabular}
-\caption{Track-separated test results. The internal B18B AND result is not used for the main official-test claim.}\label{tab:raw-strict}
+\caption{Track-separated test results. B18B AND uses frozen $K=5,\tau=.49$ and independently inferred raw/strict predictions; it is not an intersection evaluation.}\label{tab:raw-strict}
 \end{table}
 
 \section{Reproducibility Checklist}
-The repository records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. The main scripts are `train\_mocheg\_qwen3\_lora\_verifier.py`, `train\_mocheg\_b18\_explanation\_verifier.py`, `analyze\_mocheg\_b18b\_component\_ablations.py`, `analyze\_mocheg\_b18b\_subgroups.py`, `train\_mocheg\_b19\_distillation.py`, and `benchmark\_mocheg\_b18b\_efficiency.py`. Before submission, add exact GPU driver versions, package-lock information, canonical B18B raw/strict prediction hashes, author metadata, and a public archival repository link.
+The repository records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. The main scripts are `train\_mocheg\_qwen3\_lora\_verifier.py`, `train\_mocheg\_b18\_explanation\_verifier.py`, `analyze\_mocheg\_b18b\_component\_ablations.py`, `analyze\_mocheg\_b18b\_subgroups.py`, `train\_mocheg\_b19\_distillation.py`, `benchmark\_mocheg\_b18b\_efficiency.py`, and `evaluate\_mocheg\_b18b\_canonical\_router.py`. Before submission, add exact GPU driver versions, package-lock information, author metadata, and a public archival repository link.
 
 \end{document}
