@@ -34,6 +34,19 @@ RAW_DIRECT=()
 STRICT_DIRECT=()
 RAW_RATIONALE=()
 STRICT_RATIONALE=()
+
+# The rationale-trained side is already frozen by the earlier canonical P1
+# audit. Fail before spending GPU time if its matched seed predictions are not
+# present; this script must not silently regenerate or select that arm.
+for seed in "${SEEDS[@]}"; do
+  for required in \
+    "outputs/mocheg_b18a_full/candidate_seed${seed}/best_adapter/adapter_config.json" \
+    "outputs/mocheg_b18a_full/candidate_seed${seed}/test_predictions_canonical_k5.jsonl" \
+    "outputs/mocheg_b18a_full/candidate_seed${seed}/test_predictions_canonical_k5_strict.jsonl"; do
+    [[ -s "$required" ]] || { echo "ERROR: missing frozen rationale artifact: $required" >&2; exit 1; }
+  done
+done
+
 for seed in "${SEEDS[@]}"; do
   run="$OUT/direct_recipe_seed${seed}"
   DIRECT_RUNS+=("$run")
