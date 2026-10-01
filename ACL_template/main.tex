@@ -192,26 +192,32 @@ Strict P1 & AND vs. self-deferral & .54911 & .55433 & +.00523 & .7920\\
 \paragraph{Broader prior-work inventory.}
 Table~\ref{tab:prior-inventory} lists twelve system rows: eight prior-work rows and four rows from this work. It is deliberately \emph{not} a single leaderboard: a reported F-score is preserved as F-score rather than silently renamed Macro-F1; filtered tests, gold evidence, or alternate preprocessing are marked. Only rows labelled ``aligned raw P1'' support an apples-to-apples point-estimate comparison.
 \begin{table*}[t]
-\centering\scriptsize
-\resizebox{\textwidth}{!}{\begin{tabular}{@{}lp{2.15cm}p{2.35cm}rrrp{2.35cm}@{}}
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.13}
+\begin{tabular}{@{}p{2.25cm}p{1.60cm}p{2.90cm}crrp{2.40cm}@{}}
 \toprule
-System & Venue/year & Evidence and evaluation & Models & Acc. & Reported F1 & Comparability\\
+System & Venue/year & Evidence and evaluation & Passes & Acc. & Reported score & Comparison status\\
 \midrule
+\multicolumn{7}{@{}l}{\textit{Prior work: MOCHEG reports (raw-P1-aligned rows are explicitly marked)}}\\
+\addlinespace[-2pt]
 MOCHEG \citep{yao2023mocheg} & SIGIR 2023 & system text+image & -- & -- & F-score .4406 & original benchmark; score label retained\\
 LVLM4FV \citep{tahmasebi2024lvlm4fv} & arXiv 2024 & retrieved text+image & -- & .4510 & micro-F1 .4510 & macro not source-reported\\
 HGTMFC \citep{pang2025hgtmfc} & AAAI 2025 & retrieved text+image, raw test & -- & .4861 & Macro-F1 .4678 & aligned split; different model/retrieval\\
-MetaSumPerceiver \citep{chen2024metasumperceiver} & ACL 2024 & system text+image & -- & -- & F-score .4860 & source does not label it Macro-F1\\
+MetaSum\allowbreak Perceiver \citep{chen2024metasumperceiver} & ACL 2024 & system text+image & -- & -- & F-score .4860 & source does not label it Macro-F1\\
 MEVER \citep{zhang2026mever} & arXiv 2026 & retrieved multimodal & -- & .483$\pm$.021 & MF1 .497$\pm$.012 & custom consistent preprocessing\\
 M-RAV (Qwen2.5-32B) \citep{luu2027mrav} & IPM, 2027 issue & system evidence, filtered $n=2001$ & -- & .5002 & MF1 .5014 & filtered test; not aligned\\
 Entailed Opinion \citep{kumar2025entailed} & arXiv 2025 & domain-generalization setting & -- & -- & MF1 .5700 & not P1 system retrieval\\
-AMuFC \citep{jung2026amufc} & HCAI/CIKM 2025; arXiv 2026 & retrieved text+image, raw test & -- & .5460 & MF1 .5400 & aligned raw P1 challenger\\
-CURE Direct ensemble & this work & fixed corpus, raw P1 $n=2442$ & 5 & .5680 & MF1 .5453 & aligned raw P1\\
-CURE rationale seed 100 & this work & fixed corpus, raw P1 $n=2442$ & 1 & .5696 & MF1 .5513 & aligned raw P1, one seed\\
-CURE AND & this work & fixed corpus, frozen $K=5,\tau=.49$, raw P1 & 8 & .5713 & MF1 .5547 & aligned raw P1, canonical router\\
-CURE-Ensemble & this work & validation-selected, raw P1 $n=2442$ & 8 & \textbf{.5754} & \textbf{MF1 .5551} & aligned raw P1, frozen-test variant\\
+AMuFC \citep{jung2026amufc} & HCAI--CIKM \newline 2025; arXiv 2026 & retrieved text+image, raw test & -- & .5460 & MF1 .5400 & raw-P1 aligned challenger\\
+\addlinespace
+\multicolumn{7}{@{}l}{\textit{This work: frozen raw official P1 ($n=2{,}442$)}}\\
+\addlinespace[-2pt]
+CURE Direct ensemble & this work & fixed corpus; direct argmax & 5 & .5680 & MF1 .5453 & frozen reference artifact\\
+CURE rationale seed 100 & this work & fixed corpus; rationale-trained & 1 & .5696 & MF1 .5513 & single-member diagnostic\\
+CURE AND & this work & fixed corpus; frozen $K=5,\tau=.49$ & 8 & .5713 & MF1 .5547 & canonical constrained router\\
+CURE-Ensemble & this work & fixed corpus; validation-selected blend & 8 & \textbf{.5754} & \textbf{MF1 .5551} & frozen-test variant\\
 \bottomrule
-\end{tabular}}
-\caption{Protocol-aware comparison with prior work. ``Models'' is the number of sequential member forward passes when reported; a dash means not source-reported. ``Aligned'' means raw MOCHEG P1 test with system-retrieved evidence; it does not assert identical retrievers or model capacity. Only aligned rows may be used for a direct point-estimate comparison.}\label{tab:prior-inventory}
+\end{tabular}
+\caption{Protocol-aware comparison with prior work and frozen CURE variants. ``Passes'' is the number of sequential member forward passes when reported; ``--'' means not source-reported. Raw-P1 alignment means the raw MOCHEG test with system-retrieved evidence, not identical retrievers, modalities, backbones, or capacity. Thus, aligned rows support point-estimate context only, not a significance or state-of-the-art claim.}\label{tab:prior-inventory}
 \end{table*}
 
 AND has the highest frozen-validation point estimate in Table~\ref{tab:ablation}. Relative to direct-only it gains 1.916 Macro-F1 points and 1.442 accuracy points. Replacing the class-constrained rule by an unconstrained confident switch reduces Macro-F1 by 0.677 points, whereas equal averaging loses 1.843 points. The rationale-trained-only branch is useful (+0.915 over A0) but remains 1.001 points below AND. AND's validation comparisons against rationale-trained-only ($P=.9470$) and unconstrained switching ($P=.8952$) do not independently clear the reported $.95$ directional-bootstrap reference threshold; they are point-estimate evidence, not decisive mechanism confirmation. The raw and strict P1 results retain the direction of the direct comparison, while their uncertainty intervals require a cautious interpretation.
