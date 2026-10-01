@@ -128,6 +128,9 @@ Baselines include direct-only, rationale-trained-only, equal posterior averaging
 \subsection{Promotion gates and split discipline}
 We report a consistent directional-bootstrap reference threshold of $.95$, together with percentile intervals and exact McNemar tests; it is a reporting criterion rather than a claim of preregistration in this anonymized manuscript. The later duplicate-family-safe development studies use train-only folds, fixed training epochs, compute-matched controls, and fresh confirmation folds. A screen-only gain therefore cannot become an official-test claim. CURE-Ensemble is selected on validation and applied once to test. The post-hoc $\tau=.60$ sensitivity result is reported separately and never used as a frozen-test result. The fixed AND condition uses $K=5$ and $\tau=.49$; a later $K$ sweep is descriptive rather than a retrospective change to this condition.
 
+\paragraph{Multiplicity and inferential scope.}
+The paper reports multiple related development comparisons, controls, and test-track contrasts. We do \emph{not} apply Bonferroni, Holm, or FDR correction because $P(\Delta>0)$ is a directional paired-bootstrap estimate rather than a frequentist $p$-value, and the comparisons do not form a prospectively specified family of independent hypothesis tests. This does not eliminate the risk of selection across many experiments. Accordingly, no individual bootstrap probability---including values near or above .95---is presented as familywise statistical significance, and all such values are accompanied by percentile intervals and, where available, exact McNemar tests. The paper's claims are limited to frozen-policy point estimates and directional replication across raw/strict tracks; causal and superiority claims remain explicitly unresolved.
+
 \section{Main Results}
 \subsection{Mechanism-focused evidence}
 We report only the development evidence needed to assess the proposed mechanism in the main paper. Earlier interventions are retained as a compact appendix ledger. They establish four negative findings: evidence compression did not reliably replace document context; symmetric auxiliary objectives and PCGrad did not generalize; calibration and unconstrained routing alternatives were unstable; and counterfactual curricula failed matched-control confirmation. These failures motivate retaining a competent direct verifier and treating the rationale-trained branch as a constrained \textsc{NEI} signal rather than a universally superior classifier.
@@ -199,7 +202,7 @@ LVLM4FV \citep{tahmasebi2024lvlm4fv} & arXiv 2024 & retrieved text+image & -- & 
 HGTMFC \citep{pang2025hgtmfc} & AAAI 2025 & retrieved text+image, raw test & -- & .4861 & Macro-F1 .4678 & aligned split; different model/retrieval\\
 MetaSumPerceiver \citep{chen2024metasumperceiver} & ACL 2024 & system text+image & -- & -- & F-score .4860 & source does not label it Macro-F1\\
 MEVER \citep{zhang2026mever} & arXiv 2026 & retrieved multimodal & -- & .483$\pm$.021 & MF1 .497$\pm$.012 & custom consistent preprocessing\\
-M-RAV (Qwen2.5-32B) \citep{luu2027mrav} & IPM, forthcoming & system evidence, filtered $n=2001$ & -- & .5002 & MF1 .5014 & filtered test; not aligned\\
+M-RAV (Qwen2.5-32B) \citep{luu2027mrav} & IPM, 2027 issue & system evidence, filtered $n=2001$ & -- & .5002 & MF1 .5014 & filtered test; not aligned\\
 Entailed Opinion \citep{kumar2025entailed} & arXiv 2025 & domain-generalization setting & -- & -- & MF1 .5700 & not P1 system retrieval\\
 AMuFC \citep{jung2026amufc} & HCAI/CIKM 2025; arXiv 2026 & retrieved text+image, raw test & -- & .5460 & MF1 .5400 & aligned raw P1 challenger\\
 CURE Direct ensemble & this work & fixed corpus, raw P1 $n=2442$ & 5 & .5680 & MF1 .5453 & aligned raw P1\\
@@ -267,8 +270,28 @@ CURE-Student DKD seed 87 & .5494 & .5676 & raw P1, one seed\\
 \label{tab:sota}
 \end{table}
 
+\begin{table*}[t]
+\centering\scriptsize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lp{1.70cm}p{1.65cm}p{3.40cm}p{2.30cm}p{2.50cm}@{}}
+\toprule
+Raw-P1 output & Acc./MF1 & Seeds & Training configuration & Decision output & Role; comparability constraint\\
+\midrule
+Legacy direct ensemble & .56798/.54531 & 13,21,42,87,100 & Base direct recipe: $b=1$, accum.=16, lr=$10^{-4}$ & direct argmax & Legacy frozen benchmark; used for CURE-Ensemble reporting\\
+Canonical direct anchor & .56798/.54493 & 13,21,42,87,100 & Same checkpoints and recipe as legacy direct & direct argmax & Independently materialized to align exactly with AND; only paired comparator for AND\\
+Direct self-deferral & --/.54970 & 13,21,42,87,100 & Same base direct checkpoints & direct, except \textsc{NEI} if $p_D(\textsc{NEI})\geq .23$ & Frozen simpler routing control; not a new trained direct model\\
+Headline direct-only & .55569/.53474 & 42,87,100 & Headline recipe: $b=2$, accum.=4, lr=$2\times10^{-4}$, $\lambda_r=0$ & average probabilities then argmax & B20 matched-recipe causal control; not comparable to five-seed legacy score\\
+Rationale seed 100 & .56962/.55128 & 100 & Headline recipe with 7B teacher rationales, $\lambda_r=.25$ & direct argmax & Single-member diagnostic; not an ensemble comparison\\
+Rationale 7B ensemble & .55979/.53986 & 42,87,100 & Same headline rationale recipe, 7B teacher, $\lambda_r=.25$ & average probabilities then argmax & B20/B21 matched reference; probability averaging is worse than seed 100\\
+Rationale 3B ensemble & .56839/.54829 & 42,87,100 & Same headline rationale recipe, 3B teacher, $\lambda_r=.25$ & average probabilities then argmax & B21 teacher-capacity control; no routing policy fitted on test\\
+\bottomrule
+\end{tabular}}
+\caption{Configuration map for raw P1 outputs that could otherwise be called ``direct'' or ``rationale-trained.'' Scores differ because seed sets, optimization recipes, ensemble operators, and/or post-processing differ. Only rows explicitly designated as a paired comparison share a common prediction artifact and should be compared by a paired statistic.}\label{tab:configuration-map}
+\end{table*}
+
 \subsection{Official test results and leakage control}\label{sec:canonical-test}
-The frozen CURE-Ensemble reaches Macro-F1 $0.55507$ and accuracy $0.57535$ on raw P1 official test, compared with $0.54531$ and $0.56798$ for the previously materialized direct five-seed ensemble. The paired bootstrap probability of improvement is $0.9839$ with CI $[+0.00097,+0.01850]$. Its score is higher than AMuFC's reported raw-P1 point estimate (Macro-F1 .5400; accuracy .5460), but this is not a paired comparison and the two systems differ in retrieval, backbone, modality use, and member count. We therefore report it as a protocol-aligned point estimate rather than a claim of statistical superiority or state of the art. CURE-Student disagreement distillation reaches Macro-F1 $0.54940$ for a post-hoc reported single seed (87); it is an exploratory efficiency diagnostic, not a multi-seed or locked-test effectiveness comparison.
+Table~\ref{tab:configuration-map} is the single configuration map for all raw-P1 scores that might otherwise be read as interchangeable direct baselines. It shows that the four direct-family values differ in seed count, recipe, inference artifact, or post-processing; the headline recipe is not a neutral replacement for the legacy direct recipe. On validation, its direct-only control is .00492 MF1 below the base-recipe direct A0 (.68712 vs. .69205); on raw test, its three-seed output is .01057 below the legacy five-seed value. This pattern is consistent with optimization sensitivity or altered class behavior under the higher-learning-rate recipe, and is an alternative explanation for some rationale-branch behavior. The B20 comparison therefore isolates $\lambda_r$ \emph{within} that recipe but cannot establish that the headline recipe itself is harmless. Likewise, the 7B three-seed average (.53986) is lower than its best individual member (seed 100, .55128), so it should not be interpreted as a monotonic ensemble improvement.
+
+The frozen CURE-Ensemble reaches Macro-F1 $0.55507$ and accuracy $0.57535$ on raw P1 official test, compared with $0.54531$ and $0.56798$ for the previously materialized direct five-seed ensemble. The unadjusted paired bootstrap probability of improvement is $0.9839$ with CI $[+0.00097,+0.01850]$; following the multiplicity policy above, this is directional evidence rather than a familywise significance claim. Its score is higher than AMuFC's reported raw-P1 point estimate (Macro-F1 .5400; accuracy .5460), but this is not a paired comparison and the two systems differ in retrieval, backbone, modality use, and member count. We therefore report it as a protocol-aligned point estimate rather than a claim of statistical superiority or state of the art. CURE-Student disagreement distillation reaches Macro-F1 $0.54940$ for a post-hoc reported single seed (87); it is an exploratory efficiency diagnostic, not a multi-seed or locked-test effectiveness comparison.
 
 AND has canonical test artifacts on both tracks. On raw P1, AND obtains .55470 Macro-F1 and .57125 accuracy, compared with its independently inferred direct anchor's .54493 and .56798: $\Delta$MF1=+.00977, with 86 helpful and 78 harmful changes and paired bootstrap $P(\Delta>0)=.9529$. On strict P1, it obtains .55433 versus .54490 ($\Delta$MF1=+.00943; 84/77 helpful/harmful; $P(\Delta>0)=.9477$). The direct-only self-deferral control is weaker on both tracks (.54970 raw and .54911 strict); AND improves on it by +.00500/+.00523 MF1, respectively. The associated probabilities (.7805/.7920) and all test-track percentile intervals include zero, and McNemar tests are non-significant. We therefore treat the replicated direction as modest directional test evidence, not as statistically resolved confirmation.
 
@@ -337,22 +360,7 @@ Strict P1 & .53222 & .53906 & +.00685 & 120/106 & [-.00705,.02049] & .8270\\
 \subsection{Matched teacher-capacity ablation}\label{sec:teacher-capacity}
 The capacity alternative is tested directly rather than inferred from the headline result. We regenerate only the training rationales with Qwen2.5-3B-Instruct, retrain the same Qwen3-4B students with the same explanation weight, data, retrieval, prompts, seeds $\{42,87,100\}$, optimizer recipe, and validation checkpoint protocol, and independently infer both P1 tracks. Thus, the ablation changes teacher capacity but does not add data, gold evidence, student capacity, or test-time tuning.
 
-Table~\ref{tab:teacher-capacity} does not support the hypothesis that the 7B teacher's larger capacity explains the rationale-trained branch: the 3B teacher has higher point estimates on raw (+.00844 MF1 relative to 7B) and strict (+.00753). This direction is consistent across the two independently inferred manifests. It is nevertheless not a statistically resolved claim that 3B is superior: the paired 95\% intervals for 7B minus 3B include zero and $P(\Delta>0)=.1166/.1365$. The defensible conclusion is narrower: within this matched teacher family and protocol, scaling the teacher from 3B to 7B is not evidence for the observed rationale-branch behavior. A plausible explanation is that a smaller teacher produces less noisy or more concise targets, but this remains a hypothesis rather than an identified mechanism.
-
-\begin{table}[t]
-\centering\scriptsize
-\resizebox{\columnwidth}{!}{\begin{tabular}{@{}llrrrrrr@{}}
-\toprule
-Track & Teacher & Acc. & MF1 & F1-S & F1-R & F1-NEI & $P(7\mathrm{B}>3\mathrm{B})$\\
-\midrule
-Raw P1 & Qwen2.5-3B & \textbf{.56839} & \textbf{.54829} & \textbf{.54705} & \textbf{.65437} & \textbf{.44346} & --\\
-Raw P1 & Qwen2.5-7B & .55979 & .53986 & .52416 & .65332 & .44209 & .1166\\
-Strict P1 & Qwen2.5-3B & \textbf{.56738} & \textbf{.54660} & \textbf{.54633} & \textbf{.65466} & \textbf{.43881} & --\\
-Strict P1 & Qwen2.5-7B & .55957 & .53906 & .52424 & .65421 & .43875 & .1365\\
-\bottomrule
-\end{tabular}}
-\caption{Matched teacher-capacity ablation with identical student, data, retrieval, recipe, and seeds. For 7B minus 3B, raw/strict $\Delta$MF1 are $-.00844/-.00753$; 95\% CIs are $[-.02223,.00562]/[-.02147,.00626]$. Test labels select neither teacher, checkpoint, seed, nor policy.}\label{tab:teacher-capacity}
-\end{table}
+The detailed results are in Appendix~\ref{app:teacher-capacity}. The 3B teacher has higher raw/strict point estimates by .00844/.00753 MF1 relative to 7B, but the paired 95\% intervals contain zero and $P(7\mathrm{B}>3\mathrm{B})=.1166/.1365$. Hence, this matched comparison does not support a simple account in which a larger teacher causes the rationale branch's behavior; it also does not establish 3B superiority or identify why the teacher targets differ.
 
 \section{Efficiency and Robustness Analysis}
 \subsection{Inference efficiency}
@@ -424,7 +432,7 @@ The results support a narrow interpretation of the contribution. Rationale-train
 Moreover, a decisive-evidence coverage diagnostic finds that the direct posterior has stronger ranking and calibration than the rationale-trained posterior (AUROC .6486 vs. .6155; Brier .1122 vs. .1406); this diagnostic uses gold labels only after prediction and is never a router input. AND also exceeds a frozen direct self-deferral baseline on both test tracks, although that incremental comparison is not statistically resolved. The useful object is therefore the asymmetric interface between complementary class posteriors, not a demonstrated sufficiency estimator. This interface also exposes a compute--quality trade-off: AND uses eight sequential expert passes, whereas \textsc{CURE}-Student compresses complementary teacher behavior into one student. A stronger external definition of evidence sufficiency remains necessary before claiming that either posterior is calibrated for that construct.
 
 \section{Limitations and Ethical Considerations}\label{sec:limitations}
-MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live-web robustness or establish multimodal effectiveness. The rationale-trained expert inherits teacher errors and pseudo-label noise; moreover, teacher rationales are conditioned on the gold \emph{training} verdict, which is appropriate for training but prevents the rationale channel from being interpreted as independent supervision. Although B21 controls the 3B-versus-7B capacity comparison, it evaluates only two capacities from one teacher family and cannot identify why their target distributions differ. The headline-recipe direct control reduces causal ambiguity and preserves a positive point estimate on both test tracks, but its validation and test intervals include zero. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. Although AND now has independently inferred raw and strict test artifacts, its 95\% paired-bootstrap intervals include zero and strict-track directional evidence is .9477; stronger multi-dataset confirmation is needed before broad generalization claims. External-dataset evaluation and a broader teacher-family study remain future work. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
+MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live-web robustness or establish multimodal effectiveness. The rationale-trained expert inherits teacher errors and pseudo-label noise; moreover, teacher rationales are conditioned on the gold \emph{training} verdict, which is appropriate for training but prevents the rationale channel from being interpreted as independent supervision. Although B21 controls the 3B-versus-7B capacity comparison, it evaluates only two capacities from one teacher family and cannot identify why their target distributions differ. The headline-recipe direct control reduces causal ambiguity and preserves a positive point estimate on both test tracks, but its validation and test intervals include zero. The multiple related development and test comparisons create a real selection/multiplicity risk; we therefore make no familywise significance claim and report all inspected alternatives, including negative results. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. Although AND now has independently inferred raw and strict test artifacts, its 95\% paired-bootstrap intervals include zero and strict-track directional evidence is .9477; stronger multi-dataset confirmation is needed before broad generalization claims. External-dataset evaluation and a broader teacher-family study remain future work. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
 
 \section{Conclusion}
 We presented \textsc{CURE}, a dual-expert constrained routing framework for retrieved-evidence fact verification. Its AND rule improves frozen-validation Macro-F1 by 1.92 points and has raw/strict P1 test point-estimate gains of .977/.943 points under a fixed $K=5,\tau=.49$ policy. A same-recipe direct-only control retains positive raw/strict rationale-trained differences of .512/.685 MF1 points, but their intervals include zero. A matched 3B-versus-7B teacher-capacity ablation does not support simple teacher scaling as the explanation: 3B has higher raw/strict point estimates, while the paired intervals remain unresolved. Thus the routing, recipe-control, and capacity evidence should be read as directional rather than statistically resolved causal proof. CURE-Ensemble provides a separate validation-selected benchmark variant, while \textsc{CURE}-Student demonstrates a one-model compression extension. The next research steps are external-dataset evaluation, broader teacher-family controls, and sharper retrieval-reliability gating, rather than post-hoc policy tuning on P1.
@@ -506,6 +514,24 @@ AND router & strict canonical & .57149 & .55433\\
 \bottomrule
 \end{tabular}
 \caption{Track-separated test results. AND uses fixed $K=5,\tau=.49$ and independently inferred raw/strict predictions; it is not an intersection evaluation.}\label{tab:raw-strict}
+\end{table}
+
+\section{Teacher-Capacity Ablation}\label{app:teacher-capacity}
+The capacity control replaces only Qwen2.5-7B-Instruct, which generates the structured training rationales, with Qwen2.5-3B-Instruct. Student backbone, student recipe, explanation weight, retrieved passages, prompts, seed set $\{42,87,100\}$, and validation checkpoint protocol are held fixed. The tests are independently inferred for their respective raw and strict retrieval manifests; no test label selects a teacher, checkpoint, seed, or policy.
+
+\begin{table}[t]
+\centering\scriptsize
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}llrrrrrr@{}}
+\toprule
+Track & Teacher & Acc. & MF1 & F1-S & F1-R & F1-NEI & $P(7\mathrm{B}>3\mathrm{B})$\\
+\midrule
+Raw P1 & Qwen2.5-3B & \textbf{.56839} & \textbf{.54829} & \textbf{.54705} & \textbf{.65437} & \textbf{.44346} & --\\
+Raw P1 & Qwen2.5-7B & .55979 & .53986 & .52416 & .65332 & .44209 & .1166\\
+Strict P1 & Qwen2.5-3B & \textbf{.56738} & \textbf{.54660} & \textbf{.54633} & \textbf{.65466} & \textbf{.43881} & --\\
+Strict P1 & Qwen2.5-7B & .55957 & .53906 & .52424 & .65421 & .43875 & .1365\\
+\bottomrule
+\end{tabular}}
+\caption{Matched teacher-capacity ablation. For 7B minus 3B, raw/strict $\Delta$MF1 are $-.00844/-.00753$; 95\% CIs are $[-.02223,.00562]/[-.02147,.00626]$. The direction is consistent but not statistically resolved.}\label{tab:teacher-capacity}
 \end{table}
 
 \section{Reproducibility Checklist}
