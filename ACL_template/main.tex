@@ -378,7 +378,7 @@ The detailed results are in Appendix~\ref{app:teacher-capacity}. The 3B teacher 
 
 \section{Efficiency and Robustness Analysis}
 \subsection{Inference efficiency}
-On an RTX 5090 with 256 common validation claims, batch size 4, and two warm-up batches, direct, rationale-trained, AND, and the one-model student require 320.72, 193.17, 513.88, and 64.47 ms per claim, respectively (Table~\ref{tab:efficiency}). AND is therefore 1.60$\times$ slower than its five-pass direct anchor for only a +.00500/+ .00523 unresolved advantage over direct self-deferral on raw/strict test. The student uses one pass instead of the router's eight sequential passes. All ensemble timings are sequential; the repeated 14.74~GiB figure is the maximum allocated memory of one loaded member, not a comparison of total ensemble memory. Subset effectiveness scores produced by this benchmark are diagnostic only.
+On an RTX 5090 with 256 common validation claims, batch size 4, and two warm-up batches, direct, rationale-trained, AND, and the one-model student require 320.72, 193.17, 513.88, and 64.47 ms per claim, respectively (Table~\ref{tab:efficiency}). AND is therefore 1.60$\times$ slower than its five-pass direct anchor for only a +.00500/+ .00523 unresolved advantage over direct self-deferral on raw/strict test. The student uses one pass instead of the router's eight sequential passes. All ensemble timings are sequential; the repeated 14.74~GiB figure is the maximum allocated memory of one loaded member, not a comparison of total ensemble memory. Figure~\ref{fig:compute-quality} provides descriptive quality--cost context: its raw-P1 effectiveness values and validation-subset timing values are deliberately not treated as a paired effectiveness--latency comparison. Subset effectiveness scores produced by this benchmark are diagnostic only.
 
 \begin{table}[t]
 \centering\scriptsize
@@ -394,6 +394,13 @@ CURE-Student & 1 & \textbf{64.47} & \textbf{15.511} & 14.74\\
 \end{tabular}
 \caption{Efficiency benchmark: RTX 5090, 256 claims, batch size 4, two warm-up batches. Model-loading time is excluded.}\label{tab:efficiency}
 \end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/cure_compute_quality_pareto.pdf}
+\caption{Descriptive compute--quality context. Macro-F1 is the reported raw-official P1 point estimate; latency is sequential inference measured on a common 256-claim validation subset. The axes therefore summarize two frozen artifacts and do not constitute a paired effectiveness--cost test.}
+\label{fig:compute-quality}
+\end{figure}
 
 \subsection{Subgroup behavior}
 On the frozen validation audit, AND improves Macro-F1 by 1.916 points, with 58 helpful and 37 harmful changes. Table~\ref{tab:subgroups} separates where this gain occurs. It is largest for NEI (+3.239), rank-one evidence (+2.772), evidence hits (+2.280), and Snopes (+1.994). Retrieval misses decrease by 3.223 points and Supported claims decrease by 1.404 points. These are post-hoc descriptive groups, based partly on diagnostics unavailable at inference. They do not establish that the rationale-trained posterior measures corpus-level insufficiency, particularly under retrieval failure.
