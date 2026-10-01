@@ -69,6 +69,10 @@ bash scripts/run_mocheg_b18b_evidence_k_comparison.sh
 
 # Sequential-member latency and peak allocated GPU memory.
 bash scripts/run_mocheg_b18b_efficiency_benchmark.sh
+
+# CPU-only reporting diagnostics: complementarity, reliability, rank cross-tab,
+# paired-design power approximation, and compute--quality plots.
+bash scripts/run_mocheg_b18b_additional_diagnostics.sh
 ```
 
 Validation ablations are for mechanism and policy development, not test results. The `*_canonical_test.sh` scripts are the test-confirmation entry points. Internal output directory names are retained for reproducibility; the manuscript uses descriptive system names.

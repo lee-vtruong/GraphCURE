@@ -438,7 +438,7 @@ Disagreement KD & \textbf{.6836} & \textbf{.6687} & \textbf{.6276} & \textbf{.54
 \end{table}
 
 \section{Error Analysis}
-The dominant helpful transition is direct Refuted/Supported to rationale-trained \textsc{NEI} on gold \textsc{NEI} claims. Harmful transitions are direct Supported to \textsc{NEI} (28 cases) and direct Refuted to \textsc{NEI} (9 cases). This explains why AND improves \textsc{NEI} while reducing decisive-class F1. Table~\ref{tab:qualitative-patterns} provides the audited transition patterns rather than cherry-picked examples. The failure atlas also shows that routing under missing or rank-2--5 evidence is less reliable. A future system should estimate retrieval reliability before allowing deferral, but using gold rank or QREL status at inference would be invalid.
+The dominant helpful transition is direct Refuted/Supported to rationale-trained \textsc{NEI} on gold \textsc{NEI} claims. Harmful transitions are direct Supported to \textsc{NEI} (28 cases) and direct Refuted to \textsc{NEI} (9 cases). This explains why AND improves \textsc{NEI} while reducing decisive-class F1. Table~\ref{tab:qualitative-patterns} gives the aggregate audit and Table~\ref{tab:qualitative-cases} gives deterministically selected raw-test examples, including non-repairing both-wrong transitions. The failure atlas also shows that routing under missing or rank-2--5 evidence is less reliable. A future system should estimate retrieval reliability before allowing deferral, but using gold rank or QREL status at inference would be invalid.
 
 \section{Discussion}
 The results support a narrow interpretation of the contribution. Rationale-trained and direct experts form a complementary pair, but explanation supervision alone is not consistently beneficial: a matched explanation-loss ablation produced approximately zero aggregate gain. The headline-recipe control is directionally favorable to rationale training, yet its validation and test intervals include zero. Crucially, this limited contrast is recipe-conditional: $\lambda_r>0$ may transfer structured rationale information, or it may partly regularize adverse behavior induced by the headline optimization schedule. It therefore does not establish a recipe-invariant value of rationale supervision. The matched teacher-capacity control further weakens a capacity-based explanation: replacing the 7B rationale teacher with its 3B counterpart raises the raw/strict point estimates by .844/.753 MF1, but neither comparison resolves statistically. Accordingly, the evidence does not identify a causal mechanism within rationale supervision, and it does not support the claim that a larger teacher is responsible for the branch's behavior.
@@ -552,9 +552,9 @@ Refuted & Supported & \textsc{NEI} & both wrong & 4 & Changes one incorrect deci
 
 \begin{table*}[t]
 \centering\small
-\begin{tabular}{@{}p{.19\textwidth}p{.25\textwidth}p{.13\textwidth}p{.34\textwidth}@{}}
+\begin{tabular}{@{}p{.18\textwidth}p{.23\textwidth}p{.13\textwidth}p{.37\textwidth}@{}}
 \toprule
-Transition and ID & Claim & Direct $\rightarrow$ AND & Retrieved-evidence reading and interpretation\\
+Transition and ID & Claim (or abridged cue) & Direct $\rightarrow$ AND & Retrieved-evidence reading and interpretation\\
 \midrule
 Helpful: gold \textsc{NEI}; \newline mocheg-test-claim-100409 &
 ``Over a million people [were] apprehended at the border this year, meaning probably another 2 or 3 million have come in illegally.'' &
@@ -564,10 +564,20 @@ One passage confirms that more than one million people were apprehended in FY202
 Harmful: gold Supported; \newline mocheg-test-claim-101393 &
 ``The Florida 45th Congressional District is among the 10 districts in the nation receiving the least federal funding.'' &
 Supported $\rightarrow$ \textsc{NEI} &
-The retrieved report explicitly places Florida's 45th district among the ten lowest-funded districts. The direct prediction is correct, but AND defers it. This is the characteristic conservative-routing failure: a rationale-trained posterior can trigger \textsc{NEI} despite decisive retrieved support.\\
+The retrieved report explicitly places Florida's 45th district among the ten lowest-funded districts. The direct prediction is correct, but AND defers it. This is an instance of conservative over-deferral: a rationale-trained posterior can trigger \textsc{NEI} despite decisive retrieved support.\\
+\addlinespace
+Both wrong: gold Supported; \newline mocheg-test-claim-10007 &
+Rick Moranis claim &
+Refuted $\rightarrow$ \textsc{NEI} &
+The first retrieved passage concerns Moranis and his children, but the second is an unrelated Biden quotation. The direct expert is already wrong; AND changes the output to another wrong label rather than repairing a retrieval mismatch.\\
+\addlinespace
+Both wrong: gold Refuted; \newline mocheg-test-claim-100909 &
+Pre-existing-condition claim &
+Supported $\rightarrow$ \textsc{NEI} &
+The retrieved material is about a different Biden statement and does not resolve the claim's speaker and proposition. AND avoids the direct expert's unsupported decisive prediction, but the available evidence is still insufficient to recover the gold Refuted label.\\
 \bottomrule
 \end{tabular}
-\caption{Representative raw-official-P1 routing cases. Selection is deterministic: the lexicographically first claim in each predeclared helpful/harmful transition stratum, with at most two retrieved passages inspected per case. Evidence readings are concise author paraphrases, not generated rationales; neither test labels nor these readings are available to AND. The complete frozen case-card artifact contains twelve cases across six strata.}\label{tab:qualitative-cases}
+\caption{Representative raw-official-P1 routing cases. Selection is deterministic: the lexicographically first claim in each predeclared transition stratum, with at most two retrieved passages inspected per case. The two latter rows make explicit that a deferral can be non-repairing when both outputs are wrong. Evidence readings are concise author paraphrases, not generated rationales; neither test labels nor these readings are available to AND. Full claim text and passages for all twelve frozen case cards are retained in the supplementary artifact.}\label{tab:qualitative-cases}
 \end{table*}
 
 \section{Teacher-Capacity Ablation}\label{app:teacher-capacity}
