@@ -398,6 +398,8 @@ CURE-Student & 1 & \textbf{64.47} & \textbf{15.511} & 14.74\\
 \subsection{Subgroup behavior}
 On the frozen validation audit, AND improves Macro-F1 by 1.916 points, with 58 helpful and 37 harmful changes. Table~\ref{tab:subgroups} separates where this gain occurs. It is largest for NEI (+3.239), rank-one evidence (+2.772), evidence hits (+2.280), and Snopes (+1.994). Retrieval misses decrease by 3.223 points and Supported claims decrease by 1.404 points. These are post-hoc descriptive groups, based partly on diagnostics unavailable at inference. They do not establish that the rationale-trained posterior measures corpus-level insufficiency, particularly under retrieval failure.
 
+The direct and rationale-trained experts agree on 85.44\% of validation verdicts (Cohen's $\kappa=.7756$). Their errors are also strongly associated ($\kappa=.7184$; Yule's $Q=.9561$), so ``complementary'' does not mean independent. Still, 90 claims are correct only for the rationale-trained expert and 81 only for the direct expert (Appendix~\ref{app:complementarity}). This limited asymmetric overlap is consistent with a constrained deferral rule, but is not evidence that arbitrary expert switching will be safe.
+
 \begin{table}[t]
 \centering\scriptsize
 \begin{tabular}{@{}lrrr@{}}
@@ -446,7 +448,7 @@ The results support a narrow interpretation of the contribution. Rationale-train
 Moreover, a decisive-evidence coverage diagnostic finds that the direct posterior has stronger ranking and calibration than the rationale-trained posterior (AUROC .6486 vs. .6155; Brier .1122 vs. .1406); this diagnostic uses gold labels only after prediction and is never a router input. AND also exceeds a frozen direct self-deferral baseline on both test tracks, although that incremental comparison is not statistically resolved. The useful object is therefore the asymmetric interface between complementary class posteriors, not a demonstrated sufficiency estimator. This interface also exposes a compute--quality trade-off: AND uses eight sequential expert passes, whereas \textsc{CURE}-Student compresses complementary teacher behavior into one student. A stronger external definition of evidence sufficiency remains necessary before claiming that either posterior is calibrated for that construct.
 
 \section{Limitations and Ethical Considerations}\label{sec:limitations}
-MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live-web robustness or establish multimodal effectiveness. The rationale-trained expert inherits teacher errors and pseudo-label noise; moreover, teacher rationales are conditioned on the gold \emph{training} verdict, which is appropriate for training but prevents the rationale channel from being interpreted as independent supervision. Although the matched teacher-capacity control compares 3B and 7B, it evaluates only two capacities from one teacher family and cannot identify why their target distributions differ. The headline-recipe direct control reduces causal ambiguity and preserves a positive point estimate on both test tracks, but its validation and test intervals include zero and its inference is conditional on that optimization recipe. The multiple related development and test comparisons create a real selection/multiplicity risk; we therefore make no familywise significance claim and report all inspected alternatives, including negative results. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. Although AND now has independently inferred raw and strict test artifacts, its 95\% paired-bootstrap intervals include zero and strict-track directional evidence is .9477; stronger multi-dataset confirmation is needed before broad generalization claims. External-dataset evaluation and a broader teacher-family study remain future work. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
+MOCHEG is a single benchmark with two principal sources and potentially duplicated claims; we therefore report raw and strict tracks. The fixed-corpus protocol does not measure live-web robustness or establish multimodal effectiveness. The rationale-trained expert inherits teacher errors and pseudo-label noise; moreover, teacher rationales are conditioned on the gold \emph{training} verdict, which is appropriate for training but prevents the rationale channel from being interpreted as independent supervision. Although the matched teacher-capacity control compares 3B and 7B, it evaluates only two capacities from one teacher family and cannot identify why their target distributions differ. The headline-recipe direct control reduces causal ambiguity and preserves a positive point estimate on both test tracks, but its validation and test intervals include zero and its inference is conditional on that optimization recipe. The multiple related development and test comparisons create a real selection/multiplicity risk; we therefore make no familywise significance claim and report all inspected alternatives, including negative results. Subgroup analyses are descriptive and do not justify post-hoc policy tuning. The paired binary-correctness power approximation in Appendix~\ref{app:complementarity} gives 80\% minimum detectable accuracy effects of .01469/.01460 on raw/strict P1, substantially larger than the observed .00328/.00288 effects; it is not a Macro-F1 power calculation, but makes the limited resolution of the current test sets explicit. Although AND now has independently inferred raw and strict test artifacts, its 95\% paired-bootstrap intervals include zero and strict-track directional evidence is .9477; stronger multi-dataset confirmation is needed before broad generalization claims. External-dataset evaluation and a broader teacher-family study remain future work. Automated fact checking can amplify source and retrieval bias; predictions should be treated as decision support, not authoritative adjudication.
 
 \section{Conclusion}
 We presented \textsc{CURE}, a dual-expert constrained routing framework for retrieved-evidence fact verification. Its AND rule improves frozen-validation Macro-F1 by 1.92 points and has raw/strict P1 test point-estimate gains of .977/.943 points under a fixed $K=5,\tau=.49$ policy. A same-recipe direct-only control retains positive raw/strict rationale-trained differences of .512/.685 MF1 points, but their intervals include zero. A matched 3B-versus-7B teacher-capacity ablation does not support simple teacher scaling as the explanation: 3B has higher raw/strict point estimates, while the paired intervals remain unresolved. Thus the routing, recipe-control, and capacity evidence should be read as directional rather than statistically resolved causal proof. CURE-Ensemble provides a separate validation-selected benchmark variant, while \textsc{CURE}-Student demonstrates a one-model compression extension. The next research steps are external-dataset evaluation, broader teacher-family controls, and sharper retrieval-reliability gating, rather than post-hoc policy tuning on P1.
@@ -530,8 +532,70 @@ AND router & strict canonical & .57149 & .55433\\
 \caption{Track-separated test results. AND uses fixed $K=5,\tau=.49$ and independently inferred raw/strict predictions; it is not an intersection evaluation.}\label{tab:raw-strict}
 \end{table}
 
+\section{Complementarity and Diagnostic Resolution}\label{app:complementarity}
+These frozen-validation diagnostics describe the expert relationship and are not used to alter the router. The rank cross-tab uses gold evidence IDs only after prediction, so it cannot be interpreted as an available inference feature.
+
+\begin{table*}[t]
+\centering\small
+\begin{minipage}[t]{.48\textwidth}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Direct $\backslash$ rationale-trained & S & R & N\\
+\midrule
+Supported & 341 & 19 & 68\\
+Refuted & 13 & 585 & 58\\
+\textsc{NEI} & 18 & 36 & 318\\
+\bottomrule
+\end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{.46\textwidth}
+\centering
+\begin{tabular}{@{}lr@{}}
+\toprule
+Correctness overlap & Claims\\
+\midrule
+Both correct & 939\\
+Direct-only correct & 81\\
+Rationale-only correct & 90\\
+Both wrong & 346\\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\caption{Frozen-validation expert complementarity. Rows of the left matrix are direct predictions and columns are rationale-trained predictions; S/R/N denote Supported/Refuted/\textsc{NEI}. Agreement is .8544, verdict Cohen's $\kappa=.7756$, error Cohen's $\kappa=.7184$, and Yule's $Q=.9561$. The experts are strongly correlated but have a small asymmetric correctness overlap.}\label{tab:expert-complementarity}
+\end{table*}
+
+\begin{table*}[t]
+\centering\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Gold-\textsc{NEI} retrieval status & $n$ & Direct accuracy & AND accuracy & $\Delta$ & Routes / changes\\
+\midrule
+QREL absent & 7 & .2857 & .2857 & +.0000 & 2 / 0\\
+Gold not retrieved & 11 & .3636 & .4545 & +.0909 & 5 / 1\\
+Gold rank after 5 & 2 & .5000 & .5000 & +.0000 & 1 / 0\\
+Gold rank 2--5 & 39 & .6154 & .6923 & +.0769 & 25 / 3\\
+Gold rank 1 & 419 & .5203 & .6492 & +.1289 & 250 / 54\\
+\bottomrule
+\end{tabular}
+\caption{Frozen-validation cross-tab for gold \textsc{NEI} claims. Gold-rank information is retrospective only and unavailable to AND. The largest observed NEI accuracy increase is in rank-one evidence, but this is a descriptive subgroup result rather than a routing rule.}\label{tab:nei-rank-cross-tab}
+\end{table*}
+
+\begin{table}[t]
+\centering\scriptsize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Track & Observed $\Delta$Acc. & 80\% MDE & Approx. $n$ at effect\\
+\midrule
+Raw official & +.00328 & .01469 & 49,116\\
+Strict & +.00288 & .01460 & 62,771\\
+\bottomrule
+\end{tabular}
+\caption{Paired-design power approximation for AND versus direct. It uses observed helpful/harmful correctness discordance and a two-sided $\alpha=.05$ normal approximation. This is not a power calculation for Macro-F1.}\label{tab:paired-power}
+\end{table}
+
 \section{Qualitative Routing Patterns}\label{app:qualitative}
-Table~\ref{tab:qualitative-patterns} reports a frozen-validation transition audit of the direct and AND predictions. It makes the aggregate trade-off explicit. Table~\ref{tab:qualitative-cases} then gives two claim-level illustrations from the independently inferred raw official test artifact. They were selected as the lexicographically first IDs in two predeclared transition strata; gold labels are used only for retrospective reporting. Thus, the examples neither tune the router nor establish a separate effectiveness result.
+Table~\ref{tab:qualitative-patterns} reports a frozen-validation transition audit of the direct and AND predictions. It makes the aggregate trade-off explicit. Table~\ref{tab:qualitative-cases} then gives four claim-level illustrations from the independently inferred raw official test artifact. They were selected as the lexicographically first IDs in four predeclared transition strata; gold labels are used only for retrospective reporting. Thus, the examples neither tune the router nor establish a separate effectiveness result.
 
 \begin{table*}[t]
 \centering\small
