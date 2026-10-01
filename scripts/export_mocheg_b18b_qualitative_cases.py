@@ -68,6 +68,16 @@ def label(row: dict[str, Any], path: Path) -> int:
     raise KeyError(f"no valid label in {path} row {row.get('id')!r}")
 
 
+def prediction(row: dict[str, Any], path: Path) -> int:
+    """Read a model output, never the gold label retained beside it."""
+    if "prediction" not in row:
+        raise KeyError(f"no prediction field in {path} row {row.get('id')!r}")
+    value = int(row["prediction"])
+    if value not in LABEL_NAMES:
+        raise ValueError(f"invalid prediction {value} in {path} row {row.get('id')!r}")
+    return value
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -117,10 +127,12 @@ def main() -> None:
         (1, 0, 2, "both_wrong_refuted_supported_to_nei"),
     ]
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    prediction_changes = 0
     for sample_id in sorted(ids):
         gold = label(manifest[sample_id], args.manifest)
-        direct_pred = label(direct[sample_id], args.direct_predictions)
-        and_pred = label(routed[sample_id], args.and_predictions)
+        direct_pred = prediction(direct[sample_id], args.direct_predictions)
+        and_pred = prediction(routed[sample_id], args.and_predictions)
+        prediction_changes += int(direct_pred != and_pred)
         for expected_gold, expected_direct, expected_and, pattern in patterns:
             if (gold, direct_pred, and_pred) == (expected_gold, expected_direct, expected_and):
                 buckets[pattern].append({
@@ -162,6 +174,7 @@ def main() -> None:
         "- Selection: deterministic lexicographic ID within six predeclared transition strata.",
         "- Gold labels are used only for retrospective reporting; no model, seed, K, or threshold is changed.",
         f"- Cases per stratum: {args.per_pattern}; retrieved passages shown: up to {args.top_k}.",
+        f"- Direct-to-AND prediction changes in the supplied artifact: **{prediction_changes}**.",
         f"- Input hashes (manifest/retrieval/direct/AND): `{sha256_file(args.manifest)}` / `{sha256_file(args.retrieval)}` / `{sha256_file(args.direct_predictions)}` / `{sha256_file(args.and_predictions)}`.",
         "", "## Full transition-stratum counts", "",
         "| Pattern | Matching claims |", "| --- | ---: |",
