@@ -525,7 +525,7 @@ AND router & strict canonical & .57149 & .55433\\
 \end{table}
 
 \section{Qualitative Routing Patterns}\label{app:qualitative}
-Table~\ref{tab:qualitative-patterns} reports a frozen-validation transition audit of the direct and AND predictions. We present transition patterns rather than selected individual claims because the anonymized manuscript package presently contains aggregate audit counts, not a released, claim-level canonical prediction/evidence bundle for qualitative quotation. This prevents us from reconstructing claims or passages after the fact. Each count is therefore a pre-existing audit observation, and the interpretation is deliberately limited to the observed label transition.
+Table~\ref{tab:qualitative-patterns} reports a frozen-validation transition audit of the direct and AND predictions. It makes the aggregate trade-off explicit. Table~\ref{tab:qualitative-cases} then gives two claim-level illustrations from the independently inferred raw official test artifact. They were selected as the lexicographically first IDs in two predeclared transition strata; gold labels are used only for retrospective reporting. Thus, the examples neither tune the router nor establish a separate effectiveness result.
 
 \begin{table*}[t]
 \centering\small
@@ -541,7 +541,27 @@ Refuted & Refuted & \textsc{NEI} & harmful & 9 & Incorrect deferral of an alread
 Refuted & Supported & \textsc{NEI} & both wrong & 4 & Changes one incorrect decisive label to another incorrect label.\\
 \bottomrule
 \end{tabular}
-\caption{Frozen-validation transition patterns for AND. These aggregate audit counts are not used by the router and do not support post-hoc threshold changes. They make the main trade-off explicit: AND repairs direct decisive errors on gold \textsc{NEI} examples, but can over-defer correct Supported/Refuted predictions. A released camera-ready artifact should add de-identified claim--retrieved-evidence excerpts for these pre-specified transition types.}\label{tab:qualitative-patterns}
+\caption{Frozen-validation transition patterns for AND. These aggregate audit counts are not used by the router and do not support post-hoc threshold changes. They make the main trade-off explicit: AND repairs direct decisive errors on gold \textsc{NEI} examples, but can over-defer correct Supported/Refuted predictions.}\label{tab:qualitative-patterns}
+\end{table*}
+
+\begin{table*}[t]
+\centering\small
+\begin{tabular}{@{}p{.19\textwidth}p{.25\textwidth}p{.13\textwidth}p{.34\textwidth}@{}}
+\toprule
+Transition and ID & Claim & Direct $\rightarrow$ AND & Retrieved-evidence reading and interpretation\\
+\midrule
+Helpful: gold \textsc{NEI}; \newline mocheg-test-claim-100409 &
+``Over a million people [were] apprehended at the border this year, meaning probably another 2 or 3 million have come in illegally.'' &
+Refuted $\rightarrow$ \textsc{NEI} &
+One passage confirms that more than one million people were apprehended in FY2021; another says the extrapolation to millions of undetected crossings is not well supported because the apprehension share is higher than assumed. The evidence therefore does not resolve the compound claim. AND's deferral is correct, whereas the direct expert is overconfidently decisive.\\
+\addlinespace
+Harmful: gold Supported; \newline mocheg-test-claim-101393 &
+``The Florida 45th Congressional District is among the 10 districts in the nation receiving the least federal funding.'' &
+Supported $\rightarrow$ \textsc{NEI} &
+The retrieved report explicitly places Florida's 45th district among the ten lowest-funded districts. The direct prediction is correct, but AND defers it. This is the characteristic conservative-routing failure: a rationale-trained posterior can trigger \textsc{NEI} despite decisive retrieved support.\\
+\bottomrule
+\end{tabular}
+\caption{Representative raw-official-P1 routing cases. Selection is deterministic: the lexicographically first claim in each predeclared helpful/harmful transition stratum, with at most two retrieved passages inspected per case. Evidence readings are concise author paraphrases, not generated rationales; neither test labels nor these readings are available to AND. The complete frozen case-card artifact contains twelve cases across six strata.}\label{tab:qualitative-cases}
 \end{table*}
 
 \section{Teacher-Capacity Ablation}\label{app:teacher-capacity}
