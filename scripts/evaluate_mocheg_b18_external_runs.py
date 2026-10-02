@@ -46,6 +46,7 @@ def main() -> None:
     parser.add_argument("--max-evidence-chars", type=int, default=2200)
     parser.add_argument("--max-length", type=int, default=3072)
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
     validate_inputs(args.manifest, args.retrieval, args.expected_samples)
@@ -72,8 +73,12 @@ def main() -> None:
     tokenizer.padding_side = "right"
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
-                        collate_fn=make_b18_collate(tokenizer, args.max_length, False, "matched_control"))
+    loader = DataLoader(
+        dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.num_workers,
+        collate_fn=make_b18_collate(tokenizer, args.max_length, False, "matched_control"),
+        pin_memory=device.type == "cuda",
+    )
     answer_ids = label_token_ids(tokenizer)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     report = {
