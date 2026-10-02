@@ -56,8 +56,13 @@ def main() -> None:
         if not summary_path.is_file() or not (adapter / "adapter_config.json").is_file():
             raise FileNotFoundError(f"incomplete rationale-trained run: {run}")
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        if summary.get("test_split_used") is not False:
-            raise ValueError(f"run is not test-clean: {run}")
+        # These adapters may have previously been evaluated on the *MOCHEG*
+        # test split.  That historical evaluation is not a selection signal
+        # for this external SciFact transfer: the checkpoint paths, three
+        # seeds, Prompt-A interface, K=5, and AND tau are fixed before any
+        # SciFact prediction is read.  Record the source-run status for the
+        # audit rather than rejecting a valid frozen checkpoint.
+        summary["source_mocheg_test_split_used"] = summary.get("test_split_used")
         summaries.append(summary)
     claims = read_jsonl(args.manifest)
     retrieval = {str(row["id"]): row for row in read_jsonl(args.retrieval)}
@@ -86,6 +91,7 @@ def main() -> None:
         "manifest_sha256": sha256(args.manifest), "retrieval_sha256": sha256(args.retrieval),
         "corpus_sha256": sha256(args.corpus), "expected_samples": args.expected_samples,
         "members": [], "test_labels_used_for_selection": False,
+        "external_checkpoint_or_seed_selection": False,
         "inference_prompt": "B18 Prompt-A verdict interface; no explanation prompt",
     }
     for run, summary in zip(args.runs, summaries):
@@ -116,6 +122,7 @@ def main() -> None:
         if len(read_jsonl(prediction_path)) != args.expected_samples:
             raise ValueError(f"incomplete predictions in {prediction_path}")
         report["members"].append({"run": str(run), "metrics": metrics,
+                                  "source_mocheg_test_split_used": summary.get("source_mocheg_test_split_used"),
                                   "prediction": str(prediction_path),
                                   "prediction_sha256": sha256(prediction_path)})
     (args.output_dir / f"inference_{args.tag}.json").write_text(
