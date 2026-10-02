@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# B23: frozen rationale-teacher-family ablation.
+# The candidate defaults to Mistral-7B-Instruct-v0.3; the existing Qwen2.5-7B
+# rationale-trained arm is the reference. Only the teacher family changes.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+OUT="outputs/mocheg_b23_teacher_family"
+TEACHER_MODEL="${MOCHEG_ALT_TEACHER_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}"
+TEACHER_NAME="${MOCHEG_ALT_TEACHER_NAME:-Mistral-7B-Instruct-v0.3}"
+TAG="${MOCHEG_ALT_TEACHER_TAG:-mistral7b}"
+EXPLANATIONS="data/processed/mocheg_b23_explanations/train_${TAG}.jsonl"
+EXPLANATION_SUMMARY="outputs/mocheg_b23_explanations/train_${TAG}_summary.json"
+TRAIN_MANIFEST="data/processed/mocheg_manifest_strict/train.jsonl"
+TRAIN_RETRIEVAL="outputs/retrieval_mocheg_qwen3_reranked/train.jsonl"
+VAL_MANIFEST="data/processed/mocheg_manifest_strict/val.jsonl"
+VAL_RETRIEVAL="outputs/retrieval_mocheg_qwen3_reranked/val.jsonl"
+RAW_MANIFEST="data/processed/mocheg_manifest/test.jsonl"
+RAW_RETRIEVAL="outputs/retrieval_mocheg_qwen3_reranked_official/test.jsonl"
+STRICT_MANIFEST="data/processed/mocheg_manifest_strict/test.jsonl"
+STRICT_RETRIEVAL="outputs/retrieval_mocheg_qwen3_reranked/test.jsonl"
+CORPUS_ROOT="data/raw/mocheg_dataset/extracted/mocheg"
+SEEDS=(42 87 100)
+REFERENCE_NAME="Qwen2.5-7B-Instruct"
+
+for required in "$TRAIN_MANIFEST" "$TRAIN_RETRIEVAL" "$VAL_MANIFEST" "$VAL_RETRIEVAL" \
+  "$RAW_MANIFEST" "$RAW_RETRIEVAL" "$STRICT_MANIFEST" "$STRICT_RETRIEVAL" \
+  "$CORPUS_ROOT/train/Corpus2.csv" "$CORPUS_ROOT/val/Corpus2.csv" "$CORPUS_ROOT/test/Corpus2.csv"; do
+  [[ -s "$required" ]] || { echo "ERROR: missing input: $required" >&2; exit 1; }
+done
+for seed in "${SEEDS[@]}"; do
+  for required in \
+    "outputs/mocheg_b18a_full/candidate_seed${seed}/test_predictions_canonical_k5.jsonl" \
+    "outputs/mocheg_b18a_full/candidate_seed${seed}/test_predictions_canonical_k5_strict.jsonl"; do
+    [[ -s "$required" ]] || { echo "ERROR: missing frozen Qwen reference: $required" >&2; exit 1; }
+  done
+done
+
+mkdir -p "$OUT" "$(dirname "$EXPLANATIONS")" "$(dirname "$EXPLANATION_SUMMARY")"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+
+if [[ ! -s "$EXPLANATIONS" || ! -s "$EXPLANATION_SUMMARY" ]]; then
+  echo "===== GENERATE ${TEACHER_NAME} RATIONALES ====="
+  python -m scripts.generate_mocheg_b18_teacher_explanations \
+    --manifest "$TRAIN_MANIFEST" --retrieval "$TRAIN_RETRIEVAL" --corpus "$CORPUS_ROOT/train/Corpus2.csv" \
+    --model "$TEACHER_MODEL" --top-k 5 --max-evidence-chars 2200 --device cuda \
+    --output "$EXPLANATIONS" --summary "$EXPLANATION_SUMMARY" \
+    2>&1 | tee "$OUT/generate_${TAG}.log"
+else
+  echo "SKIP teacher generation (complete)"
+fi
+
+RAW_CANDIDATE=(); STRICT_CANDIDATE=(); RAW_REFERENCE=(); STRICT_REFERENCE=()
+for seed in "${SEEDS[@]}"; do
+  run="$OUT/candidate_${TAG}_seed${seed}"
+  RAW_CANDIDATE+=("$run/test_predictions_b23_canonical_raw.jsonl")
+  STRICT_CANDIDATE+=("$run/test_predictions_b23_canonical_strict.jsonl")
+  RAW_REFERENCE+=("outputs/mocheg_b18a_full/candidate_seed${seed}/test_predictions_canonical_k5.jsonl")
+  STRICT_REFERENCE+=("outputs/mocheg_b18a_full/candidate_seed${seed}/test_predictions_canonical_k5_strict.jsonl")
+  if [[ ! -s "$run/summary.json" || ! -s "$run/val_predictions.jsonl" ]]; then
+    mkdir -p "$run"
+    echo "===== TRAIN ${TEACHER_NAME}-TEACHER STUDENT seed=$seed ====="
+    python -m scripts.train_mocheg_b18_explanation_verifier \
+      --mode explanation_candidate --manifest "$TRAIN_MANIFEST" --retrieval "$TRAIN_RETRIEVAL" --corpus "$CORPUS_ROOT/train/Corpus2.csv" \
+      --val-manifest "$VAL_MANIFEST" --val-retrieval "$VAL_RETRIEVAL" --val-corpus "$CORPUS_ROOT/val/Corpus2.csv" \
+      --explanations "$EXPLANATIONS" --model Qwen/Qwen3-4B-Instruct-2507 --output "$run" --seed "$seed" \
+      --lambda-exp .25 --epochs 3 --batch-size 2 --grad-accum 4 --lr 2e-4 --top-k 5 \
+      --max-length 3072 --max-evidence-chars 2200 --device cuda \
+      2>&1 | tee "$run/train.log"
+  else
+    echo "SKIP TRAIN seed=$seed (complete)"
+  fi
+done
+
+for seed in "${SEEDS[@]}"; do
+  run="$OUT/candidate_${TAG}_seed${seed}"
+  raw="$run/test_predictions_b23_canonical_raw.jsonl"
+  strict="$run/test_predictions_b23_canonical_strict.jsonl"
+  if [[ ! -s "$raw" ]]; then
+    echo "===== INFER RAW P1 ${TEACHER_NAME}-TEACHER seed=$seed ====="
+    python -m scripts.evaluate_mocheg_b18_test --runs "$run" --manifest "$RAW_MANIFEST" --retrieval "$RAW_RETRIEVAL" --corpus "$CORPUS_ROOT/test/Corpus2.csv" \
+      --base-model Qwen/Qwen3-4B-Instruct-2507 --tag b23_canonical_raw --output-dir "$OUT/raw_inference" \
+      --top-k 5 --max-evidence-chars 2200 --batch-size 4 --device cuda --bootstrap-iterations 10000 \
+      2>&1 | tee "$run/raw_inference.log"
+  fi
+  if [[ ! -s "$strict" ]]; then
+    echo "===== INFER STRICT P1 ${TEACHER_NAME}-TEACHER seed=$seed ====="
+    python -m scripts.evaluate_mocheg_b18_test --runs "$run" --manifest "$STRICT_MANIFEST" --retrieval "$STRICT_RETRIEVAL" --corpus "$CORPUS_ROOT/test/Corpus2.csv" \
+      --base-model Qwen/Qwen3-4B-Instruct-2507 --tag b23_canonical_strict --output-dir "$OUT/strict_inference" \
+      --top-k 5 --max-evidence-chars 2200 --batch-size 4 --device cuda --bootstrap-iterations 10000 \
+      2>&1 | tee "$run/strict_inference.log"
+  fi
+done
+
+for path in "${RAW_CANDIDATE[@]}" "${STRICT_CANDIDATE[@]}" "${RAW_REFERENCE[@]}" "${STRICT_REFERENCE[@]}"; do
+  [[ -s "$path" ]] || { echo "ERROR: missing prediction: $path" >&2; exit 1; }
+done
+
+python -m scripts.analyze_mocheg_teacher_family \
+  --raw-manifest "$RAW_MANIFEST" --strict-manifest "$STRICT_MANIFEST" \
+  --raw-retrieval "$RAW_RETRIEVAL" --strict-retrieval "$STRICT_RETRIEVAL" \
+  --raw-candidate "${RAW_CANDIDATE[@]}" --strict-candidate "${STRICT_CANDIDATE[@]}" \
+  --raw-reference "${RAW_REFERENCE[@]}" --strict-reference "${STRICT_REFERENCE[@]}" \
+  --candidate-teacher "$TEACHER_NAME" --reference-teacher "$REFERENCE_NAME" \
+  --iterations 10000 --seed 2026 \
+  --output "$OUT/canonical_comparison.json" --markdown "$OUT/canonical_comparison.md" \
+  2>&1 | tee "$OUT/canonical_comparison.log"
+
+echo "DONE: $OUT/canonical_comparison.md"
