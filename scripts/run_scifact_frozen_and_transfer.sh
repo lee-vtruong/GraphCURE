@@ -94,4 +94,11 @@ python -m scripts.evaluate_cure_external_and \
   --iterations 10000 --seed 2026 --output-dir "$OUT/result" \
   2>&1 | tee "$OUT/evaluate.log"
 
+python -m scripts.analyze_cure_external_transfer \
+  --direct "$OUT/result/direct_predictions.jsonl" \
+  --rationale "$OUT/result/rationale_predictions.jsonl" \
+  --and-predictions "$OUT/result/and_predictions.jsonl" \
+  --output-dir "$OUT/result" \
+  2>&1 | tee "$OUT/transition_diagnostic.log"
+
 echo "DONE: $OUT/result/report.md"
