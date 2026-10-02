@@ -110,8 +110,9 @@ def main() -> None:
             started = time.perf_counter()
             metrics = evaluate_direct_verdict(model, loader, answer_ids, device)
             rows = metrics.pop("predictions")
-            metrics.update({"elapsed_seconds": time.perf_counter() - started,
-                            "milliseconds_per_sample": 1000 * metrics["elapsed_seconds"] / len(dataset),
+            elapsed_seconds = time.perf_counter() - started
+            metrics.update({"elapsed_seconds": elapsed_seconds,
+                            "milliseconds_per_sample": 1000 * elapsed_seconds / len(dataset),
                             "adapter_config_sha256": sha256(adapter / "adapter_config.json")})
             prediction_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
             metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
