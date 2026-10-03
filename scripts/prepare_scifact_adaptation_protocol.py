@@ -43,6 +43,8 @@ def label_for_claim(row: dict) -> int:
         for annotations in evidence.values()
         for annotation in annotations
     }
+    if not values:
+        return 2  # NOT ENOUGH INFORMATION (empty annotations)
     if len(values) != 1 or not values <= set(LABELS):
         raise ValueError(f"unexpected or conflicting SciFact evidence labels for {row['id']}: {values}")
     return LABELS[values.pop()]
