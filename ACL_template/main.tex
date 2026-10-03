@@ -36,6 +36,9 @@ $^{b}$Vietnam National University, Ho Chi Minh City, Vietnam
 % unused vertical whitespace while preserving a positive teaser/text separation.
 \setlength{\titlebox}{8.5\baselineskip}
 \maketitle
+% Page numbers are retained in this working manuscript for navigation.
+\thispagestyle{plain}
+\pagestyle{plain}
 
 % A non-floating strip is required to keep the teaser on page one.  The
 % separation remains non-negative: negative \texttt{cuted} separation causes
@@ -72,7 +75,7 @@ We distinguish frozen-test evaluation from development diagnostics. The heteroge
 \section{Related Work}
 \paragraph{Fact verification and evidence sufficiency.} FEVER established evidence-supported three-way verification at scale \citep{thorne2018fever}; LIAR studied short political claims \citep{wang2017liar}; and MultiFC broadened evaluation across sources and domains \citep{augenstein2019multifc}. SciFact further couples scientific claim labels with evidence rationales \citep{wadden2020scifact}. These benchmarks make clear that label prediction, evidence retrieval, and the availability of a convincing rationale are not identical targets. Surveys consequently treat retrieval, evidence selection, reasoning, and calibration as coupled but distinct stages \citep{guo2022survey}. UKP-Athene illustrates the role of multi-sentence textual entailment in evidence-based verification \citep{hanselowski2019ukpathene}.
 
-\paragraph{Retrieval, selection, and reasoning.} Evidence retrieval can dominate downstream verification \citep{zheng2024rav}; evidence selection itself materially changes end-to-end performance \citep{samarinas2021quin}. RAV combines retrieval with verification, while RAFTS synthesizes contrastive arguments from retrieved evidence \citep{yue2024rafts}. Complex-claim verification decomposes claims before retrieving web evidence \citep{chen2024complex}. These approaches study different evidence regimes from our P1 protocol: they motivate the separation between fixed-corpus evidence selection and live-web retrieval rather than serving as directly interchangeable leaderboard rows.
+\paragraph{Retrieval, selection, and reasoning.} Evidence retrieval can dominate downstream verification \citep{zheng2024rav}; evidence selection itself materially changes end-to-end performance \citep{samarinas2021quin}. Dense retrieval \citep{karpukhin2020dpr} and retrieved-passage aggregation \citep{izacard2021fid} establish useful general antecedents for fixed-corpus pipelines, while evidence-ranking work explicitly distinguishes early sufficiency from redundancy \citep{alt2026evidence}. RAV combines retrieval with verification, while RAFTS synthesizes contrastive arguments from retrieved evidence \citep{yue2024rafts}. Complex-claim verification decomposes claims before retrieving web evidence \citep{chen2024complex}. These approaches study different evidence regimes from our P1 protocol: they motivate the separation between fixed-corpus evidence selection and live-web retrieval rather than serving as directly interchangeable leaderboard rows.
 
 \paragraph{Rationales, selective prediction, and expert routing.} Extractive and generated rationales have been studied as both explanations and learning signals \citep{lei2016rationalizing,atanasova2020factexplanations}; ERASER emphasizes that plausibility and faithfulness require separate evaluation \citep{deyoung2020eraser}. Our matched-recipe control follows this caution: rationale supervision is not assumed to cause a verdict gain. AND is also related to selective prediction with a reject option \citep{geifman2019selectivenet}, but it does not learn a reject head or optimize risk--coverage. Instead, it compares a frozen direct posterior with a complementary expert and permits one class-specific deferral. This differs from sparsely gated mixture-of-experts routing \citep{shazeer2017moe}: CURE evaluates all members sequentially and uses a fixed, interpretable decision rule rather than learned conditional computation. Because softmax confidence need not be calibrated \citep{guo2017calibration}, we report calibration diagnostics and explicitly compare against direct self-deferral.
 
@@ -555,7 +558,9 @@ Atlas & failure atlas & candidate/control .66517/.66621; help/harm 550/561 & No 
 \end{table*}
 
 \section{Five-Fold \textsc{CURE}-Student Confirmation}
-\begin{table}[t]
+The student is the one-model extension of the dual-expert system, not the main AND policy. For each fold, its disagreement-aware distillation target is produced only by teachers trained without that fold. Relative to the matched student control, the out-of-fold aggregate improves from .660788 to .667607 Macro-F1 (+.006819), with four positive folds and a paired-bootstrap probability of .9517. These train-only OOF results are reported as a confirmation of the student training objective; they do not use official validation or test labels to choose a test policy.
+
+\begin{table}[H]
 \centering\scriptsize
 \begin{tabular}{@{}rrrr@{}}
 \toprule
@@ -662,7 +667,7 @@ Strict & +.00288 & .01460 & 62,771\\
 \end{table}
 
 \section{Frozen External-Transfer Audit}\label{app:external-transfer}
-We ran one deliberately strict out-of-domain audit, not a second benchmark comparison. The frozen MOCHEG direct ensemble (five members), rationale-trained ensemble (three members), top-$K=5$, and AND threshold $\tau=.49$ were applied without SciFact training, seed selection, threshold retuning, cited-document access, or gold-rationale use. We use the 300 labeled claims in the public SciFact development split only to evaluate the already-frozen outputs \citep{wadden2020scifact}. Retrieval uses scikit-learn TF--IDF on corpus abstracts (lowercase, Unicode accent stripping, word 1--2 grams, sublinear TF, $L_2$ normalization), retaining its top five without reranking. Hence the results in Table~\ref{tab:scifact-transfer} are not comparable to SciFact's standard abstract-/sentence-rationale leaderboard, which uses a different output contract and typically trained in-domain systems.
+We ran one deliberately strict out-of-domain audit, not a second benchmark comparison. The frozen MOCHEG direct ensemble (five members), rationale-trained ensemble (three members), top-$K=5$, and AND threshold $\tau=.49$ were applied without SciFact training, seed selection, threshold retuning, cited-document access, or gold-rationale use. We use the 300 labeled claims in the public SciFact development split only to evaluate the already-frozen outputs \citep{wadden2020scifact}. Retrieval uses scikit-learn TF--IDF on corpus abstracts (lowercase, Unicode accent stripping, word 1--2 grams, sublinear TF, $L_2$ normalization), retaining its top five without reranking. The audit is deliberately stricter than adapting a system to a new corpus: open-domain scientific verification has independently documented substantial generalization difficulty \citep{wadden2022scifactopen}. Hence the results in Table~\ref{tab:scifact-transfer} are not comparable to SciFact's standard abstract-/sentence-rationale leaderboard, which uses a different output contract and typically trained in-domain systems.
 
 \begin{table}[t]
 \centering\scriptsize
