@@ -13,28 +13,45 @@
 \usepackage{array}
 \usepackage{xcolor}
 \usepackage{url}
+\usepackage{etoolbox}
+\usepackage{caption}
 \usepackage{cuted}
+\usepackage{fvextra}
+\usepackage{float}
+\setlength{\emergencystretch}{2em}
 
 \title{\textsc{CURE}: Constrained Uncertainty Routing with Complementary Experts for Retrieved-Evidence Fact Verification}
-\author{Van-Truong Le$^{a,b}$ \quad Tung Le$^{a,b}$ \quad Huy Tien Nguyen$^{a,b,\ast}$\\
+
+\author{
+Van-Truong Le$^{a,b}$ \quad
+Tung Le$^{a,b}$ \quad
+Huy Tien Nguyen$^{a,b}$\\
 $^{a}$Faculty of Information Technology, University of Science, Ho Chi Minh City, Vietnam\\
-$^{b}$Vietnam National University, Ho Chi Minh City, Vietnam}
+$^{b}$Vietnam National University, Ho Chi Minh City, Vietnam
+}
 
 \begin{document}
+% The standard ACL title box reserves space for a longer anonymous author block.
+% This camera-ready block has two affiliation lines, so a shorter box removes
+% unused vertical whitespace while preserving a positive teaser/text separation.
+\setlength{\titlebox}{8.5\baselineskip}
 \maketitle
 
-% Keep the first-page teaser visually attached to the title/author block.
-\setlength{\stripsep}{-8pt}
+% A non-floating strip is required to keep the teaser on page one.  The
+% separation remains non-negative: negative \texttt{cuted} separation causes
+% the following two-column material to overlap the caption.
+\setlength{\stripsep}{2pt}
 \begin{strip}
 \centering
-\includegraphics[width=\textwidth]{figures/teaser.png}
+\includegraphics[width=0.96\textwidth]{figures/teaser.png}
+\vspace{-3pt}
 \captionof{figure}{Overview of \textsc{CURE}, a constrained uncertainty routing framework with complementary experts for retrieved-evidence fact verification. \textbf{(a)} A standard pipeline uses a single verdict-trained model, which can over-commit when retrieved evidence is non-decisive. \textbf{(b)} \textsc{CURE} routes between a direct verdict expert and a complementary \textsc{NEI} expert via Asymmetric \textsc{NEI} Deferral (AND), leading to more reliable predictions. Bottom: key results and takeaways.}
 \label{fig:teaser}
 \end{strip}
-
 \begin{abstract}
 Fact verifiers often conflate two distinct decisions: which verdict is most likely and whether the retrieved evidence warrants a decisive verdict. We study this distinction in a fixed-corpus, text-evidence MOCHEG protocol. \textsc{CURE} (\textbf{C}onstrained \textbf{U}ncertainty \textbf{R}outing with \textbf{C}omplementary \textbf{E}xperts) combines a verdict-trained direct expert with a rationale-trained complementary expert. Its \emph{Asymmetric NEI Deferral} rule preserves the direct verdict by default and permits only a high-confidence complementary \textsc{NEI} prediction to defer the output. On frozen validation, this constrained rule improves Macro-F1 from 0.6920 to 0.7112 (+1.92 points; paired-bootstrap $P(\Delta>0)=0.9975$), whereas equal averaging and symmetric confidence routing do not. With frozen $K=5$ and $\tau=.49$, the raw/strict P1 test point estimates are +0.00977/+0.00943 MF1 (95\% CIs $[-.00128,.02109]$/$[-.00187,.02065]$; $P(\Delta>0)=.9529/.9477$). These are directional rather than statistically resolved test results. Matched teacher controls find unresolved 3B-versus-7B capacity differences and near-identical Mistral-7B versus Qwen2.5-7B results, ruling out simple capacity or tested-family explanations. Post-hoc diagnostic groups suggest a benefit for some \textsc{NEI} cases and identify retrieval misses as a failure mode. A frozen zero-shot SciFact audit finds that the MOCHEG policy does not transfer without adaptation. A separate validation-selected heterogeneous ensemble reaches 0.5551 Macro-F1 on raw P1, and a disagreement-distilled student offers a lower-latency extension.
 \end{abstract}
+
 
 \section{Introduction}
 Automated fact checking is commonly decomposed into evidence retrieval and claim verification \citep{guo2022survey,thorne2018fever}. Modern systems increasingly retrieve heterogeneous evidence and use large language models, but two assumptions remain fragile: that all retrieved passages should be consumed by the verifier, and that a model trained to predict a verdict is also a reliable detector of \emph{retrieved-evidence sufficiency}. We focus on the latter distinction in a controlled text-evidence setting.
@@ -716,7 +733,7 @@ The retrieved material is about a different Biden statement and does not resolve
 \section{Teacher Capacity and Family Ablations}\label{app:teacher-capacity}
 The capacity control replaces only Qwen2.5-7B-Instruct, which generates the structured training rationales, with Qwen2.5-3B-Instruct. The family control instead replaces it with Mistral-7B-Instruct-v0.3. Student backbone, student recipe, explanation weight, retrieved passages, prompts, seed set $\{42,87,100\}$, and validation checkpoint protocol are held fixed. The tests are independently inferred for their respective raw and strict retrieval manifests; no test label selects a teacher, checkpoint, seed, or policy.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering\scriptsize
 \resizebox{\columnwidth}{!}{\begin{tabular}{@{}llrrrrrr@{}}
 \toprule
@@ -733,7 +750,157 @@ Strict P1 & Mistral-7B & .55957 & .53808 & .51840 & .65427 & .44156 & .4454 (M$>
 \caption{Matched teacher capacity and family ablations. For Qwen2.5 7B minus 3B, raw/strict $\Delta$MF1 are $-.00844/-.00753$; 95\% CIs are $[-.02223,.00562]/[-.02147,.00626]$. For Mistral-7B minus Qwen2.5-7B, they are $-.00021/-.00099$ with CIs $[-.01364,.01274]/[-.01376,.01183]$. Neither contrast resolves statistically.}\label{tab:teacher-capacity}
 \end{table}
 
+\section{Prompt Templates and Model Versions}\label{app:prompts-models}
+This appendix prints the prompt templates used by the released pipeline. Angle-bracket fields are runtime substitutions; each numbered passage is truncated to 2,200 characters. Prompt~A is the \emph{same} verdict interface for the direct and rationale-trained experts at training and inference. The rationale-trained expert differs only because it receives the Prompt~B auxiliary target during training; it does not generate an explanation at P1 validation or test time. Prompt~C is used only to create teacher targets for training claims. Its \texttt{Reference Gold Verdict} field is the training label; it is never instantiated for validation or test claims. Qwen2.5-7B, Qwen2.5-3B, and Mistral-7B use the same teacher template and decoding policy, so the teacher ablations change the teacher model rather than the text instruction.
+
+\begin{table*}[!t]
+\centering\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}p{2.10cm}p{4.15cm}p{4.95cm}p{2.00cm}@{}}
+\toprule
+Component & Exact identifier / implementation & Role in this paper & Updated during training?\\
+\midrule
+Student backbone & \url{Qwen/Qwen3-4B-Instruct-2507} & Direct expert, rationale-trained expert, and \textsc{CURE}-Student backbone with LoRA adapters & LoRA adapters only\\
+Dense retriever & \url{Qwen/Qwen3-Embedding-4B} & Fixed-corpus MOCHEG dense candidate retrieval (top 50) & No\\
+Cross-encoder reranker & \url{Qwen/Qwen3-Reranker-4B} & MOCHEG candidate reranking; top $K\in\{1,3,5\}$ passed to verifiers & No\\
+Primary rationale teacher & \url{Qwen/Qwen2.5-7B-Instruct} & Main structured-rationale generation; greedy decoding, at most 512 new tokens & No\\
+Capacity-control teacher & \url{Qwen/Qwen2.5-3B-Instruct} & Matched capacity ablation; Prompt~C unchanged & No\\
+Family-control teacher & \url{mistralai/Mistral-7B-Instruct-v0.3} & Matched teacher-family ablation; Prompt~C unchanged & No\\
+External-transfer retriever & scikit-learn \texttt{TfidfVectorizer} & SciFact audit only: lowercase, Unicode accent stripping, word 1--2 grams, sublinear TF, $L_2$ normalization, top 5, no reranker & No\\
+\bottomrule
+\end{tabular}
+\caption{Model and retrieval glossary. Identifiers are the exact Hugging Face model names recorded by the scripts; the P1 student base revision is encoded in \texttt{Instruct-2507}. All teacher and retrieval models are frozen.}\label{tab:model-glossary}
+\end{table*}
+
+\subsection{Prompt A: shared direct-verdict interface}
+The following system message and user template are used by both expert branches. The system emits one label token whose mapping is $A=\textsc{Supported}$, $B=\textsc{Refuted}$, and $C=\textsc{NEI}$.
+
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,frame=single]
+SYSTEM
+You are an evidence-grounded fact verifier. Use only the retrieved evidence
+supplied by the user. Decide whether the claim is A: supported, B: refuted,
+or C: not enough information. Conflicting, irrelevant, or insufficient
+evidence must not be treated as support. Answer with exactly one letter:
+A, B, or C.
+
+USER
+Claim:
+<CLAIM>
+
+Retrieved evidence:
+
+[1] <PASSAGE_1>
+
+...
+
+[K] <PASSAGE_K>
+
+Return only A, B, or C.
+\end{Verbatim}
+
+\subsection{Prompt B: rationale auxiliary interface (training only)}
+Prompt~B is added only for the rationale-trained student objective in Equation~(1). Its target is a schema-validated JSON rationale generated by Prompt~C; it is absent from direct-only training and from all P1 validation/test inference.
+
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,frame=single]
+SYSTEM
+You are an evidence-grounded reasoning assistant. Given a claim and retrieved
+evidence, provide a concise structured explanation identifying the key
+evidence passages, the reasoning, and any missing information. Output
+strictly as JSON.
+
+USER
+Claim:
+<CLAIM>
+
+Retrieved evidence (<K> passages):
+
+[1] <PASSAGE_1>
+
+...
+
+[K] <PASSAGE_K>
+
+Provide a structured explanation JSON with keys: 'verdict',
+'key_evidence_ids', 'reason', 'missing_information'.
+\end{Verbatim}
+
+\subsection{Prompt C: teacher structured-rationale generation}
+The teacher is instructed to assess whether the retrieved passages ground the \emph{training} verdict, rather than to import external knowledge. The three JSON examples below are part of the actual prompt template.
+
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,frame=single]
+SYSTEM
+You are an expert fact-checking rationale annotator. Your task is to analyze a
+claim and a numbered list of retrieved evidence passages to produce a
+structured explanation.
+CRITICAL RULES:
+1. You must judge whether the supplied retrieved evidence ACTUALLY GROUNDS the
+claim verdict. Do NOT fabricate facts or assume external knowledge not in the
+evidence.
+2. If the retrieved evidence is insufficient, irrelevant, or missing key facts
+to justify the verdict, set "grounded": false.
+3. Only reference evidence passage numbers that actually exist in the prompt
+(1-based index).
+4. Output MUST be valid JSON conforming strictly to the required schema.
+
+USER
+Claim:
+<CLAIM>
+
+Retrieved evidence (<K> passages):
+
+[1] <PASSAGE_1>
+
+...
+
+[K] <PASSAGE_K>
+
+Reference Gold Verdict: <TRAINING_GOLD_VERDICT>
+
+Instructions:
+1. Examine if the retrieved evidence passages ([1] to [<K>]) can genuinely
+ground the verdict.
+2. If the evidence supports or refutes the claim, set "grounded": true and
+specify "key_evidence_ids" (e.g. [1, 2]).
+3. If the evidence is insufficient or does not match the gold verdict, set
+"grounded": false.
+4. If the verdict is NEI, state what specific information is missing in
+"missing_information".
+5. Return ONLY a JSON object matching one of these schemas:
+
+Example SUPPORTED:
+{
+  "grounded": true,
+  "verdict": "SUPPORTED",
+  "key_evidence_ids": [1],
+  "reason": "Evidence [1] directly confirms the claim details.",
+  "missing_information": null
+}
+
+Example NEI:
+{
+  "grounded": true,
+  "verdict": "NEI",
+  "key_evidence_ids": [1],
+  "reason": "Evidence [1] discusses the topic but does not verify the
+  specific assertion.",
+  "missing_information": "Verification of the specific date and location
+  asserted in the claim."
+}
+
+Example UNGROUNDED (evidence does not justify claim):
+{
+  "grounded": false,
+  "verdict": "NEI",
+  "key_evidence_ids": [],
+  "reason": "The retrieved evidence is completely off-topic and cannot
+  ground any verdict.",
+  "missing_information": "Primary evidence addressing the claim."
+}
+
+Output JSON:
+\end{Verbatim}
+
 \section{Reproducibility Checklist}
-The anonymized artifact package records manifests, retrieval signatures, prediction files, training summaries, seeds, and protocol flags. It includes training, component-ablation, subgroup, distillation, efficiency, and canonical-evaluation entry points. Before camera-ready release, we will add exact GPU driver versions, package-lock information, author metadata, and a public archival link.
+The anonymized artifact package records manifests, retrieval signatures, prediction files, training summaries, seeds, prompt templates, and protocol flags. It includes training, component-ablation, subgroup, distillation, efficiency, and canonical-evaluation entry points. Before camera-ready release, we will add exact GPU driver versions, package-lock information, author metadata, and a public archival link.
 
 \end{document}
