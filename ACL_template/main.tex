@@ -13,6 +13,7 @@
 \usepackage{array}
 \usepackage{xcolor}
 \usepackage{url}
+\usepackage{cuted}
 
 \title{\textsc{CURE}: Constrained Uncertainty Routing with Complementary Experts for Retrieved-Evidence Fact Verification}
 \author{Anonymous Submission}
@@ -20,16 +21,16 @@
 \begin{document}
 \maketitle
 
+\begin{strip}
+\centering
+\includegraphics[width=\textwidth]{figures/teaser.png}
+\captionof{figure}{Overview of \textsc{CURE}, a constrained uncertainty routing framework with complementary experts for retrieved-evidence fact verification. \textbf{(a)} A standard pipeline uses a single verdict-trained model, which can over-commit when retrieved evidence is non-decisive. \textbf{(b)} \textsc{CURE} routes between a direct verdict expert and a complementary \textsc{NEI} expert via Asymmetric \textsc{NEI} Deferral (AND), leading to more reliable predictions. Bottom: key results and takeaways.}
+\label{fig:teaser}
+\end{strip}
+
 \begin{abstract}
 Fact verifiers often conflate two distinct decisions: which verdict is most likely and whether the retrieved evidence warrants a decisive verdict. We study this distinction in a fixed-corpus, text-evidence MOCHEG protocol. \textsc{CURE} (\textbf{C}onstrained \textbf{U}ncertainty \textbf{R}outing with \textbf{C}omplementary \textbf{E}xperts) combines a verdict-trained direct expert with a rationale-trained complementary expert. Its \emph{Asymmetric NEI Deferral} rule preserves the direct verdict by default and permits only a high-confidence complementary \textsc{NEI} prediction to defer the output. On frozen validation, this constrained rule improves Macro-F1 from 0.6920 to 0.7112 (+1.92 points; paired-bootstrap $P(\Delta>0)=0.9975$), whereas equal averaging and symmetric confidence routing do not. With frozen $K=5$ and $\tau=.49$, the raw/strict P1 test point estimates are +0.00977/+0.00943 MF1 (95\% CIs $[-.00128,.02109]$/$[-.00187,.02065]$; $P(\Delta>0)=.9529/.9477$). These are directional rather than statistically resolved test results. Matched teacher controls find unresolved 3B-versus-7B capacity differences and near-identical Mistral-7B versus Qwen2.5-7B results, ruling out simple capacity or tested-family explanations. Post-hoc diagnostic groups suggest a benefit for some \textsc{NEI} cases and identify retrieval misses as a failure mode. A frozen zero-shot SciFact audit finds that the MOCHEG policy does not transfer without adaptation. A separate validation-selected heterogeneous ensemble reaches 0.5551 Macro-F1 on raw P1, and a disagreement-distilled student offers a lower-latency extension.
 \end{abstract}
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{figures/teaser.png}
-\caption{Overview of \textsc{CURE}, a constrained uncertainty routing framework with complementary experts for retrieved-evidence fact verification. \textbf{(a)} A standard pipeline uses a single verdict-trained model, which can over-commit when retrieved evidence is non-decisive. \textbf{(b)} \textsc{CURE} routes between a direct verdict expert and a complementary \textsc{NEI} expert via Asymmetric \textsc{NEI} Deferral (AND), leading to more reliable predictions. Bottom: key results and takeaways.}
-\label{fig:teaser}
-\end{figure*}
 
 \section{Introduction}
 Automated fact checking is commonly decomposed into evidence retrieval and claim verification \citep{guo2022survey,thorne2018fever}. Modern systems increasingly retrieve heterogeneous evidence and use large language models, but two assumptions remain fragile: that all retrieved passages should be consumed by the verifier, and that a model trained to predict a verdict is also a reliable detector of \emph{retrieved-evidence sufficiency}. We focus on the latter distinction in a controlled text-evidence setting.
